@@ -1,0 +1,50 @@
+INSTALL:
+--------
+
+1. Download the most recent version of CIL
+
+
+2. Modify "alloc_names" in ptranal.ml to include SOS specific malloc
+functions.  The updated version should read:
+
+========
+let alloc_names = 
+  [
+    "malloc";"calloc";"realloc";"xmalloc";"__builtin_alloca";"alloca";"kmalloc";
+    "ker_malloc";"ker_msg_take_data";"sos_blk_mem_alloc";"msg_create"
+  ]
+========
+
+
+3. Build CIL
+
+
+4. Download the most recent version of "the checker" (all you need is the
+memoryChecker directory)
+
+
+5. Update "CIL_DIR" the Makefile to point to the directory containing the
+"cil.cmxa" libraray for your installation of CIL (this is a platform and
+installation specific)
+
+
+6. Type "touch .depend"
+
+
+7. Type "make depend"
+
+
+8. Type "make"
+
+
+9. Run the resulting program using:
+
+========
+$ ./memory [options] <file to examine>
+========
+
+
+Note: A number of debugging flags are convientent for understanding what the
+checker is doing (and what is going wrong!)  Use the "--help" option to list
+all flags.
+
