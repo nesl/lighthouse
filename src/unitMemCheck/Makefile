@@ -1,62 +1,42 @@
-# Path to CIL installation
-CIL_DIR=-I /home/rshea/mote/cil-1.3.5/obj/x86_LINUX
+# General define of the base Makefile
+OCAMLMAKEFILE = OCamlMakefile
+
+####
+# Global build options
+####
+export LIBS = unix str cil oUnit
+export INCDIRS = /home/rshea/mote/cil-1.3.5/obj/x86_LINUX +oUnit
 
 
-########################################
+####
+# Add projects here
+#### 
+define PROJ_cd
+  SOURCES = cilDriver.ml
+  RESULT = cilDriver
+endef
+export PROJ_cd
 
-# Compilers / generators
-OCAMLC=ocamlc
-OCAMLOPT=ocamlopt
-OCAMLDEP=ocamldep
+define PROJ_aa
+  SOURCES = ../memCheck/addAnnotations.ml unitAddAnnotations.ml
+  RESULT = unitAddAnnotations
+endef
+export PROJ_aa
 
-# all relevant -I options here
-INCLUDES=$(CIL_DIR)
+####
+# Default project to bulid
+####
+ifndef SUBPROJS
+  export SUBPROJS = cd aa
+endif
 
-# all relevant -L options here
-LIB_DIRS=-ccopt -L/home/rshea/mote/cil/obj/x86_LINUX
+####
+# General build rulse
+####
+all:	bc
 
-# LIBS
-LIBS=unix.cma str.cma cil.cma
-OPTLIBS=unix.cmxa str.cmxa cil.cmxa
+# Catch-all target will be applied to all subprojects automatically
+%:
+	@$(MAKE) -f $(OCAMLMAKEFILE) subprojs SUBTARGET=$@
 
-# add other options for ocamlc here
-OCAMLFLAGS=-g $(LIB_DIRS) $(INCLUDES)    
-
-# add other options for ocamlopt here
-OCAMLOPTFLAGS=$(LIB_DIRS) $(INCLUDES) 
-
-# The list of object files (.cmo / .cmx) for the memory checker
-OBJS=
-	
-OPT_OBJS=
-
-all: $(OPT_OBJS) cilDriver.cmx
-	$(OCAMLOPT) -o cilDriver $(OCAMLOPTFLAGS) $(OPTLIBS) $(OPT_OBJS) cilDriver.cmx
-
-
-memoryByte: $(OBJS) cilDriver.cmo
-	$(OCAMLC) -o cilDriverByte $(OCAMLFLAGS) $(LIBS) $(OBJS) cilDriver.cmo
-
-# Common rules
-.SUFFIXES: .ml .mli .cmo .cmi .cmx
-
-.ml.cmo:
-	$(OCAMLC) $(OCAMLFLAGS) -c $<
-
-.mli.cmi:
-	$(OCAMLC) $(OCAMLFLAGS) -c $<
-
-.ml.cmx:
-	$(OCAMLOPT) $(OCAMLOPTFLAGS) -c $<
-
-# Clean up
-clean:
-	rm -f *.o
-	rm -f *.cm[iox]
-
-# Dependencies
-depend:
-	$(OCAMLDEP) $(INCLUDES) *.mli *.ml > .depend
-
-include .depend
 
