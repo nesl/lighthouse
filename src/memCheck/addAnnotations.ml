@@ -1,9 +1,9 @@
-(** 
-  * File: addAnnotations
-  * Date: 2/06, 7/06
-  * Purpose: Add annotations to specific function prototypes
-  * @author Roy Shea <roy@cs.ucla.edu>
-  *)
+(*
+ * File: addAnnotations
+ * Date: 2/06, 7/06
+ * Purpose: Add annotations to specific function prototypes
+ * Author: Roy Shea <roy@cs.ucla.edu>
+ *)
 
 open Pretty
 open Cil
@@ -14,9 +14,7 @@ let dbg_verbose = ref false
 let config_file = ref "config.txt"
 
 
-(** Update function [gfun]'s type with attributes described by the list
-  * [attributes].
-  *)
+(* Update gFun's type with attributes *)
 let addFunAttributes gFun attributes =
 
   (* Return a new type that is the old type with an additional attribute set *)
@@ -131,9 +129,7 @@ let tryAddFunAttributes annotTable global =
 ;;
 
 
-(** Get annotations from a file
-  * @todo Update this to read from a file rather than hardcode the values
-  *)
+(* Get annotations from a file. *)
 let getAnnotations file =
 
   (* Open a file and read each line into a list *)
@@ -201,10 +197,7 @@ let getAnnotations file =
 ;;
 
 
-(** Feature description that allows this functionality to be easily added into a
-  * larger collection of tools.  Based on the feature mechanism implemented in
-  * CIL.
-  *)
+(* Feature *)
 let feature : featureDescr = {
   fd_name = "addAnnotations";
   fd_enabled = ref true;

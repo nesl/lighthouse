@@ -12,8 +12,8 @@ export INCDIRS = /home/rshea/mote/cil-1.3.5/obj/x86_LINUX +oUnit
 # Add projects here
 #### 
 define PROJ_cd
-  SOURCES = cilDriver.ml
-  RESULT = cilDriver
+  SOURCES = cilDriver.ml unitCilDriver.ml
+  RESULT = unitCilDriver
 endef
 export PROJ_cd
 

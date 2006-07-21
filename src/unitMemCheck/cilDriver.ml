@@ -1,6 +1,14 @@
-open Cil
+(** Helper functions for scripting tools to prepare a program in CIL
+  @author Roy Shea (roy\@cs.ucla.edu)
+  *)
 
+open Cil
 module E = Errormsg
+
+(* Output channel that will be used by CIL if the user requests to save modified
+ * program. *)
+let outChannel : out_channel option ref = ref None;;
+
 
 (* Helper function to open a file for output *)
 let openFile (takeit: out_channel -> unit) outFile = 
@@ -12,10 +20,6 @@ let openFile (takeit: out_channel -> unit) outFile =
 ;;
 
 
-(* Output channel that will be used by CIL *)
-let outChannel : out_channel option ref = ref None;;
-
-
 (* Command line options that will be recognizied by this program  *)
 let argDescr = [
       ("--out", Arg.String (openFile (fun oc -> outChannel := Some oc)),
@@ -24,49 +28,47 @@ let argDescr = [
 ];;
   
 
-(* Run a given file thtrough CIL *)
-let doFile fn = 
-   
-  let f = Frontc.parse fn () in  
-
-    (* ADD CALLS TO OTHER PARTS OF CIL HERE using a style similar to: *)
-    (*     ignore (MyModule.feature.fd_doit f); *)
-
-    (match !outChannel with
-         None -> ()
-       | Some c -> Stats.time "printCIL" 
-                     (dumpFile (!printerForMaincil) c f.fileName) f);
+(* Run a given file through CIL *)
+(* ADD CALLS TO OTHER PARTS OF CIL HERE using a style similar to: *)
+(*     ignore (MyModule.feature.fd_doit f); *)
+let makeCilFile fileName = 
+  Cil.initCIL ();
+  Frontc.parse fileName ()
 ;;
 
 
 (* Handle the command line, initialize CIL, and then process the incoming file.*)
 let mainFunction () =
 
-  let fileNames : string list ref = ref [] in
+  (* Input and output file names *)
+  let inName = ref "" in
+  let outName = ref "" in
 
-  let commandLine () = 
+  (* Parse command line for the name of input file and optional output file name *)
+  let parseCommandLine () = 
     let usageMsg = "Usage: " ^ Sys.argv.(0) ^ " [options] source-file" in
-    let recordFile fname = fileNames := fname :: (!fileNames) in
-    let outName = ref "" in
-      Arg.parse argDescr recordFile usageMsg;
-      fileNames := List.rev !fileNames;
-      if not (List.length !fileNames == 1) then (
-        Arg.usage argDescr usageMsg;
-        exit 0;
+    let getInputFile name = 
+      if !inName = "" then (
+        inName := name 
+      ) else (
+        E.s (E.error "mainFunction: May only specify one source-file on the command line")
       )
-  in
-
-  let runCil () =
-    Cil.initCIL ();
-    List.iter doFile !fileNames;
+    in
+      Arg.parse argDescr getInputFile usageMsg;
+      if !inName = "" then 
+        E.s (E.error "mainFunction: Must specify one source-file on the command line");
+      ()
   in
 
     (* Go! *)
-    commandLine ();
-    runCil ();
-    ()
+    parseCommandLine ();
+    let cilFile = makeCilFile !inName in
+      (match !outChannel with
+           None -> ()
+         | Some c -> Stats.time "printCIL" 
+                       (dumpFile (!printerForMaincil) c cilFile.fileName) cilFile);
+      ()
 ;;
 
-
-mainFunction ();;
+(* mainFunction ();; *)
 
