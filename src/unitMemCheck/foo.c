@@ -1,22 +1,9 @@
 #include <stdlib.h>
 
-int* createIntArray(int size) {
-    return (malloc(sizeof(int) * size));
-}
+int* createIntArray(int size);
+void freeArray(int* buffer);
+void setArray(int *buffer, int size);
 
-void freeArray(int* buffer) {
-    free(buffer);
-}
-
-void setArray(int *buffer, int size) {
-    int i = 0;
-
-    for(i=0; i<42; i++) {
-        array[i] = i;
-    }
-
-
-}
 
 int main() {
 
@@ -36,3 +23,23 @@ int main() {
     
     return 0;
 }
+
+int* createIntArray(int size) {
+    return (malloc(sizeof(int) * size));
+}
+
+void freeArray(int* buffer) {
+    free(buffer);
+}
+
+void setArray(int *buffer, int size) {
+    int i = 0;
+
+    for(i=0; i<42; i++) {
+        buffer[i] = i;
+    }
+
+
+}
+
+

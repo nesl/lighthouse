@@ -18,7 +18,7 @@ endef
 export PROJ_cd
 
 define PROJ_aa
-  SOURCES = ../memCheck/addAnnotations.ml unitAddAnnotations.ml
+  SOURCES = ../memCheck/addAnnotations.ml cilDriver.ml unitAddAnnotations.ml
   RESULT = unitAddAnnotations
 endef
 export PROJ_aa
