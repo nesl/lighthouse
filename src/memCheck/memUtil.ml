@@ -11,7 +11,7 @@ let dbg_mem_util = ref false
 
 (* Runtime debugging flags. *)
                        
-let rec getVarinfo (l:lval) : (varinfo option) =
+let rec getVarinfoFromLval (l:lval) : (varinfo option) =
       match l with
           (Var v, _) -> Some v
         | (Mem e, _) -> getVarinfoFromExp e
@@ -21,7 +21,7 @@ and getVarinfoFromExp (e:exp) : (varinfo option) =
 
         | Lval l
         | AddrOf l
-        | StartOf l -> (getVarinfo l)
+        | StartOf l -> (getVarinfoFromLval l)
 
         (* Watch out for the NULL pointer... *)
         | Const c -> None
@@ -70,24 +70,25 @@ and getVarinfoFromExp (e:exp) : (varinfo option) =
 
                        
                 
-(* Assume that expression e is a flag.  Return true if the bit set in
- * by f is set in the expression. *)
-let check_flag_ (e:exp) (f:int64): bool = 
-  match e with 
-      Const(CInt64(i, _, _)) 
-        when ((Int64.logand i f) > (Int64.of_int 0)) 
-      -> true 
-  | _ -> false 
-
-
-
 (* Given an instruction return a list of expressions corresponding to
  * foramal paramaters that have the 'sos_claim' flag set. *)
 
 (* TODO: If the function does not store the return value, but the return value
  * must be stored, this function will overlook the memory leak. *)
-let get_own (i:instr): exp list =
+let getOwn (i:instr): exp list =
     
+  (* Assume that expression e is a flag.  Return true if the bit set in
+   * by f is set in the expression. *)
+  let check_flag_ (e:exp) (f:int64): bool = 
+    match e with 
+        Const(CInt64(i, _, _)) 
+          when ((Int64.logand i f) > (Int64.of_int 0)) 
+        -> true 
+      | _ -> false 
+  in
+
+
+
   match i with 
 
       Call (lop, Lval((Var vi), _), elist, _) 

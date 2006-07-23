@@ -1,6 +1,6 @@
 (*
  * File: addAnnotations
- * Date: 2/06, 7/06
+ * Date: 7/06
  * Purpose: Add annotations to specific function prototypes
  * Author: Roy Shea <roy@cs.ucla.edu>
  *)

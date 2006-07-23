@@ -74,7 +74,7 @@ module DFR = struct
    *)
   let doInstr (i: instr) (state: t): t DF.action = 
     
-    let returnedList = U.get_own i 
+    let returnedList = U.getOwn i 
     in
 
       if !dbg_return_i && (List.length returnedList = 0) then

@@ -23,11 +23,17 @@ define PROJ_aa
 endef
 export PROJ_aa
 
+define PROJ_pt
+  SOURCES = cilDriver.ml unitPtranal.ml
+  RESULT = unitPtranal
+endef
+export PROJ_pt
+
 ####
 # Default project to bulid
 ####
 ifndef SUBPROJS
-  export SUBPROJS = cd aa
+  export SUBPROJS = cd aa pt
 endif
 
 ####

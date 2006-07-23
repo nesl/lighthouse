@@ -14,7 +14,6 @@ module RF = ReturnFlow
 module U = MemUtil
 module A = AliasWrapper             
 module E = Errormsg
-module P = Ptranal
 
 (* State describing what happens to data from an "interesting" point in the
  * program.  Dead implies that the data is treated as dead on ALL paths from
@@ -317,7 +316,7 @@ class memoryVisitor = object
 
   method vinst (i:instr) =
  
-    let alloced = U.get_own i in
+    let alloced = U.getOwn i in
     let freed = U.get_released i in
     
       (* Match this instruction with any of: alloc, free, combo, or neither *)

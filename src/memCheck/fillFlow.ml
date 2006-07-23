@@ -72,7 +72,7 @@ module DFF = struct
    *)
   let doInstr (i: instr) (state: t): t DF.action = 
     
-    let filledList = U.get_own i 
+    let filledList = U.getOwn i 
     in
   
     let filled =
