@@ -17,11 +17,13 @@ define PROJ_cd
 endef
 export PROJ_cd
 
+
 define PROJ_aa
   SOURCES = ../memCheck/addAnnotations.ml cilDriver.ml unitAddAnnotations.ml
   RESULT = unitAddAnnotations
 endef
 export PROJ_aa
+
 
 define PROJ_pt
   SOURCES = cilDriver.ml unitPtranal.ml
@@ -29,11 +31,19 @@ define PROJ_pt
 endef
 export PROJ_pt
 
+
+define PROJ_ma
+  SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/memUtil.ml ../memCheck/mustFlow.ml cilDriver.ml unitMustAlias.ml
+  RESULT = unitMustAlias
+endef
+export PROJ_ma
+
+
 ####
 # Default project to bulid
 ####
 ifndef SUBPROJS
-  export SUBPROJS = cd aa pt
+  export SUBPROJS = cd aa pt ma
 endif
 
 ####

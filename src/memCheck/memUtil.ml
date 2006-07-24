@@ -77,18 +77,6 @@ and getVarinfoFromExp (e:exp) : (varinfo option) =
  * must be stored, this function will overlook the memory leak. *)
 let getOwn (i:instr): exp list =
     
-  (* Assume that expression e is a flag.  Return true if the bit set in
-   * by f is set in the expression. *)
-  let check_flag_ (e:exp) (f:int64): bool = 
-    match e with 
-        Const(CInt64(i, _, _)) 
-          when ((Int64.logand i f) > (Int64.of_int 0)) 
-        -> true 
-      | _ -> false 
-  in
-
-
-
   match i with 
 
       Call (lop, Lval((Var vi), _), elist, _) 
@@ -157,6 +145,20 @@ let getOwn (i:instr): exp list =
 (* Given an instruction return a list of expressions corresponding to
  * foramal paramaters that have the 'sos_release' flag set. *)
 let get_released (i:instr): exp list =
+  
+  
+  (* Assume that expression e is a flag.  Return true if the bit set in
+   * by f is set in the expression. *)
+  let check_flag_ (e:exp) (f:int64): bool = 
+    match e with 
+        Const(CInt64(i, _, _)) 
+          when ((Int64.logand i f) > (Int64.of_int 0)) 
+        -> true 
+      | _ -> false 
+  in
+
+
+
 
 
   match i with 
