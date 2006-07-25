@@ -37,6 +37,8 @@ type test_data = {
 
 
 let must_test_data = {
+  array_a = ref zero;
+  array_b = ref zero;
   alias_a = ref zero;
   alias_b = ref zero;
   alias_ab = ref zero;
@@ -72,7 +74,7 @@ class testVisitor = object
   method vvdec (v:varinfo) =
     match v.vname with
         "arrayA" ->
-          must_test_data.arra_a := Lval (var v);
+          must_test_data.array_a := Lval (var v);
           SkipChildren
       | "arrayB" ->
           must_test_data.array_b := Lval (var v);
@@ -122,127 +124,127 @@ visitCilFileSameGlobals tv cilFile;;
 
 (* Tests!!! *)
 let test_mustAlias_one = 
-  let a_good = match query_alias must_test_data.alias_a must_test_data.label_one with
-      End -> true
+  let a_good = match MF.query_alias !(must_test_data.alias_a) must_test_data.id_one with
+      MF.Dead -> true
     | _ -> false
   in
-  let b_good = match query_alias must_test_data.alias_b must_test_data.label_one with
-      End -> true
+  let b_good = match MF.query_alias !(must_test_data.alias_b) must_test_data.id_one with
+      MF.Dead -> true
     | _ -> false
   in
-  let ab_good = match query_alias must_test_data.alias_ab must_test_data.label_one with
-      End -> true
+  let ab_good = match MF.query_alias !(must_test_data.alias_ab) must_test_data.id_one with
+      MF.Dead -> true
     | _ -> false
   in
-  TestCase(fun _ -> assert_bool (a_good && b_good && c_good)) 
+  TestCase(fun _ -> assert_bool "Incorrect alias information" (a_good && b_good && ab_good)) 
 ;;
 
 
 
 let test_mustAlias_two = 
-  let a_good = match query_alias must_test_data.alias_a must_test_data.label_one with
-      MF.Next e -> ((compare e must_test_data.array_a) = 0)
+  let a_good = match MF.query_alias !(must_test_data.alias_a) must_test_data.id_two with
+      MF.Next e -> ((compare e !(must_test_data.array_a)) = 0)
     | _ -> false
   in
-  let b_good = match query_alias must_test_data.alias_b must_test_data.label_one with
-      End -> true
+  let b_good = match MF.query_alias !(must_test_data.alias_b) must_test_data.id_two with
+      MF.Dead -> true
     | _ -> false
   in
-  let ab_good = match query_alias must_test_data.alias_ab must_test_data.label_one with
-      End -> true
+  let ab_good = match MF.query_alias !(must_test_data.alias_ab) must_test_data.id_two with
+      MF.Dead -> true
     | _ -> false
   in
-  TestCase(fun _ -> assert_bool (a_good && b_good && c_good)) 
+  TestCase(fun _ -> assert_bool "Incorrect alias information" (a_good && b_good && ab_good)) 
 ;;
 
 
 
 let test_mustAlias_three = 
-  let a_good = match query_alias must_test_data.alias_a must_test_data.label_one with
-      MF.Next e -> ((compare e must_test_data.array_a) = 0)
+  let a_good = match MF.query_alias !(must_test_data.alias_a) must_test_data.id_three with
+      MF.Next e -> ((compare e !(must_test_data.array_a)) = 0)
     | _ -> false
   in
-  let b_good = match query_alias must_test_data.alias_b must_test_data.label_one with
-      End -> true
+  let b_good = match MF.query_alias !(must_test_data.alias_b) must_test_data.id_three with
+      MF.Dead -> true
     | _ -> false
   in
-  let ab_good = match query_alias must_test_data.alias_ab must_test_data.label_one with
-      End -> true
+  let ab_good = match MF.query_alias !(must_test_data.alias_ab) must_test_data.id_three with
+      MF.Dead -> true
     | _ -> false
   in
-  TestCase(fun _ -> assert_bool (a_good && b_good && c_good)) 
+  TestCase(fun _ -> assert_bool "Incorrect alias information" (a_good && b_good && ab_good)) 
 ;;
 
 
 
 let test_mustAlias_four = 
-  let a_good = match query_alias must_test_data.alias_a must_test_data.label_one with
-      MF.Next e -> ((compare e must_test_data.array_a) = 0)
+  let a_good = match MF.query_alias !(must_test_data.alias_a) must_test_data.id_four with
+      MF.Next e -> ((compare e !(must_test_data.array_a)) = 0)
     | _ -> false
   in
-  let b_good = match query_alias must_test_data.alias_b must_test_data.label_one with
-      MF.Next e -> ((compare e must_test_data.array_b) = 0)
+  let b_good = match MF.query_alias !(must_test_data.alias_b) must_test_data.id_four with
+      MF.Next e -> ((compare e !(must_test_data.array_b)) = 0)
     | _ -> false
   in
-  let ab_good = match query_alias must_test_data.alias_ab must_test_data.label_one with
-      End -> true
+  let ab_good = match MF.query_alias !(must_test_data.alias_ab) must_test_data.id_four with
+      MF.Dead -> true
     | _ -> false
   in
-  TestCase(fun _ -> assert_bool (a_good && b_good && c_good)) 
+  TestCase(fun _ -> assert_bool "Incorrect alias information" (a_good && b_good && ab_good)) 
 ;;
 
 
 
 let test_mustAlias_five = 
-  let a_good = match query_alias must_test_data.alias_a must_test_data.label_one with
-      MF.Next e -> ((compare e must_test_data.array_a) = 0)
+  let a_good = match MF.query_alias !(must_test_data.alias_a) must_test_data.id_five with
+      MF.Next e -> ((compare e !(must_test_data.array_a)) = 0)
     | _ -> false
   in
-  let b_good = match query_alias must_test_data.alias_b must_test_data.label_one with
-      MF.Next e -> ((compare e must_test_data.array_b) = 0)
+  let b_good = match MF.query_alias !(must_test_data.alias_b) must_test_data.id_five with
+      MF.Next e -> ((compare e !(must_test_data.array_b)) = 0)
     | _ -> false
   in
-  let ab_good = match query_alias must_test_data.alias_ab must_test_data.label_one with
-      MF.Next e -> ((compare e must_test_data.array_a) = 0)
+  let ab_good = match MF.query_alias !(must_test_data.alias_ab) must_test_data.id_five with
+      MF.Next e -> ((compare e !(must_test_data.array_a)) = 0)
     | _ -> false
   in
-  TestCase(fun _ -> assert_bool (a_good && b_good && c_good)) 
+  TestCase(fun _ -> assert_bool "Incorrect alias information" (a_good && b_good && ab_good)) 
 ;;
 
 
 
 let test_mustAlias_six = 
-  let a_good = match query_alias must_test_data.alias_a must_test_data.label_one with
-      MF.Next e -> ((compare e must_test_data.array_a) = 0)
+  let a_good = match MF.query_alias !(must_test_data.alias_a) must_test_data.id_six with
+      MF.Next e -> ((compare e !(must_test_data.array_a)) = 0)
     | _ -> false
   in
-  let b_good = match query_alias must_test_data.alias_b must_test_data.label_one with
-      MF.Next e -> ((compare e must_test_data.array_b) = 0)
+  let b_good = match MF.query_alias !(must_test_data.alias_b) must_test_data.id_six with
+      MF.Next e -> ((compare e !(must_test_data.array_b)) = 0)
     | _ -> false
   in
-  let ab_good = match query_alias must_test_data.alias_ab must_test_data.label_one with
-      MF.Next e -> ((compare e must_test_data.array_b) = 0)
+  let ab_good = match MF.query_alias !(must_test_data.alias_ab) must_test_data.id_six with
+      MF.Next e -> ((compare e !(must_test_data.array_b)) = 0)
     | _ -> false
   in
-  TestCase(fun _ -> assert_bool (a_good && b_good && c_good)) 
+  TestCase(fun _ -> assert_bool "Incorrect alias information" (a_good && b_good && ab_good)) 
 ;;
 
 
 
 let test_mustAlias_seven = 
-  let a_good = match query_alias must_test_data.alias_a must_test_data.label_one with
-      MF.Next e -> ((compare e must_test_data.array_a) = 0)
+  let a_good = match MF.query_alias !(must_test_data.alias_a) must_test_data.id_seven with
+      MF.Next e -> ((compare e !(must_test_data.array_a)) = 0)
     | _ -> false
   in
-  let b_good = match query_alias must_test_data.alias_b must_test_data.label_one with
-      MF.Next e -> ((compare e must_test_data.array_b) = 0)
+  let b_good = match MF.query_alias !(must_test_data.alias_b) must_test_data.id_seven with
+      MF.Next e -> ((compare e !(must_test_data.array_b)) = 0)
     | _ -> false
   in
-  let ab_good = match query_alias must_test_data.alias_ab must_test_data.label_one with
-      End -> true
+  let ab_good = match MF.query_alias !(must_test_data.alias_ab) must_test_data.id_seven with
+      MF.Dead -> true
     | _ -> false
   in
-  TestCase(fun _ -> assert_bool (a_good && b_good && c_good)) 
+  TestCase(fun _ -> assert_bool "Incorrect alias information" (a_good && b_good && ab_good)) 
 ;;
 
 
