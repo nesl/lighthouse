@@ -6,140 +6,243 @@ open Cil
 module MF = MustFlow
 module IH = Inthash
 
-  
+
 (* Set up a file for running tests *)
 let inputFile = "unitMustAlias.c";;
 let cilFile = makeCilFile inputFile;;
 ignore (MakeOneCFG.feature.fd_doit cilFile);;
-  
-(* Debugging *)
-MF.dbg_must_i := true;;
-MF.dbg_must_combine := true;;
-                  
-(* Section of code that we wish to examine and references to expressions of
- * interest *)
-let testLabel = ref "ZERO";;
-let aliasA = ref zero;;
-let aliasB = ref zero;;
-let aliasAB = ref zero;;
+
+(* Describe what we are interested in examining within CIL *)
+type test_data = {
+  array_a : exp ref;
+  array_b : exp ref;
+  alias_a : exp ref;
+  alias_b : exp ref;
+  alias_ab : exp ref;
+  label_one : string;
+  label_two : string;
+  label_three : string;
+  label_four : string;
+  label_five : string;
+  label_six : string;
+  label_seven : string;
+  mutable id_one : int;
+  mutable id_two : int;
+  mutable id_three : int;
+  mutable id_four : int;
+  mutable id_five : int;
+  mutable id_six : int;
+  mutable id_seven : int;
+};;
+
+
+let must_test_data = {
+  alias_a = ref zero;
+  alias_b = ref zero;
+  alias_ab = ref zero;
+  label_one = "ONE";
+  label_two = "TWO";
+  label_three = "THREE";
+  label_four = "FOUR";
+  label_five = "FIVE";
+  label_six = "SIX";
+  label_seven = "SEVEN";
+  id_one = 0;
+  id_two = 0;
+  id_three = 0;
+  id_four = 0;
+  id_five = 0;
+  id_six = 0;
+  id_seven = 0;
+};;
+
 
 
 (* Create a visitor to examine aliases *)
 class testVisitor = object
   inherit nopCilVisitor
 
-  (* Generate function's must alias information *)
+  (* Prepare must alias information *)
   method vfunc (f:fundec) =
-    IH.clear MF.DFM.stmtStartData;
-    IH.add MF.DFM.stmtStartData (List.hd f.sbody.bstmts).sid (Hashtbl.create 5);
-    MF.TrackF.compute [(List.hd f.sbody.bstmts)];
+    MF.generate_must_alias f;
     DoChildren
 
-    
-  (* Snarf the variables of interest into references *)
+
+  (* Snarf the variables of interest *)
   method vvdec (v:varinfo) =
     match v.vname with
-        "arrayAliasA" ->
-          aliasA := Lval (var v);
+        "arrayA" ->
+          must_test_data.arra_a := Lval (var v);
+          SkipChildren
+      | "arrayB" ->
+          must_test_data.array_b := Lval (var v);
+          SkipChildren
+      | "arrayAliasA" ->
+          must_test_data.alias_a := Lval (var v);
           SkipChildren
       | "arrayAliasB" ->
-          aliasB := Lval (var v);
+          must_test_data.alias_b := Lval (var v);
           SkipChildren
       | "arrayAliasAB" ->
-          aliasAB := Lval (var v);
+          must_test_data.alias_ab := Lval (var v);
           SkipChildren
       | _ -> SkipChildren
 
-  (* Assume that caller has set the referance "testLabel".  This visitor will
-   * find the statement with this label and then traverse its children. *)
+
+  (* Snarf the states of interest *)
   method vstmt (s:stmt) =
-    let found_label =
-      List.exists 
-        (fun l -> match l with 
-             Label (name, loc, b) when name = !testLabel -> true
-           | _ -> false
-        ) 
-        s.labels;
-    in
-      if found_label then (
-        ignore (printf "\n\nFound label %s\n" !testLabel);
-        ignore (printf "Must Alias information at %a\n" d_stmt s);
-        match (MF.getStmtState MF.DFM.stmtStartData s) with
-          
-            Some table -> 
-              Hashtbl.iter 
-                (fun key value -> 
-                   ignore (printf "%s -> " key.vname);
-                   match value with
-                       MF.Next v -> ignore (printf "%s\n" v.vname)
-                     | MF.End -> ignore (printf "End\n")
-                     | MF.Null -> ignore (printf "Null\n")
-                )
-                table;
-              SkipChildren
-          
-          
-          | None -> 
-              SkipChildren
-      ) else (
-        SkipChildren
+    List.iter 
+      (fun l -> match l with 
+           Label (name, _, _) when name = must_test_data.label_one -> 
+             must_test_data.id_one <- s.sid
+         | Label (name, _, _) when name = must_test_data.label_two -> 
+             must_test_data.id_two <- s.sid
+         | Label (name, _, _) when name = must_test_data.label_three -> 
+             must_test_data.id_three <- s.sid
+         | Label (name, _, _) when name = must_test_data.label_four -> 
+             must_test_data.id_four <- s.sid
+         | Label (name, _, _) when name = must_test_data.label_five -> 
+             must_test_data.id_five <- s.sid
+         | Label (name, _, _) when name = must_test_data.label_six -> 
+             must_test_data.id_six <- s.sid
+         | Label (name, _, _) when name = must_test_data.label_seven -> 
+             must_test_data.id_seven <- s.sid
+         | Label (name, _, _) -> ignore (printf "Failed for label name: %s\n" name)
+         | _ -> ignore (printf "Skipping statement %a\n" d_stmt s)
+                                 
       )
-
-  (* Print the instruction *)
-  method vinst (i:instr) =
+      s.labels;
     SkipChildren
-      
-
 end
-        
 
+(* Generate  data for the tests *)
+let tv = new testVisitor;;
+visitCilFileSameGlobals tv cilFile;;
+
+
+(* Tests!!! *)
 let test_mustAlias_one = 
-  testLabel := "ONE";
-  let tv = new testVisitor in
-    visitCilFileSameGlobals tv cilFile;
-    TestCase(fun _ -> assert_failure "Test not implemented") 
+  let a_good = match query_alias must_test_data.alias_a must_test_data.label_one with
+      End -> true
+    | _ -> false
+  in
+  let b_good = match query_alias must_test_data.alias_b must_test_data.label_one with
+      End -> true
+    | _ -> false
+  in
+  let ab_good = match query_alias must_test_data.alias_ab must_test_data.label_one with
+      End -> true
+    | _ -> false
+  in
+  TestCase(fun _ -> assert_bool (a_good && b_good && c_good)) 
 ;;
+
+
 
 let test_mustAlias_two = 
-  testLabel := "TWO";
-  let tv = new testVisitor in
-    visitCilFileSameGlobals tv cilFile;
-  TestCase(fun _ -> assert_failure "Test not implemented") 
+  let a_good = match query_alias must_test_data.alias_a must_test_data.label_one with
+      MF.Next e -> ((compare e must_test_data.array_a) = 0)
+    | _ -> false
+  in
+  let b_good = match query_alias must_test_data.alias_b must_test_data.label_one with
+      End -> true
+    | _ -> false
+  in
+  let ab_good = match query_alias must_test_data.alias_ab must_test_data.label_one with
+      End -> true
+    | _ -> false
+  in
+  TestCase(fun _ -> assert_bool (a_good && b_good && c_good)) 
 ;;
+
+
 
 let test_mustAlias_three = 
-  testLabel := "THREE";
-  let tv = new testVisitor in
-    visitCilFileSameGlobals tv cilFile;
-  TestCase(fun _ -> assert_failure "Test not implemented") 
+  let a_good = match query_alias must_test_data.alias_a must_test_data.label_one with
+      MF.Next e -> ((compare e must_test_data.array_a) = 0)
+    | _ -> false
+  in
+  let b_good = match query_alias must_test_data.alias_b must_test_data.label_one with
+      End -> true
+    | _ -> false
+  in
+  let ab_good = match query_alias must_test_data.alias_ab must_test_data.label_one with
+      End -> true
+    | _ -> false
+  in
+  TestCase(fun _ -> assert_bool (a_good && b_good && c_good)) 
 ;;
+
+
 
 let test_mustAlias_four = 
-  testLabel := "FOUR";
-  let tv = new testVisitor in
-    visitCilFileSameGlobals tv cilFile;
-  TestCase(fun _ -> assert_failure "Test not implemented") 
+  let a_good = match query_alias must_test_data.alias_a must_test_data.label_one with
+      MF.Next e -> ((compare e must_test_data.array_a) = 0)
+    | _ -> false
+  in
+  let b_good = match query_alias must_test_data.alias_b must_test_data.label_one with
+      MF.Next e -> ((compare e must_test_data.array_b) = 0)
+    | _ -> false
+  in
+  let ab_good = match query_alias must_test_data.alias_ab must_test_data.label_one with
+      End -> true
+    | _ -> false
+  in
+  TestCase(fun _ -> assert_bool (a_good && b_good && c_good)) 
 ;;
+
+
 
 let test_mustAlias_five = 
-  testLabel := "FIVE";
-  let tv = new testVisitor in
-    visitCilFileSameGlobals tv cilFile;
-  TestCase(fun _ -> assert_failure "Test not implemented") 
+  let a_good = match query_alias must_test_data.alias_a must_test_data.label_one with
+      MF.Next e -> ((compare e must_test_data.array_a) = 0)
+    | _ -> false
+  in
+  let b_good = match query_alias must_test_data.alias_b must_test_data.label_one with
+      MF.Next e -> ((compare e must_test_data.array_b) = 0)
+    | _ -> false
+  in
+  let ab_good = match query_alias must_test_data.alias_ab must_test_data.label_one with
+      MF.Next e -> ((compare e must_test_data.array_a) = 0)
+    | _ -> false
+  in
+  TestCase(fun _ -> assert_bool (a_good && b_good && c_good)) 
 ;;
+
+
 
 let test_mustAlias_six = 
-  testLabel := "SIX";
-  let tv = new testVisitor in
-    visitCilFileSameGlobals tv cilFile;
-  TestCase(fun _ -> assert_failure "Test not implemented") 
+  let a_good = match query_alias must_test_data.alias_a must_test_data.label_one with
+      MF.Next e -> ((compare e must_test_data.array_a) = 0)
+    | _ -> false
+  in
+  let b_good = match query_alias must_test_data.alias_b must_test_data.label_one with
+      MF.Next e -> ((compare e must_test_data.array_b) = 0)
+    | _ -> false
+  in
+  let ab_good = match query_alias must_test_data.alias_ab must_test_data.label_one with
+      MF.Next e -> ((compare e must_test_data.array_b) = 0)
+    | _ -> false
+  in
+  TestCase(fun _ -> assert_bool (a_good && b_good && c_good)) 
 ;;
 
+
+
 let test_mustAlias_seven = 
-  testLabel := "SEVEN";
-  let tv = new testVisitor in
-    visitCilFileSameGlobals tv cilFile;
-  TestCase(fun _ -> assert_failure "Test not implemented") 
+  let a_good = match query_alias must_test_data.alias_a must_test_data.label_one with
+      MF.Next e -> ((compare e must_test_data.array_a) = 0)
+    | _ -> false
+  in
+  let b_good = match query_alias must_test_data.alias_b must_test_data.label_one with
+      MF.Next e -> ((compare e must_test_data.array_b) = 0)
+    | _ -> false
+  in
+  let ab_good = match query_alias must_test_data.alias_ab must_test_data.label_one with
+      End -> true
+    | _ -> false
+  in
+  TestCase(fun _ -> assert_bool (a_good && b_good && c_good)) 
 ;;
 
 

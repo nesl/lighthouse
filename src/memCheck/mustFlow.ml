@@ -272,7 +272,7 @@ module DFM = struct
 
 
   (* Statements should not effect alias information *) 
-  let doStmt (s: stmt) (state: t) = DF.SDefault
+  let doStmt (s: stmt) (state: t) = DF.SUse (Hashtbl.copy state)
 
   (* All blocks go on worklist. *)
   let filterStmt _ = true
@@ -283,7 +283,46 @@ module TrackF = DF.ForwardsDataFlow(DFM)
 
 let getStmtState (data: mustTable IH.t) (s: stmt): mustTable option =
   try Some (IH.find data s.sid)
-  with Not_found -> None (* Assume that data is not taken *)
+  with Not_found -> None 
+
+let getIdState (data: mustTable IH.t) (id: int): mustTable option =
+  try Some (IH.find data id)
+  with Not_found -> None 
+
+let print_alias (id:int) =
+  match (getIdState DFM.stmtStartData id) with
+      Some table -> 
+        ignore (printf "\n\nState %d:\n" id);
+        Hashtbl.iter 
+          (fun key value ->
+             ignore (printf "%s -> " key.vname);
+             match value with
+                 Next v -> ignore (printf "%s\n" v.vname)
+               | End -> ignore (printf "End\n")
+               | Null -> ignore (printf "Null\n")
+          )
+          table;
+        ()
+    | None ->
+        ignore (printf "\n\nUnable to find state %d\n" id);
+;;
+        
+let generate_must_alias (f:fundec) =
+  IH.clear DFM.stmtStartData;
+  IH.add DFM.stmtStartData (List.hd f.sbody.bstmts).sid (Hashtbl.create 5);
+  TrackF.compute [(List.hd f.sbody.bstmts)]
+;;
+
+let query_alias (e:exp) (id:int) : (varPtr) =
+  match (getIdState DFM.stmtStartData id) with
+      Some table -> (
+        try (Hashtbl.find table e)
+        with Not_found -> End
+      )
+    | None -> End
+;;
+          
 
 
 
+  
