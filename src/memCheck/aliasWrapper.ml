@@ -2,7 +2,7 @@ open Cil
 open Pretty
 
 module E = Errormsg
-module MF = MustFlow
+module MF = MustAlias
 module IH = Inthash
 module U = MemUtil
 

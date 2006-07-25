@@ -33,7 +33,7 @@ export PROJ_pt
 
 
 define PROJ_ma
-  SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/memUtil.ml ../memCheck/mustFlow.ml cilDriver.ml unitMustAlias.ml
+  SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/memUtil.ml ../memCheck/mustAlias.ml cilDriver.ml unitMustAlias.ml
   RESULT = unitMustAlias
 endef
 export PROJ_ma

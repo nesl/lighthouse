@@ -7,7 +7,7 @@ open MakeOneCFG
 
 module IH = Inthash
 module DF = DeadFlow
-module MF = MustFlow
+module MF = MustAlias
 module OF = OwnFlow
 module FF = FillFlow
 module RF = ReturnFlow

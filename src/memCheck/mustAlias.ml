@@ -184,16 +184,16 @@ end
 
 module TrackF = DF.ForwardsDataFlow(DFM)
 
-let getStmtState (data: must_table IH.t) (s: stmt): must_table option =
+let get_stmt_state (data: must_table IH.t) (s: stmt): must_table option =
   try Some (IH.find data s.sid)
   with Not_found -> None 
 
-let getIdState (data: must_table IH.t) (id: int): must_table option =
+let get_id_state (data: must_table IH.t) (id: int): must_table option =
   try Some (IH.find data id)
   with Not_found -> None 
 
 let print_alias (id:int) =
-  match (getIdState DFM.stmtStartData id) with
+  match (get_id_state DFM.stmtStartData id) with
       Some table -> 
         ignore (printf "\n\nState %d:\n" id);
         Hashtbl.iter 
@@ -217,8 +217,8 @@ let generate_must_alias (f:fundec) =
   TrackF.compute [(List.hd f.sbody.bstmts)]
 ;;
 
-let query_alias (e:exp) (id:int) : (alias) =
-  match (getIdState DFM.stmtStartData id) with
+let get_alias (e:exp) (id:int) : (alias) =
+  match (get_id_state DFM.stmtStartData id) with
       Some table -> (
         try (Hashtbl.find table e)
         with Not_found -> Dead
@@ -226,6 +226,16 @@ let query_alias (e:exp) (id:int) : (alias) =
     | None -> Dead
 ;;
           
+
+let must_alias (e1:exp) (e2:exp) (id:int) : (bool) =
+  try 
+    match (get_alias e1 id) with
+        Next e when (Util.equals e2 e) -> true
+      | _ -> false
+  with Not_found -> false
+;;
+          
+
 
 
 
