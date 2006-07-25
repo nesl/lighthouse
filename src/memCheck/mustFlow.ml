@@ -7,111 +7,103 @@ module E = Errormsg
 module U = MemUtil
 
 (* Runtime debuging flags. *)
-let dbg_must_i = ref false
-let dbg_must_combine = ref false
+let dbg_must_i = ref false;;
+let dbg_must_combine = ref false;;
 
 (* Dataflow specific debugging *)
-let dbg_must_df = ref false
+let dbg_must_df = ref false;;
 
-type varPtr = Next of varinfo | End | Null
-type mustTable = (varinfo, varPtr) Hashtbl.t
+type alias = Next of exp | End | Null | Dead;;
 
+type must_table = (varinfo, varPtr) Hashtbl.t;;
+
+let print_must_table (table:must_table) =
+  Hashtbl.iter
+    (fun (e:exp) (a:alias) -> 
+       ignore (printf "Exp %a -> " d_exp e);
+       match a with
+           Next e -> ignore (printf "%a\n" d_exp e)
+         | End -> ignore (printf "End\n")
+         | Null -> ignore (printf "Null\n")
+         | Dead -> ignore (printf "Dead\n") 
+    )
+    table
+;;
+                   
 module DFM = struct
 
   (* Vital stats for this dataflow. *)
-  let name = "mustFlow"
-  let debug = dbg_must_df
-  type t = mustTable
+  let name = "mustFlow";;
+  let debug = dbg_must_df;;
+  type t = must_table;;
 
   (* Basic util functions to jumpstart dataflow. *)
-  let stmtStartData: t IH.t = IH.create 17
-  let copy (state: t) = state
+  let stmtStartData: t IH.t = IH.create 17;;
+  let copy (state: t) = state;;
   let pretty () (state: t) =
     dprintf "{%s}" ( "Print not implemented..."
-    )
+    );;
+
 
   (* Statments do not have a default state *)
-  let computeFirstPredecessor (s: stmt) (state: t) = state
+  let computeFirstPredecessor (s: stmt) (state: t) = state;;
 
+  
   (* Merge points take the intersection of the two sets *)
-  let combinePredecessors (s: stmt) ~(old: t) (new_state: t) =
+  let combinePredecessors (s: stmt) ~(old_state: t) (new_state: t) =
+
+    (* Print incoming state *)
     if (!dbg_must_combine) then (
       ignore (printf "MUST COMBINE: Examining State: %d:\n" s.sid);
+      ignore (printf "MUST COMBINE: Incoming old_state:\n");
+      print_must_table old_state;
+      ignore (printf "MUST COMBINE: Incoming merge:\n");
+      print_must_table new_state;
       flush stdout;
     );
 
+    (* Create a NEW state by merging the two old state.  Be careful since OCaml
+     * defaults to using references to copy a hash table...
+     *)
     let state = Hashtbl.create 5 in
-
-      if (!dbg_must_combine) then
-        (
-          (* Print old state *)
-          ignore (printf "MUST COMBINE: Incoming old:\n");
-          Hashtbl.iter
-            (fun v vop -> 
-               ignore (printf "MUST COMBINE:   Var %s -> " v.vname);
-               match vop with
-                   Next v -> ignore (printf "%s\n" v.vname)
-                 | End -> ignore (printf "End\n")
-                 | Null -> ignore (printf "Null\n")
-            )
-            old;
-
-          (* Print incoming merge *)
-          ignore (printf "MUST COMBINE: Incoming merge:\n");
-          Hashtbl.iter
-            (fun v vop -> 
-               ignore (printf "MUST COMBINE:   Var %s -> " v.vname);
-               match vop with
-                   Next v -> ignore (printf "%s\n" v.vname)
-                 | End -> ignore (printf "End\n")
-                 | Null -> ignore (printf "Null\n")
-            )
-            new_state;
-        );
       
-      (* For each element in old state *)
+      (* For each element in old_state state, if it has the same alias good,
+       * else drop it *)
       Hashtbl.iter 
-        (
-          fun v aop -> 
-
-            (* If it has the same alias good, else drop it *)
+        (fun v a -> 
             try 
-              if (Util.equals (Hashtbl.find new_state v) aop) then
-                Hashtbl.add state v aop
+              if (Util.equals (Hashtbl.find new_state v) a) then
+                Hashtbl.add state v a
               else
-                Hashtbl.add state v End
-            with
-                _ -> Hashtbl.add state v End
-        )
-        old;
-      
-      if (!dbg_must_combine) then
-        (
-          (* Print outgoing state *)
-          ignore (printf "MUST COMBINE: Post merge:\n");
-          Hashtbl.iter
-            (fun v vop -> 
-               ignore (printf "MUST COMBINE:   Var %s -> " v.vname);
-               match vop with
-                   Next v -> ignore (printf "%s\n" v.vname)
-                 | End -> ignore (printf "End\n")
-                 | Null -> ignore (printf "Null\n")
-            )
-            state;
-        );
+                Hashtbl.add state v Dead
+            with _ -> Hashtbl.add state v Dead)
+        old_state;
+     
+      (* Print outgoing state *)
+      if (!dbg_must_combine) then (
+        ignore (printf "MUST COMBINE: Post merge:\n");
+        print_must_table state;
+      );
 
+      (* Check to see if the state is the same INDEPENDENT of the order of
+       * entries by checking that:
+       *   all enteries is the old state are in the generated state AND
+       *   all enteries in the generated state are in the old state
+       * 
+       * Convince yourself that we do not need to check the new_state :-)
+       *)
       if (
         try
           let seo =
             (Hashtbl.fold
-               (fun v vop b -> b && (Util.equals (Hashtbl.find old v) vop))
+               (fun e a b -> b && (Util.equals (Hashtbl.find old_state e) a))
                state
                true)
           in
           let soe = 
             (Hashtbl.fold
-               (fun v vop b -> b && (Util.equals (Hashtbl.find state v) vop))
-               old
+               (fun e a b -> b && (Util.equals (Hashtbl.find state e) a))
+               old_state
                true)
           in
             seo && soe
