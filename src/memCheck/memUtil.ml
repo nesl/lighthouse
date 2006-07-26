@@ -4,8 +4,6 @@ open Pretty
 module E = Errormsg
 module IH = Inthash
               
-let release = Int64.of_int 0x04
-
 (* Run time debugging flags *)
 let dbg_mem_util = ref false
 
@@ -145,7 +143,9 @@ let getOwn (i:instr): exp list =
 (* Given an instruction return a list of expressions corresponding to
  * foramal paramaters that have the 'sos_release' flag set. *)
 let get_released (i:instr): exp list =
-  
+
+  let release = Int64.of_int 0x04 in
+
   
   (* Assume that expression e is a flag.  Return true if the bit set in
    * by f is set in the expression. *)
@@ -156,9 +156,6 @@ let get_released (i:instr): exp list =
         -> true 
       | _ -> false 
   in
-
-
-
 
 
   match i with 
