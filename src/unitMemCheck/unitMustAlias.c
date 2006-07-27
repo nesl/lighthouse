@@ -48,12 +48,18 @@ FIVE:
 SIX:
 
     // This conditional should make it such that arrayAliasAB may alias arrayB
-    // OR arra A.  So it MUST alias nothing.
+    // OR arra A.  So its MUST alias information becomes ambigous.
     if(arrayA[0] > arrayB[0]) { 
         arrayAliasAB = arrayA; 
     }
 SEVEN:
 
+    // Finish off by nulling all of the pointers
+    arrayAliasA = 0;
+    arrayAliasB = 0;
+    arrayAliasAB = 0;
+EIGHT:
+    
     return 0;
 }
 

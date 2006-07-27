@@ -51,9 +51,10 @@ val generate_must_alias : Cil.fundec -> unit
   * expression e2 *)
 val must_alias : Cil.exp -> Cil.exp -> int -> bool                                      
 
-(** Get the must alias information describing what the expression in question
-  * must alias *)
-val get_alias : Cil.exp -> int -> alias
+(** Return the set of expressions that an expression must alias at a given point
+  * in the program
+  *)
+val get_aliases : Cil.exp -> int -> Cil.exp list
 
 (** Print the alias information valid at the end of the given statement ID *)
 val print_alias : int -> unit

@@ -6,7 +6,6 @@ open Cil
 module MA = MustAlias
 module IH = Inthash
 
-
 (* Set up a file for running tests *)
 let inputFile = "unitMustAlias.c";;
 let cilFile = makeCilFile inputFile;;
@@ -26,6 +25,7 @@ type test_data = {
   label_five : string;
   label_six : string;
   label_seven : string;
+  label_eight : string;
   mutable id_one : int;
   mutable id_two : int;
   mutable id_three : int;
@@ -33,6 +33,7 @@ type test_data = {
   mutable id_five : int;
   mutable id_six : int;
   mutable id_seven : int;
+  mutable id_eight : int;
 };;
 
 
@@ -49,6 +50,7 @@ let must_test_data = {
   label_five = "FIVE";
   label_six = "SIX";
   label_seven = "SEVEN";
+  label_eight = "EIGHT";
   id_one = 0;
   id_two = 0;
   id_three = 0;
@@ -56,6 +58,7 @@ let must_test_data = {
   id_five = 0;
   id_six = 0;
   id_seven = 0;
+  id_eight = 0;
 };;
 
 
@@ -66,6 +69,7 @@ class testVisitor = object
 
   (* Prepare must alias information *)
   method vfunc (f:fundec) =
+    MA.dbg_must_i := true;
     MA.generate_must_alias f;
     DoChildren
 
@@ -109,6 +113,8 @@ class testVisitor = object
              must_test_data.id_six <- s.sid
          | Label (name, _, _) when name = must_test_data.label_seven -> 
              must_test_data.id_seven <- s.sid
+         | Label (name, _, _) when name = must_test_data.label_eight -> 
+             must_test_data.id_eight <- s.sid
          | Label (name, _, _) -> ignore (printf "Failed for label name: %s\n" name)
          | _ -> ignore (printf "Skipping statement %a\n" d_stmt s)
                                  
@@ -124,8 +130,8 @@ visitCilFileSameGlobals tv cilFile;;
 (* Helper function to check that an expression is considerd Dead by the alias
  * analysis *)
 let is_dead (e:exp) (id:int) : bool =
-  match MA.get_alias e id with
-      MA.Dead -> true
+  match MA.get_aliases e id with
+      [e] -> true
     | _ -> false
 ;;
 
@@ -253,6 +259,31 @@ let test_mustAlias_seven =
 ;;
 
 
+let test_mustAlias_eight = 
+  MA.print_alias must_test_data.id_eight;
+  let a_good = 
+    MA.must_alias 
+      !(must_test_data.alias_a) 
+      zero
+      must_test_data.id_eight
+  in
+  let b_good = 
+    MA.must_alias
+      !(must_test_data.alias_b) 
+      zero
+      must_test_data.id_eight
+  in
+  let ab_good = 
+    MA.must_alias
+      !(must_test_data.alias_ab) 
+      zero
+      must_test_data.id_eight
+  in
+  TestCase(fun _ -> assert_bool "Incorrect alias information" (a_good && b_good && ab_good)) 
+;;
+
+
+
 (* Run all the tests *)
 let suite_mustAlias = 
   TestLabel ("Add Annotations", 
@@ -264,6 +295,7 @@ let suite_mustAlias =
                TestLabel ("mustAlias.c: Five", test_mustAlias_five);
                TestLabel ("mustAlias.c: Six", test_mustAlias_six);
                TestLabel ("mustAlias.c: Seven", test_mustAlias_seven);
+               TestLabel ("mustAlias.c: Eight", test_mustAlias_eight);
              ]
   )
 ;;

@@ -184,14 +184,24 @@ end
 
 module TrackF = DF.ForwardsDataFlow(DFM)
 
-let get_stmt_state (data: must_table IH.t) (s: stmt): must_table option =
-  try Some (IH.find data s.sid)
-  with Not_found -> None 
 
+(* Run the data flow to generate must alias information for a function *)
+let generate_must_alias (f:fundec) =
+  IH.clear DFM.stmtStartData;
+  IH.add DFM.stmtStartData (List.hd f.sbody.bstmts).sid (Hashtbl.create 5);
+  TrackF.compute [(List.hd f.sbody.bstmts)]
+;;
+
+
+(* Helper function that returns the alias information for a given statement ID
+ *)                      
 let get_id_state (data: must_table IH.t) (id: int): must_table option =
   try Some (IH.find data id)
-  with Not_found -> None 
+  with Not_found -> None
+;;
 
+
+(* Print the alias information gatherd for a particular statment ID *)                      
 let print_alias (id:int) =
   match (get_id_state DFM.stmtStartData id) with
       Some table -> 
@@ -210,13 +220,9 @@ let print_alias (id:int) =
     | None ->
         ignore (printf "\n\nUnable to find state %d\n" id);
 ;;
-        
-let generate_must_alias (f:fundec) =
-  IH.clear DFM.stmtStartData;
-  IH.add DFM.stmtStartData (List.hd f.sbody.bstmts).sid (Hashtbl.create 5);
-  TrackF.compute [(List.hd f.sbody.bstmts)]
-;;
+ 
 
+(* Helper function to return the item that an expression must alias *)
 let get_alias (e:exp) (id:int) : (alias) =
   match (get_id_state DFM.stmtStartData id) with
       Some table -> (
@@ -227,12 +233,37 @@ let get_alias (e:exp) (id:int) : (alias) =
 ;;
           
 
+(* For a given expression at a particular statement, return the alias
+ * information for that state. Note that this includes items found through a
+ * transitive follow of must alias information. *)
+let get_aliases (e:exp) (id:int) : (exp list) =
+  
+  let rec get_aliases_helper (e_check_next:exp) (e_aliases:exp list) =
+    try match (get_alias e_check_next id) with
+          
+      | Next e_next when (List.mem e_next e_aliases) -> e_aliases
+      (* Found a loop so the traversal is done *)
+
+      | Next e_next -> get_aliases_helper e_next (e_next :: e_aliases)
+      (* Continue to traverse the must aliases *)
+      
+      | Null -> zero :: e_aliases
+      (* Special case used for Null pointers *)
+
+      | End
+      | Dead -> e_aliases
+      (* Reached the end of the traversal *)
+          
+    with Not_found -> e_aliases
+  in
+
+    get_aliases_helper e [e]
+;;
+  
+                      
+(* Retrun true if expression e1 must alias expression e2 *)
 let must_alias (e1:exp) (e2:exp) (id:int) : (bool) =
-  try 
-    match (get_alias e1 id) with
-        Next e when (Util.equals e2 e) -> true
-      | _ -> false
-  with Not_found -> false
+  List.mem e2 (get_aliases e1 id)
 ;;
           
 
