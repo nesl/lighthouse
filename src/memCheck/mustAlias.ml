@@ -15,6 +15,8 @@ let dbg_must_df = ref false;;
 
 type alias = Next of exp | End | Null | Dead;;
 
+let nullPtr = CastE (intPtrType, zero);;
+
 type must_table = (exp, alias) Hashtbl.t;;
 
 let print_must_table (table:must_table) =
@@ -124,7 +126,7 @@ module DFM = struct
   let doInstr (i: instr) (state: t): t DF.action =
     match i with
 
-        Set (lv, e, _) when (Util.equals e zero) ->
+        Set (lv, e, _) when (Util.equals e nullPtr) ->
           Hashtbl.replace state (Lval lv) Null;
           if (!dbg_must_i) then
             ignore (printf "MUST I: %a\n maps expr %a to Null\n" d_instr i d_exp (Lval lv));
@@ -183,7 +185,6 @@ module DFM = struct
 end
 
 module TrackF = DF.ForwardsDataFlow(DFM)
-
 
 (* Run the data flow to generate must alias information for a function *)
 let generate_must_alias (f:fundec) =
@@ -247,7 +248,7 @@ let get_aliases (e:exp) (id:int) : (exp list) =
       | Next e_next -> get_aliases_helper e_next (e_next :: e_aliases)
       (* Continue to traverse the must aliases *)
       
-      | Null -> zero :: e_aliases
+      | Null -> nullPtr :: e_aliases
       (* Special case used for Null pointers *)
 
       | End

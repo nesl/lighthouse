@@ -69,7 +69,6 @@ class testVisitor = object
 
   (* Prepare must alias information *)
   method vfunc (f:fundec) =
-    MA.dbg_must_i := true;
     MA.generate_must_alias f;
     DoChildren
 
@@ -260,23 +259,22 @@ let test_mustAlias_seven =
 
 
 let test_mustAlias_eight = 
-  MA.print_alias must_test_data.id_eight;
   let a_good = 
     MA.must_alias 
       !(must_test_data.alias_a) 
-      zero
+      MA.nullPtr
       must_test_data.id_eight
   in
   let b_good = 
     MA.must_alias
       !(must_test_data.alias_b) 
-      zero
+      MA.nullPtr
       must_test_data.id_eight
   in
   let ab_good = 
     MA.must_alias
       !(must_test_data.alias_ab) 
-      zero
+      MA.nullPtr
       must_test_data.id_eight
   in
   TestCase(fun _ -> assert_bool "Incorrect alias information" (a_good && b_good && ab_good)) 

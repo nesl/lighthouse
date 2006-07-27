@@ -20,7 +20,7 @@ val dbg_must_combine : bool ref
 val dbg_must_df : bool ref
 
 
-(** {b Alias Type} Base type used to describe alias information. *)
+(** {b Types} Base type used to describe alias information. *)
 
 (** Type used to describe alias information *)
 type alias = 
@@ -38,7 +38,12 @@ type alias =
   (** Expression in question either has no alias information at this point or
     * may point to more than one target *)
 
-      
+(** Definition of the NULL pointer.  Assumes that this will be zero type cast to
+  * an integer pointer.
+  *)
+val nullPtr : Cil.exp
+
+
 (** {b Must Alias Functions} The following functions allow application code to
   * interact with the must alias analysis.  Note that [generate_must_alias]
   * should be called for a given function before any of the other calls are
