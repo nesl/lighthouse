@@ -4,7 +4,7 @@ open Pretty
 module IH = Inthash
 module DF = Dataflow
 module U = MemUtil
-module A = AliasWrapper
+module MA = MustAlias
 module E = Errormsg
  
 (* Current statement needed for mustAlias analysis *)
@@ -79,7 +79,7 @@ module DFF = struct
       List.exists
         (fun target ->
            List.exists
-             (fun e -> A.mustAliasWrapper (e: exp) (target: exp) (!currentStmt: stmt))
+             (fun e -> MA.must_alias e target !currentStmt.sid)
              filledList
         )
         !targets

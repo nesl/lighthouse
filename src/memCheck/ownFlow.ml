@@ -4,7 +4,7 @@ open Pretty
 module IH = Inthash
 module DF = Dataflow
 module U = MemUtil
-module A = AliasWrapper
+module MA = MustAlias
 module E = Errormsg
  
 (* Blah... *)             
@@ -46,7 +46,8 @@ let takenI i s =
         Set (lv, _, _) 
       | Call (Some lv, _, _, _) ->
           List.exists 
-            (fun store -> A.mustAliasWrapper ((Lval lv): exp) (store: exp) (s: stmt)) 
+            (fun store -> 
+               MA.must_alias (Lval lv) store s.sid)
             !stores
       | _ -> false
   in
@@ -58,7 +59,7 @@ let takenI i s =
           List.exists 
             (fun target -> 
                let b = 
-                 A.mustAliasWrapper e target s
+                 MA.must_alias e target s.sid
                in
                  if (!dbg_alloc_store_i) then (
                    if b then 
@@ -82,7 +83,7 @@ let takenI i s =
               (fun target -> 
                  List.exists
                    (fun release -> 
-                      A.mustAliasWrapper release target s)
+                      MA.must_alias release target s.sid)
                    (U.get_released i)
               )
               !targets
@@ -312,7 +313,7 @@ sid);
           
           let returnsTarget =
             List.exists 
-              (fun target -> A.mustAliasWrapper e target s) 
+              (fun target -> MA.must_alias e target s.sid) 
               !targets
           in
 
@@ -378,7 +379,7 @@ sid);
           let e1Target = 
             let e1 = (Lval lv) in
               List.exists 
-                (fun target -> A.mustAliasWrapper e1 target s) 
+                (fun target -> MA.must_alias e1 target s.sid) 
                 !targets
           in
             
@@ -406,22 +407,22 @@ sid);
       | If (BinOp (Ne, e1, e2, _), b1, _, _) ->
          
           let e1Null = 
-            A.mustAliasNull e1 s 
+            MA.must_alias e1 MA.nullPtr s.sid
           in
 
           let e2Null = 
-            A.mustAliasNull e2 s 
+            MA.must_alias e2 MA.nullPtr s.sid
           in
 
           let e1Target =
             List.exists 
-              (fun target -> A.mustAliasWrapper e1 target s) 
+              (fun target -> MA.must_alias e1 target s.sid) 
               !targets
           in
 
           let e2Target =
             List.exists 
-              (fun target -> A.mustAliasWrapper e2 target s) 
+              (fun target -> MA.must_alias e2 target s.sid) 
               !targets
           in
 
@@ -464,7 +465,7 @@ sid);
           let e1Target =
             let e1 = (Lval lv) in
               List.exists 
-                (fun target -> A.mustAliasWrapper e1 target s) 
+                (fun target -> MA.must_alias e1 target s.sid) 
                 !targets
           in
 
@@ -490,22 +491,22 @@ sid);
       | If (BinOp (Eq, e1, e2, _), b1, _, _) ->
          
           let e1Null = 
-            A.mustAliasNull e1 s 
+            MA.must_alias e1 MA.nullPtr s.sid
           in
 
           let e2Null = 
-            A.mustAliasNull e2 s 
+            MA.must_alias e1 MA.nullPtr s.sid
           in
 
           let e1Target =
             List.exists 
-              (fun target -> A.mustAliasWrapper e1 target s) 
+              (fun target -> MA.must_alias e1 target s.sid) 
               !targets
           in
 
           let e2Target =
             List.exists 
-              (fun target -> A.mustAliasWrapper e2 target s) 
+              (fun target -> MA.must_alias e2 target s.sid) 
               !targets
           in
 

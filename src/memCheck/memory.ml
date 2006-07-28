@@ -14,7 +14,8 @@ module RF = ReturnFlow
 module U = MemUtil
 module A = AliasWrapper             
 module E = Errormsg
-
+module MA = MustAlias
+             
 (* State describing what happens to data from an "interesting" point in the
  * program.  Dead implies that the data is treated as dead on ALL paths from
  * that point forward.  Store implies that the data is stored exactly once on
@@ -100,7 +101,8 @@ let allocDataTreatment alloced s iop =
                 Set (lv, _, _) 
               | Call (Some lv, _, _, _) ->
                   List.exists 
-                    (fun store -> A.mustAliasWrapper ((Lval lv): exp) (store: exp) (s: stmt)) 
+                    (fun store -> 
+                       MA.must_alias (Lval lv) store s.sid)
                     !OF.stores
               | _ -> false
           in
@@ -444,9 +446,6 @@ let argDescr = [
       ("--mem_dbg_may_alias", Arg.Unit (fun _ -> A.dbg_may_alias := true),
        "List all may alias queries and the results");
      
-      ("--mem_dbg_must_alias", Arg.Unit (fun _ -> A.dbg_must_alias := true),
-       "List all must alias queries and the results");
-
       ("--mem_dbg_must_i", Arg.Unit (fun _ -> MustFlow.dbg_must_i := true),
        "Show must dataflow processing each instruction");
 
@@ -455,9 +454,6 @@ let argDescr = [
 
       ("--mem_dbg_must_df", Arg.Unit (fun _ -> MustFlow.dbg_must_df := true),
        "Internal dataflow debug");
-
-      ("--mem_dbg_must_null", Arg.Unit (fun _ -> A.dbg_must_null := true),
-       "Verbose listing of analiysis to see if an expression is the null pointer");
 
       (* Degbugging for the fill analysis *)
       

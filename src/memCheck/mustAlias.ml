@@ -224,43 +224,92 @@ let print_alias (id:int) =
  
 
 (* Helper function to return the item that an expression must alias *)
-let get_alias (e:exp) (id:int) : (alias) =
+let get_forward_alias (e:exp) (id:int) : (exp option) =
   match (get_id_state DFM.stmtStartData id) with
       Some table -> (
-        try (Hashtbl.find table e)
-        with Not_found -> Dead
+        try match (Hashtbl.find table e) with
+            Next e -> Some e
+          | Null -> Some nullPtr
+          | _ -> None
+        with Not_found -> None
       )
-    | None -> Dead
+    | None -> None
+;;
+          
+
+(* Helper function to return the items that must alias an expression *)
+let get_backward_aliass (e:exp) (id:int) : (exp list) =
+  match (get_id_state DFM.stmtStartData id) with
+      Some table -> (
+        try 
+          Hashtbl.fold 
+            (fun key binding back_aliases -> 
+               if (Util.equals binding (Next e)) then 
+                 (key :: back_aliases)
+               else 
+                 back_aliases
+            ) 
+            table []
+        with Not_found -> []
+      )
+    | None -> []
 ;;
           
 
 (* For a given expression at a particular statement, return the alias
  * information for that state. Note that this includes items found through a
- * transitive follow of must alias information. *)
+ * transitive follow of must alias information. This function implements a
+ * traveresal of an undirected graph.  This is NOT an efficient implementation. *)
 let get_aliases (e:exp) (id:int) : (exp list) =
   
-  let rec get_aliases_helper (e_check_next:exp) (e_aliases:exp list) =
-    try match (get_alias e_check_next id) with
-          
-      | Next e_next when (List.mem e_next e_aliases) -> e_aliases
-      (* Found a loop so the traversal is done *)
+  let rec get_aliases_helper (old_aliases:exp list) =
 
-      | Next e_next -> get_aliases_helper e_next (e_next :: e_aliases)
-      (* Continue to traverse the must aliases *)
-      
-      | Null -> nullPtr :: e_aliases
-      (* Special case used for Null pointers *)
+    (* Merge new forwards aliases into list *)
+    let new_aliases = 
+      List.fold_left 
+        (fun growing_aliases e -> match (get_forward_alias e id) with
+           | Some e_next when not (List.mem e_next growing_aliases) -> 
+               e_next :: growing_aliases
+           | _ -> growing_aliases
+        )
+        old_aliases
+        old_aliases
+    in
 
-      | End
-      | Dead -> e_aliases
-      (* Reached the end of the traversal *)
-          
-    with Not_found -> e_aliases
+
+    (* Merge new backwards aliases into list *)
+    let new_aliases = 
+      List.fold_left 
+        (fun growing_aliases e -> 
+
+           (* Merge the backwards aliases from a given expression *)
+           List.fold_left 
+             (fun growing_aliases e_before -> 
+                if (List.mem e_before growing_aliases) then growing_aliases
+                else (e_before::growing_aliases)
+             )
+             growing_aliases
+             (get_backward_aliass e id)
+        )
+        new_aliases
+        new_aliases
+    in
+
+    (* We can stop if the new aliases list is the same as the old alias list.
+    * Since new _must_ contain everything in old due to the way this function is
+    * written, we simply need to se if new is also a subset of old to test for
+    * equality. *)
+    let new_subset_of_old = 
+      List.for_all (fun e -> List.mem e old_aliases) new_aliases
+    in
+
+      if new_subset_of_old then new_aliases
+      else (get_aliases_helper new_aliases)
   in
 
-    get_aliases_helper e [e]
+    get_aliases_helper [e]
 ;;
-  
+
                       
 (* Retrun true if expression e1 must alias expression e2 *)
 let must_alias (e1:exp) (e2:exp) (id:int) : (bool) =
