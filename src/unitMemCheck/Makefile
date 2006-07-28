@@ -32,18 +32,18 @@ endef
 export PROJ_pt
 
 
-define PROJ_ma
-  SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/memUtil.ml ../memCheck/mustAlias.ml cilDriver.ml unitMustAlias.ml
-  RESULT = unitMustAlias
+define PROJ_ie
+  SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/memUtil.ml ../memCheck/isEquivalent.ml cilDriver.ml unitIsEquivalent.ml
+  RESULT = unitIsEquivalent
 endef
-export PROJ_ma
+export PROJ_ie
 
 
 ####
 # Default project to bulid
 ####
 ifndef SUBPROJS
-  export SUBPROJS = cd aa pt ma
+  export SUBPROJS = cd aa pt ie
 endif
 
 ####

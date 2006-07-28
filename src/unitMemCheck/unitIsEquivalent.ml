@@ -3,11 +3,11 @@ open CilDriver
 open Pretty
 open Cil
 
-module MA = MustAlias
+module MA = IsEquivalent
 module IH = Inthash
 
 (* Set up a file for running tests *)
-let inputFile = "unitMustAlias.c";;
+let inputFile = "unitIsEquivalent.c";;
 let cilFile = makeCilFile inputFile;;
 ignore (MakeOneCFG.feature.fd_doit cilFile);;
 
