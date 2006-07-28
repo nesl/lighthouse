@@ -224,7 +224,7 @@ let print_alias (id:int) =
  
 
 (* Helper function to return the item that an expression must alias *)
-let get_forward_alias (e:exp) (id:int) : (exp option) =
+let get_aliases (e:exp) (id:int) : (exp option) =
   match (get_id_state DFM.stmtStartData id) with
       Some table -> (
         try match (Hashtbl.find table e) with
@@ -238,7 +238,7 @@ let get_forward_alias (e:exp) (id:int) : (exp option) =
           
 
 (* Helper function to return the items that must alias an expression *)
-let get_backward_aliass (e:exp) (id:int) : (exp list) =
+let get_aliased_by (e:exp) (id:int) : (exp list) =
   match (get_id_state DFM.stmtStartData id) with
       Some table -> (
         try 
@@ -258,8 +258,9 @@ let get_backward_aliass (e:exp) (id:int) : (exp list) =
 
 (* For a given expression at a particular statement, return the alias
  * information for that state. Note that this includes items found through a
- * transitive follow of must alias information. This function implements a
- * traveresal of an undirected graph.  This is NOT an efficient implementation. *)
+ * transitive follow of must alias information, but only in the forward
+ * direction.
+ *)
 let get_aliases (e:exp) (id:int) : (exp list) =
   
   let rec get_aliases_helper (old_aliases:exp list) =
@@ -267,7 +268,7 @@ let get_aliases (e:exp) (id:int) : (exp list) =
     (* Merge new forwards aliases into list *)
     let new_aliases = 
       List.fold_left 
-        (fun growing_aliases e -> match (get_forward_alias e id) with
+        (fun growing_aliases e -> match (get_aliases e id) with
            | Some e_next when not (List.mem e_next growing_aliases) -> 
                e_next :: growing_aliases
            | _ -> growing_aliases
@@ -276,28 +277,9 @@ let get_aliases (e:exp) (id:int) : (exp list) =
         old_aliases
     in
 
-
-    (* Merge new backwards aliases into list *)
-    let new_aliases = 
-      List.fold_left 
-        (fun growing_aliases e -> 
-
-           (* Merge the backwards aliases from a given expression *)
-           List.fold_left 
-             (fun growing_aliases e_before -> 
-                if (List.mem e_before growing_aliases) then growing_aliases
-                else (e_before::growing_aliases)
-             )
-             growing_aliases
-             (get_backward_aliass e id)
-        )
-        new_aliases
-        new_aliases
-    in
-
     (* We can stop if the new aliases list is the same as the old alias list.
     * Since new _must_ contain everything in old due to the way this function is
-    * written, we simply need to se if new is also a subset of old to test for
+    * written, we simply need to check if new is also a subset of old to test for
     * equality. *)
     let new_subset_of_old = 
       List.for_all (fun e -> List.mem e old_aliases) new_aliases
