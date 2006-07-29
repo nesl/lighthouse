@@ -6,44 +6,54 @@ module DF = Dataflow
 module E = Errormsg
 module U = MemUtil
 
+module S = Set
+
+             
 (* Runtime debuging flags. *)
-let dbg_must_i = ref false;;
-let dbg_must_combine = ref false;;
+let dbg_equiv_i = ref false;;
+let dbg_equiv_combine = ref false;;
 
 (* Dataflow specific debugging *)
-let dbg_must_df = ref false;;
+let dbg_equiv_df = ref false;;
 
-type alias = Next of exp | End | Null | Dead;;
+(* Equivalency information will be stored as sets of expressions *)
+module Equiv =
+struct
+  type t = exp
+  let compare i j = compare i j
+end;;
+
+module EquivSet = Set.Make(Equiv);;
 
 let nullPtr = CastE (intPtrType, zero);;
 
-type must_table = (exp, alias) Hashtbl.t;;
+type equiv_table = EquivSet.t list;;
 
-let print_must_table (table:must_table) =
-  Hashtbl.iter
-    (fun (e:exp) (a:alias) -> 
-       ignore (printf "Exp %a -> " d_exp e);
-       match a with
-           Next e -> ignore (printf "%a\n" d_exp e)
-         | End -> ignore (printf "End\n")
-         | Null -> ignore (printf "Null\n")
-         | Dead -> ignore (printf "Dead\n") 
+(* Helper function to print an EquivSet *)
+let print_equiv_table (table:equiv_table) =
+  List.iter
+    (fun (eq : EquivSet.t) -> 
+       ignore (printf "Set ->\n");
+       EquivSet.iter (fun e -> ignore (printf "  %a\n" d_exp e)) eq
     )
     table
 ;;
-                   
+
+
+
 module DFM = struct
 
   (* Vital stats for this dataflow. *)
-  let name = "mustFlow";;
-  let debug = dbg_must_df;;
-  type t = must_table;;
+  let name = "equivFlow";;
+  let debug = dbg_equiv_df;;
+  type t = equiv_table;;
 
   (* Basic util functions to jumpstart dataflow. *)
   let stmtStartData: t IH.t = IH.create 17;;
-  let copy (state: t) = Hashtbl.copy state;;
+  let copy (state: t) = state;;
   let pretty () (state: t) =
-    dprintf "{%s}" ( "Print not implemented..."
+    dprintf "{%s}" ( 
+      print_equiv_table state
     );;
 
 
@@ -58,16 +68,45 @@ module DFM = struct
     if (!dbg_must_combine) then (
       ignore (printf "MUST COMBINE: Examining State: %d:\n" s.sid);
       ignore (printf "MUST COMBINE: Incoming old state:\n");
-      print_must_table old;
+      print_equiv_table old;
       ignore (printf "MUST COMBINE: Incoming merge:\n");
-      print_must_table new_state;
+      print_equiv_table new_state;
       flush stdout;
     );
 
-    (* Create a NEW state by merging the two old state.  Be careful since OCaml
-     * defaults to using references to copy a hash table...
-     *)
-    let state = Hashtbl.create 5 in
+    (* Create a NEW state by merging the two old state.  If the state is
+    * different that the old state then we need to do stuff.  *)
+    let state =
+      List.iter 
+        (f eq ->
+           EquivSet.fold
+             (fun e l -> 
+                let intersections = 
+                  EquivSet.fold  
+                    (fun eq_new l_new -> 
+                       let i = EquivSet.inter eq eq_new in
+                         if EquivSet.mem e i then i::l_new
+                         else l_new
+                    )
+                    new_state []
+                in
+                  if List.length intersections > 1 then
+                    E.s (E.error "isEquivalent: combinePredecessors: Incorrect math :-(\n")
+                  else if (List.length intersection = 1) then
+                    intersection::l
+                  else 
+                    l
+                    (* TODO: Start here *)
+                    (* TODO: Trying to take the intersection of the two lists of sets. *)
+             )
+             eq []
+        )
+        old
+      
+      EquivSet.union old new_state in
+
+      
+  let state = Hashtbl.create 5 in
       
       (* For each element in old state state, if it has the same alias good,
        * else drop it *)

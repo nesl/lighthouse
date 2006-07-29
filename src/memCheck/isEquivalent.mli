@@ -1,42 +1,26 @@
 (*
- * File: mustAlias
+ * File: isEquivalent
  * Date: 7/06
- * Purpose: Genereate and query must alias information about a program
+ * Purpose: Genereate and query equivalency information about a program
  * Author: Roy Shea <roy@cs.ucla.edu>
  *)
 
-(** Generate and query must alias information about expressions within a
+(** Generate and query equivalency information about expressions within a
   * program. *)
 
-(** {b Debugging} Options to enable debugging of the mustAlias module. *)
+(** {b Debugging} Options to enable debugging of the isEquivalent module. *)
 
 (** Enable instruction level debugging of the dataflow *)
-val dbg_must_i : bool ref
+val dbg_equiv_i : bool ref
 
 (** Enable debugging of merges within the dataflow *)
-val dbg_must_combine : bool ref
+val dbg_equiv_combine : bool ref
 
 (** Enable debugging of the underlying dataflow framework *)
-val dbg_must_df : bool ref
+val dbg_equiv_df : bool ref
 
 
-(** {b Types} Base type used to describe alias information. *)
-
-(** Type used to describe alias information *)
-type alias = 
-  
-  Next of Cil.exp 
-  (** Expression that must be aliased by the expression in question *)
-
-  | End 
-  (** Expression in question must alias an end value such as an integer *)
-
-  | Null
-  (** Special case of End in which the expression in question must alias Null *) 
-      
-  | Dead
-  (** Expression in question either has no alias information at this point or
-    * may point to more than one target *)
+(** {b Types} Base type used to describe equivalency information. *)
 
 (** Definition of the NULL pointer.  Assumes that this will be zero type cast to
   * an integer pointer.
@@ -45,24 +29,24 @@ val nullPtr : Cil.exp
 
 
 (** {b Must Alias Functions} The following functions allow application code to
-  * interact with the must alias analysis.  Note that [generate_must_alias]
-  * should be called for a given function before any of the other calls are
-  * made. *)
+  * query the equivalency inforamation for a function.  Note that
+  * [generate_equivalency] must be called for a given function before any of the
+  * other calls are made. *)
 
-(** Create the must alias information for a function *)
-val generate_must_alias : Cil.fundec -> unit
+(** Create the equivalency information for a function *)
+val generate_equiv : Cil.fundec -> unit
 
-(** Query the must alias information to see if expression e1 must alias
-  * expression e2 *)
-val must_alias : Cil.exp -> Cil.exp -> int -> bool                                      
+(** Query the equivalency information to see if expression e1 is equivalent in
+  * value to expression e2 *)
+val is_equiv : Cil.exp -> Cil.exp -> int -> bool                                      
 
-(** Return the set of expressions that an expression must alias at a given point
-  * in the program
+(** Return the set of expressions that an expression is equivalent to at a given
+  * point in the program
   *)
-val get_aliases : Cil.exp -> int -> Cil.exp list
+val get_equiv_set : Cil.exp -> int -> Cil.exp list
 
-(** Print the alias information valid at the end of the given statement ID *)
-val print_alias : int -> unit
+(** Print the equivalency sets at the end of the given statement ID *)
+val print_equiv_sets : int -> unit
 
 
                                       
