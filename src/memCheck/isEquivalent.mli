@@ -16,6 +16,9 @@ val dbg_equiv_i : bool ref
 (** Enable debugging of merges within the dataflow *)
 val dbg_equiv_combine : bool ref
 
+(** Enable debugging of incoming statement states *)
+val dbg_equiv_stmt_summary : bool ref
+
 (** Enable debugging of the underlying dataflow framework *)
 val dbg_equiv_df : bool ref
 

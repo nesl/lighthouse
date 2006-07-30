@@ -3,7 +3,7 @@ open CilDriver
 open Pretty
 open Cil
 
-module MA = IsEquivalent
+module IE = IsEquivalent
 module IH = Inthash
 
 (* Set up a file for running tests *)
@@ -31,7 +31,7 @@ type test_data = {
 };;
 
 
-let must_test_data = {
+let equiv_test_data = {
   array_a = ref zero;
   array_b = ref zero;
   clone_a = ref zero;
@@ -55,9 +55,14 @@ let must_test_data = {
 class testVisitor = object
   inherit nopCilVisitor
 
-  (* Prepare must clone information *)
+  (* Prepare equiv clone information *)
   method vfunc (f:fundec) =
-    MA.generate_must_alias f;
+    IE.dbg_equiv_i := false;
+    IE.dbg_equiv_combine := false;
+    IE.dbg_equiv_stmt_summary := false;
+    IE.dbg_equiv_df := false;
+
+    IE.generate_equiv f;
     DoChildren
 
 
@@ -65,19 +70,19 @@ class testVisitor = object
   method vvdec (v:varinfo) =
     match v.vname with
         "arrayA" ->
-          must_test_data.array_a := Lval (var v);
+          equiv_test_data.array_a := Lval (var v);
           SkipChildren
       | "arrayB" ->
-          must_test_data.array_b := Lval (var v);
+          equiv_test_data.array_b := Lval (var v);
           SkipChildren
       | "arrayCloneA" ->
-          must_test_data.clone_a := Lval (var v);
+          equiv_test_data.clone_a := Lval (var v);
           SkipChildren
       | "arrayCloneB" ->
-          must_test_data.clone_b := Lval (var v);
+          equiv_test_data.clone_b := Lval (var v);
           SkipChildren
       | "arrayCloneAB" ->
-          must_test_data.clone_ab := Lval (var v);
+          equiv_test_data.clone_ab := Lval (var v);
           SkipChildren
       | _ -> SkipChildren
 
@@ -86,16 +91,16 @@ class testVisitor = object
   method vstmt (s:stmt) =
     List.iter 
       (fun l -> match l with 
-           Label (name, _, _) when name = must_test_data.label_one -> 
-             must_test_data.id_one <- s.sid
-         | Label (name, _, _) when name = must_test_data.label_two -> 
-             must_test_data.id_two <- s.sid
-         | Label (name, _, _) when name = must_test_data.label_three -> 
-             must_test_data.id_three <- s.sid
-         | Label (name, _, _) when name = must_test_data.label_four -> 
-             must_test_data.id_four <- s.sid
-         | Label (name, _, _) when name = must_test_data.label_five -> 
-             must_test_data.id_five <- s.sid
+           Label (name, _, _) when name = equiv_test_data.label_one -> 
+             equiv_test_data.id_one <- s.sid
+         | Label (name, _, _) when name = equiv_test_data.label_two -> 
+             equiv_test_data.id_two <- s.sid
+         | Label (name, _, _) when name = equiv_test_data.label_three -> 
+             equiv_test_data.id_three <- s.sid
+         | Label (name, _, _) when name = equiv_test_data.label_four -> 
+             equiv_test_data.id_four <- s.sid
+         | Label (name, _, _) when name = equiv_test_data.label_five -> 
+             equiv_test_data.id_five <- s.sid
          | Label (name, _, _) -> ignore (printf "Failed for label name: %s\n" name)
          | _ -> ignore (printf "Skipping statement %a\n" d_stmt s)
       )
@@ -110,102 +115,103 @@ visitCilFileSameGlobals tv cilFile;;
 (* Helper function to check that an expression is considerd Dead by the clone
  * analysis *)
 let is_dead (e:exp) (id:int) : bool =
-  match MA.get_aliases e id with
+  match IE.get_equiv_set e id with
       [e] -> true
+    | [] -> true
     | _ -> false
 ;;
 
 
 (* Tests!!! *)
-let test_mustClone_one = 
-  let a_dead = is_dead !(must_test_data.clone_a) must_test_data.id_one in
-  let b_dead = is_dead !(must_test_data.clone_b) must_test_data.id_one in
-  let cab_dead = is_dead !(must_test_data.clone_ab) must_test_data.id_one in
+let test_equivClone_one = 
+  let a_dead = is_dead !(equiv_test_data.clone_a) equiv_test_data.id_one in
+  let b_dead = is_dead !(equiv_test_data.clone_b) equiv_test_data.id_one in
+  let cab_dead = is_dead !(equiv_test_data.clone_ab) equiv_test_data.id_one in
   TestCase(fun _ -> assert_bool "Incorrect clone information" (a_dead && b_dead && cab_dead)) 
 ;;
 
 
 
-let test_mustClone_two = 
+let test_equivClone_two = 
   let ca_to_a = 
-    MA.must_alias 
-      !(must_test_data.clone_a) 
-      !(must_test_data.array_a)
-      must_test_data.id_two
+    IE.is_equiv 
+      !(equiv_test_data.clone_a) 
+      !(equiv_test_data.array_a)
+      equiv_test_data.id_two
   in
   let a_to_ca = 
-    MA.must_alias 
-      !(must_test_data.array_a)
-      !(must_test_data.clone_a) 
-      must_test_data.id_two
+    IE.is_equiv 
+      !(equiv_test_data.array_a)
+      !(equiv_test_data.clone_a) 
+      equiv_test_data.id_two
   in
   let cb_to_b = 
-    MA.must_alias 
-      !(must_test_data.clone_b) 
-      !(must_test_data.array_b)
-      must_test_data.id_two
+    IE.is_equiv 
+      !(equiv_test_data.clone_b) 
+      !(equiv_test_data.array_b)
+      equiv_test_data.id_two
   in
   let b_to_cb = 
-    MA.must_alias 
-      !(must_test_data.array_b)
-      !(must_test_data.clone_b) 
-      must_test_data.id_two
+    IE.is_equiv 
+      !(equiv_test_data.array_b)
+      !(equiv_test_data.clone_b) 
+      equiv_test_data.id_two
   in
-  let cab_dead = is_dead !(must_test_data.clone_ab) must_test_data.id_two in
+  let cab_dead = is_dead !(equiv_test_data.clone_ab) equiv_test_data.id_two in
   TestCase(fun _ -> assert_bool "Incorrect clone information" 
                       (ca_to_a && a_to_ca && cb_to_b && b_to_cb && cab_dead))
 ;;
 
 
 
-let test_mustClone_three = 
+let test_equivClone_three = 
   let ca_to_a = 
-    MA.must_alias 
-      !(must_test_data.clone_a) 
-      !(must_test_data.array_a)
-      must_test_data.id_three
+    IE.is_equiv 
+      !(equiv_test_data.clone_a) 
+      !(equiv_test_data.array_a)
+      equiv_test_data.id_three
   in
   let a_to_ca = 
-    MA.must_alias 
-      !(must_test_data.array_a)
-      !(must_test_data.clone_a) 
-      must_test_data.id_three
+    IE.is_equiv 
+      !(equiv_test_data.array_a)
+      !(equiv_test_data.clone_a) 
+      equiv_test_data.id_three
   in
   let cb_to_b = 
-    MA.must_alias 
-      !(must_test_data.clone_b) 
-      !(must_test_data.array_b)
-      must_test_data.id_three
+    IE.is_equiv 
+      !(equiv_test_data.clone_b) 
+      !(equiv_test_data.array_b)
+      equiv_test_data.id_three
   in
   let b_to_cb = 
-    MA.must_alias 
-      !(must_test_data.array_b)
-      !(must_test_data.clone_b) 
-      must_test_data.id_three
+    IE.is_equiv 
+      !(equiv_test_data.array_b)
+      !(equiv_test_data.clone_b) 
+      equiv_test_data.id_three
   in
   let cab_to_b = 
-    MA.must_alias 
-      !(must_test_data.clone_ab) 
-      !(must_test_data.array_b)
-      must_test_data.id_three
+    IE.is_equiv 
+      !(equiv_test_data.clone_ab) 
+      !(equiv_test_data.array_b)
+      equiv_test_data.id_three
   in
   let b_to_cab = 
-    MA.must_alias 
-      !(must_test_data.array_b)
-      !(must_test_data.clone_ab) 
-      must_test_data.id_three
+    IE.is_equiv 
+      !(equiv_test_data.array_b)
+      !(equiv_test_data.clone_ab) 
+      equiv_test_data.id_three
   in
   let cb_to_cab = 
-    MA.must_alias 
-      !(must_test_data.clone_b) 
-      !(must_test_data.clone_ab)
-      must_test_data.id_three
+    IE.is_equiv 
+      !(equiv_test_data.clone_b) 
+      !(equiv_test_data.clone_ab)
+      equiv_test_data.id_three
   in
   let cab_to_cb = 
-    MA.must_alias 
-      !(must_test_data.clone_ab)
-      !(must_test_data.clone_b) 
-      must_test_data.id_three
+    IE.is_equiv 
+      !(equiv_test_data.clone_ab)
+      !(equiv_test_data.clone_b) 
+      equiv_test_data.id_three
   in
   TestCase(fun _ -> assert_bool "Incorrect clone information" 
                       (ca_to_a && a_to_ca && cb_to_b && b_to_cb && 
@@ -214,56 +220,56 @@ let test_mustClone_three =
 
 
 
-let test_mustClone_four = 
+let test_equivClone_four = 
   let ca_to_a = 
-    MA.must_alias 
-      !(must_test_data.clone_a) 
-      !(must_test_data.array_a)
-      must_test_data.id_four
+    IE.is_equiv 
+      !(equiv_test_data.clone_a) 
+      !(equiv_test_data.array_a)
+      equiv_test_data.id_four
   in
   let a_to_ca = 
-    MA.must_alias 
-      !(must_test_data.array_a)
-      !(must_test_data.clone_a) 
-      must_test_data.id_four
+    IE.is_equiv 
+      !(equiv_test_data.array_a)
+      !(equiv_test_data.clone_a) 
+      equiv_test_data.id_four
   in
   let cb_to_b = 
-    MA.must_alias 
-      !(must_test_data.clone_b) 
-      !(must_test_data.array_b)
-      must_test_data.id_four
+    IE.is_equiv 
+      !(equiv_test_data.clone_b) 
+      !(equiv_test_data.array_b)
+      equiv_test_data.id_four
   in
   let b_to_cb = 
-    MA.must_alias 
-      !(must_test_data.array_b)
-      !(must_test_data.clone_b) 
-      must_test_data.id_four
+    IE.is_equiv 
+      !(equiv_test_data.array_b)
+      !(equiv_test_data.clone_b) 
+      equiv_test_data.id_four
   in
-  let cab_dead = is_dead !(must_test_data.clone_ab) must_test_data.id_four in
+  let cab_dead = is_dead !(equiv_test_data.clone_ab) equiv_test_data.id_four in
   TestCase(fun _ -> assert_bool "Incorrect clone information" 
                       (ca_to_a && a_to_ca && cb_to_b && b_to_cb && cab_dead))
 ;;
 
 
 
-let test_mustClone_five = 
+let test_equivClone_five = 
   let a_good = 
-    MA.must_alias 
-      !(must_test_data.clone_a) 
-      MA.nullPtr
-      must_test_data.id_five
+    IE.is_equiv 
+      !(equiv_test_data.clone_a) 
+      IE.nullPtr
+      equiv_test_data.id_five
   in
   let b_good = 
-    MA.must_alias
-      !(must_test_data.clone_b) 
-      MA.nullPtr
-      must_test_data.id_five
+    IE.is_equiv
+      !(equiv_test_data.clone_b) 
+      IE.nullPtr
+      equiv_test_data.id_five
   in
   let ab_good = 
-    MA.must_alias
-      !(must_test_data.clone_ab) 
-      MA.nullPtr
-      must_test_data.id_five
+    IE.is_equiv
+      !(equiv_test_data.clone_ab) 
+      IE.nullPtr
+      equiv_test_data.id_five
   in
   TestCase(fun _ -> assert_bool "Incorrect clone information" (a_good && b_good && ab_good)) 
 ;;
@@ -271,17 +277,17 @@ let test_mustClone_five =
 
 
 (* Run all the tests *)
-let suite_mustClone = 
+let suite_equivClone = 
   TestLabel ("Add Annotations", 
              TestList [
-               TestLabel ("mustClone.c: One", test_mustClone_one);
-               TestLabel ("mustClone.c: Two", test_mustClone_two);
-               TestLabel ("mustClone.c: Three", test_mustClone_three);
-               TestLabel ("mustClone.c: Four", test_mustClone_four);
-               TestLabel ("mustClone.c: Five", test_mustClone_five);
+               TestLabel ("equivClone.c: One", test_equivClone_one);
+               TestLabel ("equivClone.c: Two", test_equivClone_two);
+               TestLabel ("equivClone.c: Three", test_equivClone_three);
+               TestLabel ("equivClone.c: Four", test_equivClone_four);
+               TestLabel ("equivClone.c: Five", test_equivClone_five);
              ]
   )
 ;;
 
-let main = run_test_tt suite_mustClone
+let main = run_test_tt suite_equivClone
 

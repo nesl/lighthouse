@@ -8,10 +8,11 @@ module U = MemUtil
 
 module S = Set
 
-             
+
 (* Runtime debuging flags. *)
 let dbg_equiv_i = ref false;;
 let dbg_equiv_combine = ref false;;
+let dbg_equiv_stmt_summary = ref false;;
 
 (* Dataflow specific debugging *)
 let dbg_equiv_df = ref false;;
@@ -30,83 +31,107 @@ let nullPtr = CastE (intPtrType, zero);;
 type equiv_table = EquivSet.t list;;
 
 (* Helper function to print an EquivSet *)
-let print_equiv_table (table:equiv_table) =
+let print_equiv_table (table : equiv_table) =
   List.iter
     (fun (eq : EquivSet.t) -> 
-       ignore (printf "Set ->\n");
-       EquivSet.iter (fun e -> ignore (printf "  %a\n" d_exp e)) eq
+       ignore (printf "* Set ->\n");
+       EquivSet.iter (fun e -> ignore (printf "    %a\n" d_exp e)) eq
     )
     table
 ;;
 
 
 (* Operations for interacting with lists of sets *)
-module ListSet = 
-struct
-  
+module ListSet = struct
+
   (* Given an expression and an equiv set (probably contianing the
    * expression), intersect the equiv set with each element of a list of
    * equiv sets (aka equiv set list or eqsl).  Choose from these sets the
    * non-empty set containing the expression. *)
-  let equiv_eqsl_intersection (e : exp) (eq : Equiv.t) (eqsl : EquivSet.t list) : EquivSet.t =
+  let intersection (e : exp) (eq : EquivSet.t) (eqsl : EquivSet.t list) : EquivSet.t =
     let intersections = 
-      EquivSet.fold  
-        (fun eq_new eq_list -> 
-           let i = EquivSet.inter eq eq_new in
-             if EquivSet.mem e i then i::eq_list
+      List.fold_left  
+        (fun eq_list eq_new -> 
+           let i = (EquivSet.inter eq eq_new) in
+             if (EquivSet.mem e i) then (i::eq_list)
              else eq_list
         )
-        eqsl []
+        [] eqsl
     in
       if List.length intersections > 1 then
         E.s (E.error "isEquivalent: combinePredecessors: Incorrect math :-(\n")
-      else if (List.length intersection = 1) (List.hd intersections)
+      else if (List.length intersections = 1) then (List.hd intersections)
       else EquivSet.singleton e
   ;;
 
-  (* Given an expression and a list of equiv sets (aka. set list or sl),
-   * return true if the expression is in the sl. *)
-  let e_in_sl (e : exp) (eqsl : EquivSet.t list) : bool =
+  (* Given an expression and a list of equiv sets return true if the 
+   * expression is in one of the sets in the list. *)
+  let e_mem (e : exp) (eqsl : EquivSet.t list) : bool =
     List.exists (fun eq -> EquivSet.mem e eq) eqsl
   ;;
-        
-  (* eqsl1 is a "subset" of eqsl2 if each set within eqsl1 is also a set
-   * within eqsl2 *)
-  let is_subset_of (eqsl1 : EquivSet.t list) (eqsl2 : EquivSet.t) : bool =
+
+  (* eqsl1 is a "subset" of eqsl2 if each set within eqsl1 is also a subset of a
+   * set within eqsl2 *)
+  let subset (eqsl1 : EquivSet.t list) (eqsl2 : EquivSet.t list) : bool =
     List.for_all 
-      (fun eq1 -> 
-         List.exists (
-           fun eq2 -> EquivSet.equal eq1 eq2) 
-           eqsl2) 
+      (fun eq1 -> List.exists (fun eq2 -> EquivSet.subset eq1 eq2) eqsl2) 
       eqsl1
   ;;
 
   (* Remove element from any sets that it occupies *)
   let remove (e : exp) (eqsl: EquivSet.t list) : (EquivSet.t list) =
     List.fold_left
-      (fun result eq -> (EquivSet.remove e)::result)
+      (fun result eq -> (EquivSet.remove e eq)::result)
       [] eqsl
   ;;
 
+
+  let add_singleton (e : exp) (eqsl : EquivSet.t list) : (EquivSet.t list) =
+    let eq_op = 
+      try Some (List.find (fun eq -> EquivSet.mem e eq) eqsl)
+      with Not_found -> None
+    in
+      match eq_op with
+          None -> (EquivSet.singleton e)::eqsl
+        | Some _ -> E.s (E.error "isEquivalent: ListSet.add_pair: Invalid list set state\n")
+  ;;
+  
   (* Add the pair of elements to the set that contains e1 or the set that
    * contains e2.  Note that if both e1 and e2 are contained in a set then this
    * is a mistake. *)
   let add_pair (e1 : exp) (e2 : exp) (eqsl : EquivSet.t list) : (EquivSet.t list) =
-    let e1_set = 
+
+    let eq1_op = 
       try Some (List.find (fun eq -> EquivSet.mem e1 eq) eqsl)
       with Not_found -> None
     in
-    let e2_set = 
+
+    let eq2_op = 
       try Some (List.find (fun eq -> EquivSet.mem e2 eq) eqsl)
       with Not_found -> None
     in
-      match (e1_set, e2_set) with
-          (None, None) -> (EquivSet.add e1 (EquivSet.singleton e2))::eqsl
-        | (Some e1, None) ->
-(*TODO: Start here *)
-    
-  
-end;;
+
+    let update (add_exp : exp) (set : EquivSet.t) (eqsl : EquivSet.t list) : (EquivSet.t list) =
+      List.fold_left 
+        (fun new_eqsl eq ->
+           if (EquivSet.equal set eq) then (EquivSet.add add_exp eq)::new_eqsl
+           else eq::new_eqsl
+        ) 
+        [] eqsl
+    in
+
+      match (eq1_op, eq2_op) with
+          (None, None) -> 
+            (EquivSet.add e1 (EquivSet.singleton e2))::eqsl
+        | (Some eq1, None) -> 
+            update e2 eq1 eqsl
+        | (None, Some eq2) -> 
+            update e1 eq2 eqsl
+        | (Some _, Some _) -> 
+            E.s (E.error "isEquivalent: ListSet.add_pair: Invalid list set state\n")
+  ;;
+
+end
 
 
 
@@ -120,47 +145,63 @@ module DFM = struct
   (* Basic util functions to jumpstart dataflow. *)
   let stmtStartData: t IH.t = IH.create 17;;
   let copy (state: t) = state;;
-  let pretty () (state: t) =
-    dprintf "{%s}" ( 
-      print_equiv_table state
-    );;
+  let pretty () (state: t) = dprintf "{%s}" (
+    ignore (print_equiv_table state);
+    "Cheating...\n"
+  );;
 
 
   (* Statments do not have a default state *)
   let computeFirstPredecessor (s: stmt) (state: t) = state;;
 
-  
+
   (* Merge points take the intersection of the two sets *)
   let combinePredecessors (s: stmt) ~(old: t) (new_state: t) : t option =  
 
     (* Print incoming state *)
-    if (!dbg_must_combine) then (
-      ignore (printf "MUST COMBINE: Examining State: %d:\n" s.sid);
-      ignore (printf "MUST COMBINE: Incoming old state:\n");
+    if (!dbg_equiv_combine) then (
+      ignore (printf "IS_EQUIV COMBINE: Examining State: %d:\n" s.sid);
+      ignore (printf "IS_EQUIV COMBINE: Incoming old state:\n");
       print_equiv_table old;
-      ignore (printf "MUST COMBINE: Incoming merge:\n");
+      ignore (printf "IS_EQUIV COMBINE: Incoming merge:\n");
       print_equiv_table new_state;
       flush stdout;
     );
 
     (* Create a NEW state by merging the two old state.  If the state is
-    * different that the old state then we need to do stuff.  *)
+     * different that the old state then continue iterating on the dataflow. *)
     let state =
 
-         (* TODO: This could be correct... *) 
-         List.fold_left
-           (fun eq l ->
-              (EquivSet.fold
-                 (fun e eqsl -> 
-                    if (ListSet.e_in_sl e eqsl) then eqsl
-                    else (ListSet.equiv_eqsl_intersection e eq eqsl)::eqsl
-                 ) eq []
-              )::l
-           )
-           [] old
+      (* For each set in the old state... *)
+      (* Examine each expression within the set... *)
+      (* If that expression is alread in the merged list of sets being generated
+       * ..(from this or previous passes) then do nothing and move to the next
+       * ..expression... *)
+      (* Else, find the intersection of the set containing the expression from
+       * ..the old state and each set in the new state and add this
+       * ..intersection to the merged output. *)
+      List.fold_left
+        (fun merged_list eq ->
+           (EquivSet.fold
+              (fun e tmp_merged_list -> 
+                 if ((ListSet.e_mem e merged_list) || 
+                     (ListSet.e_mem e tmp_merged_list)) then 
+                   tmp_merged_list
+                 else 
+                   (ListSet.intersection e eq new_state)::tmp_merged_list
+              ) eq []
+           ) @ merged_list
+        )
+        [] old
     in
 
-      if (ListSet.is_subset_of state old) && (ListSet.is_subset_of old state) then None
+      if (!dbg_equiv_combine) then (
+        ignore (printf "IS_EQUIV COMBINE: Outging state:\n");
+        print_equiv_table state;
+        flush stdout;
+      );
+      
+      if (ListSet.subset state old) && (ListSet.subset old state) then None
       else (Some state)
   ;;
 
@@ -168,182 +209,129 @@ module DFM = struct
   (* Go go data flow!
    *)
   let doInstr (i: instr) (state: t): t DF.action =
+   
+    (* Debugging  helper function *)
+    let dbg e1 e2 t =
+      if (!dbg_equiv_i) then (
+        ignore (printf "isEquiv: doInstr: %a\n  maps exp %a to %a\n" 
+                  d_instr i d_exp e1 d_exp e2);
+        print_equiv_table t;
+        flush stdout;
+      )
+      else ()
+    in
+    
     match i with
 
         Set (lv, e, _) when (Util.equals e nullPtr) ->
-          Hashtbl.replace state (Lval lv) Null;
-          if (!dbg_must_i) then
-            ignore (printf "MUST I: %a\n maps expr %a to Null\n" d_instr i d_exp (Lval lv));
-          DF.Done state
-      
+          let state = ListSet.remove (Lval lv) state in
+          let state = ListSet.add_pair (Lval lv) (nullPtr) state in
+            dbg (Lval lv) nullPtr state;
+            DF.Done state
+
       | Set (lv, e, _) when (isConstant e) || (match isInteger e with None -> false | _ -> true) ->
-          Hashtbl.replace state (Lval lv) End;
-          if (!dbg_must_i) then
-            ignore (printf "MUST I: %a\n maps exp %a to End\n" d_instr i d_exp (Lval lv));
-          DF.Done state
+          let state = ListSet.remove (Lval lv) state in
+          let state = ListSet.add_singleton (Lval lv) state in
+            dbg (Lval lv) (Lval lv) state;
+            DF.Done state
 
       | Set (lv, e, _) -> begin match e with
-            Lval lv2 ->
-              Hashtbl.replace state (Lval lv) (Next (Lval lv2));
-              if (!dbg_must_i) then
-                ignore (printf "MUST I: %a\n maps exp %a to %a\n" d_instr i d_exp (Lval lv) d_exp (Lval lv2));
-              DF.Done state
-
+            Lval lv2
           | CastE (_, Lval lv2) ->
-              Hashtbl.replace state (Lval lv) (Next (Lval lv2));
-              if (!dbg_must_i) then
-                ignore (printf "MUST I: %a\n maps exp %a to %a\n" d_instr i d_exp (Lval lv) d_exp (Lval lv2));
-              DF.Done state
+              let state = ListSet.remove (Lval lv) state in
+              let state = ListSet.add_pair (Lval lv) (Lval lv2) state in
+                dbg (Lval lv) (Lval lv2) state;
+                DF.Done state
 
           | _ -> 
-              E.warn "mustFlow doInstr: Do not understand RHS of instrurtion %a.  Skipping.\n" d_instr i;
+              E.warn "mustFlow doInstr:\n";
+              E.warn "  Do not understand RHS of instrurtion %a.\n" d_instr i;
+              E.warn  "  Skipping.\n";
               DF.Done state
         end
-      
+
       | Call (Some lv, _, _, _) ->
-          Hashtbl.replace state (Lval lv) End;
-          if (!dbg_must_i) then
-            ignore (printf "MUST I: %a\n maps exp %a to End\n" d_instr i d_exp (Lval lv));
-          DF.Done state
+          let state = ListSet.remove (Lval lv) state in
+          let state = ListSet.add_singleton (Lval lv) state in
+            dbg (Lval lv) (Lval lv) state;
+            DF.Done state
 
       | _ -> 
           (* TODO: Remove this after debugging and replace with version
-          * commented out below. *)
+           * commented out below. *)
           E.warn "mustFlow doInstr: Ignoring instruction %a\n" d_instr i;
           DF.Done state
-          (*
-          if (!dbg_must_i) then
-            ignore (printf "MUST I: %a\n is ignored\n" d_instr i);
-          DF.Done state
-           *)
+  ;;
 
-  let doGuard _ _ = DF.GDefault
+  
+  let doGuard _ _ = DF.GDefault;;
 
 
   (* Statements should not effect alias information *) 
-  let doStmt (s: stmt) (state: t) = DF.SUse (Hashtbl.copy state)
+  let doStmt (s: stmt) (state: t) = 
+    if (!dbg_equiv_stmt_summary) then (
+      ignore (printf "isEquiv: doInstr: Entering statement %d with state\n" s.sid); 
+      print_equiv_table state;
+      flush stdout
+    );
+      DF.SDefault
+  ;;
+
 
   (* All blocks go on worklist. *)
-  let filterStmt _ = true
+  let filterStmt _ = true;;
 
 end
+
+
 
 module TrackF = DF.ForwardsDataFlow(DFM)
 
 (* Run the data flow to generate must alias information for a function *)
-let generate_must_alias (f:fundec) =
+let generate_equiv (f:fundec) =
   IH.clear DFM.stmtStartData;
-  IH.add DFM.stmtStartData (List.hd f.sbody.bstmts).sid (Hashtbl.create 5);
+  IH.add DFM.stmtStartData (List.hd f.sbody.bstmts).sid [];
   TrackF.compute [(List.hd f.sbody.bstmts)]
 ;;
 
 
-(* Helper function that returns the alias information for a given statement ID
+(* Helper function that returns the equivalince sets for a given statement ID
  *)                      
-let get_id_state (data: must_table IH.t) (id: int): must_table option =
+let get_id_state (data: equiv_table IH.t) (id: int): equiv_table option =
   try Some (IH.find data id)
   with Not_found -> None
 ;;
 
 
 (* Print the alias information gatherd for a particular statment ID *)                      
-let print_alias (id:int) =
+let print_equiv_sets (id:int) =
   match (get_id_state DFM.stmtStartData id) with
       Some table -> 
         ignore (printf "\n\nState %d:\n" id);
-        Hashtbl.iter 
-          (fun key value ->
-             ignore (printf "%a (%d) -> " d_exp key (Hashtbl.hash key));
-             match value with
-                 Next e -> ignore (printf "%a (%d)\n" d_exp e (Hashtbl.hash e))
-               | End -> ignore (printf "End\n")
-               | Null -> ignore (printf "Null\n")
-               | Dead -> ignore (printf "Dead\n")
-          )
-          table;
-        ()
+        print_equiv_table table
     | None ->
-        ignore (printf "\n\nUnable to find state %d\n" id);
+        ignore (printf "\n\nUnable to find state %d\n" id)
 ;;
- 
 
-(* Helper function to return the item that an expression must alias *)
-let get_aliases (e:exp) (id:int) : (exp option) =
+
+(* Helper function to return the items that an expression is equivalent to *)
+let get_equiv_set (e:exp) (id:int) : (exp list) =
   match (get_id_state DFM.stmtStartData id) with
       Some table -> (
-        try match (Hashtbl.find table e) with
-            Next e -> Some e
-          | Null -> Some nullPtr
-          | _ -> None
-        with Not_found -> None
-      )
-    | None -> None
-;;
-          
-
-(* Helper function to return the items that must alias an expression *)
-let get_aliased_by (e:exp) (id:int) : (exp list) =
-  match (get_id_state DFM.stmtStartData id) with
-      Some table -> (
-        try 
-          Hashtbl.fold 
-            (fun key binding back_aliases -> 
-               if (Util.equals binding (Next e)) then 
-                 (key :: back_aliases)
-               else 
-                 back_aliases
-            ) 
-            table []
+        try (EquivSet.elements (List.find (fun eq -> EquivSet.mem e eq) table))
         with Not_found -> []
       )
     | None -> []
 ;;
-          
 
-(* For a given expression at a particular statement, return the alias
- * information for that state. Note that this includes items found through a
- * transitive follow of must alias information, but only in the forward
- * direction.
- *)
-let get_aliases (e:exp) (id:int) : (exp list) =
-  
-  let rec get_aliases_helper (old_aliases:exp list) =
 
-    (* Merge new forwards aliases into list *)
-    let new_aliases = 
-      List.fold_left 
-        (fun growing_aliases e -> match (get_aliases e id) with
-           | Some e_next when not (List.mem e_next growing_aliases) -> 
-               e_next :: growing_aliases
-           | _ -> growing_aliases
-        )
-        old_aliases
-        old_aliases
-    in
-
-    (* We can stop if the new aliases list is the same as the old alias list.
-    * Since new _must_ contain everything in old due to the way this function is
-    * written, we simply need to check if new is also a subset of old to test for
-    * equality. *)
-    let new_subset_of_old = 
-      List.for_all (fun e -> List.mem e old_aliases) new_aliases
-    in
-
-      if new_subset_of_old then new_aliases
-      else (get_aliases_helper new_aliases)
-  in
-
-    get_aliases_helper [e]
-;;
-
-                      
 (* Retrun true if expression e1 must alias expression e2 *)
-let must_alias (e1:exp) (e2:exp) (id:int) : (bool) =
-  List.mem e2 (get_aliases e1 id)
+let is_equiv (e1:exp) (e2:exp) (id:int) : (bool) =
+  List.mem e2 (get_equiv_set e1 id)
 ;;
-          
 
 
 
 
-  
+
+

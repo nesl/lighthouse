@@ -44,14 +44,14 @@ OPT_MEMORY_OBJS=$(MEMORY_OBJS:.cmo=.cmx)
 #	$(OCAMLC) -o xxxByte $(OCAMLFLAGS) $(LIBS) $(MEMORY_OBJS) xxx.cmo
 #
 ########################################
-UMA_MLI = ../memCheck/memUtil.cmi ../memCheck/mustAlias.cmi 
+UMA_MLI = ../memCheck/memUtil.cmi ../memCheck/isEquivalent.cmi 
 UMA_OBJS = ../memCheck/makeOneCFG.cmo\
 		   ../memCheck/memUtil.cmo\
-		   ../memCheck/mustAlias.cmo\
+		   ../memCheck/isEquivalent.cmo\
 		   cilDriver.cmo\
-		   unitMustAlias.cmo
-unitMustAlias: $(UMA_MLI) $(UMA_OBJS)
-	$(OCAMLC) -o unitMustAlias $(OCAMLFLAGS) $(LIBS) $(UMA_OBJS)
+		   unitIsEquivalent.cmo
+unitIsEquivalent: $(UMA_MLI) $(UMA_OBJS)
+	$(OCAMLC) -o unitIsEquivalent $(OCAMLFLAGS) $(LIBS) $(UMA_OBJS)
 
 
 
