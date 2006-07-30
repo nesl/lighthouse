@@ -40,6 +40,75 @@ let print_equiv_table (table:equiv_table) =
 ;;
 
 
+(* Operations for interacting with lists of sets *)
+module ListSet = 
+struct
+  
+  (* Given an expression and an equiv set (probably contianing the
+   * expression), intersect the equiv set with each element of a list of
+   * equiv sets (aka equiv set list or eqsl).  Choose from these sets the
+   * non-empty set containing the expression. *)
+  let equiv_eqsl_intersection (e : exp) (eq : Equiv.t) (eqsl : EquivSet.t list) : EquivSet.t =
+    let intersections = 
+      EquivSet.fold  
+        (fun eq_new eq_list -> 
+           let i = EquivSet.inter eq eq_new in
+             if EquivSet.mem e i then i::eq_list
+             else eq_list
+        )
+        eqsl []
+    in
+      if List.length intersections > 1 then
+        E.s (E.error "isEquivalent: combinePredecessors: Incorrect math :-(\n")
+      else if (List.length intersection = 1) (List.hd intersections)
+      else EquivSet.singleton e
+  ;;
+
+  (* Given an expression and a list of equiv sets (aka. set list or sl),
+   * return true if the expression is in the sl. *)
+  let e_in_sl (e : exp) (eqsl : EquivSet.t list) : bool =
+    List.exists (fun eq -> EquivSet.mem e eq) eqsl
+  ;;
+        
+  (* eqsl1 is a "subset" of eqsl2 if each set within eqsl1 is also a set
+   * within eqsl2 *)
+  let is_subset_of (eqsl1 : EquivSet.t list) (eqsl2 : EquivSet.t) : bool =
+    List.for_all 
+      (fun eq1 -> 
+         List.exists (
+           fun eq2 -> EquivSet.equal eq1 eq2) 
+           eqsl2) 
+      eqsl1
+  ;;
+
+  (* Remove element from any sets that it occupies *)
+  let remove (e : exp) (eqsl: EquivSet.t list) : (EquivSet.t list) =
+    List.fold_left
+      (fun result eq -> (EquivSet.remove e)::result)
+      [] eqsl
+  ;;
+
+  (* Add the pair of elements to the set that contains e1 or the set that
+   * contains e2.  Note that if both e1 and e2 are contained in a set then this
+   * is a mistake. *)
+  let add_pair (e1 : exp) (e2 : exp) (eqsl : EquivSet.t list) : (EquivSet.t list) =
+    let e1_set = 
+      try Some (List.find (fun eq -> EquivSet.mem e1 eq) eqsl)
+      with Not_found -> None
+    in
+    let e2_set = 
+      try Some (List.find (fun eq -> EquivSet.mem e2 eq) eqsl)
+      with Not_found -> None
+    in
+      match (e1_set, e2_set) with
+          (None, None) -> (EquivSet.add e1 (EquivSet.singleton e2))::eqsl
+        | (Some e1, None) ->
+(*TODO: Start here *)
+    
+  
+end;;
+
+
 
 module DFM = struct
 
@@ -77,90 +146,26 @@ module DFM = struct
     (* Create a NEW state by merging the two old state.  If the state is
     * different that the old state then we need to do stuff.  *)
     let state =
-      List.iter 
-        (f eq ->
-           EquivSet.fold
-             (fun e l -> 
-                let intersections = 
-                  EquivSet.fold  
-                    (fun eq_new l_new -> 
-                       let i = EquivSet.inter eq eq_new in
-                         if EquivSet.mem e i then i::l_new
-                         else l_new
-                    )
-                    new_state []
-                in
-                  if List.length intersections > 1 then
-                    E.s (E.error "isEquivalent: combinePredecessors: Incorrect math :-(\n")
-                  else if (List.length intersection = 1) then
-                    intersection::l
-                  else 
-                    l
-                    (* TODO: Start here *)
-                    (* TODO: Trying to take the intersection of the two lists of sets. *)
-             )
-             eq []
-        )
-        old
-      
-      EquivSet.union old new_state in
 
-      
-  let state = Hashtbl.create 5 in
-      
-      (* For each element in old state state, if it has the same alias good,
-       * else drop it *)
-      Hashtbl.iter 
-        (fun v a -> 
-            try 
-              if (Util.equals (Hashtbl.find new_state v) a) then
-                Hashtbl.add state v a
-              else
-                Hashtbl.add state v Dead
-            with _ -> Hashtbl.add state v Dead)
-        old;
-     
-      (* Print outgoing state *)
-      if (!dbg_must_combine) then (
-        ignore (printf "MUST COMBINE: Post merge:\n");
-        print_must_table state;
-      );
+         (* TODO: This could be correct... *) 
+         List.fold_left
+           (fun eq l ->
+              (EquivSet.fold
+                 (fun e eqsl -> 
+                    if (ListSet.e_in_sl e eqsl) then eqsl
+                    else (ListSet.equiv_eqsl_intersection e eq eqsl)::eqsl
+                 ) eq []
+              )::l
+           )
+           [] old
+    in
 
-      (* Check to see if the state is the same INDEPENDENT of the order of
-       * entries by checking that:
-       *   - all enteries is the old state are in the generated state AND
-       *   - all enteries in the generated state are in the old state
-       *)
-      if (
-        try
-          let seo =
-            (Hashtbl.fold
-               (fun e a b -> b && (Util.equals (Hashtbl.find old e) a))
-               state
-               true)
-          in
-          let soe = 
-            (Hashtbl.fold
-               (fun e a b -> b && (Util.equals (Hashtbl.find state e) a))
-               old
-               true)
-          in
-            seo && soe
-        with
-            _ -> false
-      ) then (
-        None
-      ) else (
-        Some state
-      )
+      if (ListSet.is_subset_of state old) && (ListSet.is_subset_of old state) then None
+      else (Some state)
+  ;;
 
 
   (* Go go data flow!
-   * This is overly conservative since it only handles situations such as:
-   *    a = b;
-   *  but fails on items such as:
-   *    a = &b;
-   *    *a = b;
    *)
   let doInstr (i: instr) (state: t): t DF.action =
     match i with
