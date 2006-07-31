@@ -4,8 +4,8 @@ open Pretty
 module IH = Inthash
 module DF = Dataflow
 module U = MemUtil
-module A = AliasWrapper
 module E = Errormsg
+module IE = IsEquivalent
 
 (* Reference to the varinfo ID that we are interested in *)
 let targets = ref []
@@ -84,8 +84,8 @@ let stillDeadI i =
       (fun e1 ->
          List.exists
            (fun target -> 
-              let may = A.mayAliasWrapper e1 target in
-              let null = A.mustAliasNull e1 !currentStmt in
+              let may = U.mayAliasWrapper e1 target in
+              let null = IE.is_equiv e1 IE.nullPtr !currentStmt.sid in
                 if (!dbg_free_dead_i) then (
                   match (may, null) with
                       (_, true) ->
@@ -139,7 +139,7 @@ let stillDeadS s =
 
         let notDead = 
           List.exists
-            (fun target -> A.mayAliasWrapper e1 target)
+            (fun target -> U.mayAliasWrapper e1 target)
             !targets
         in
 

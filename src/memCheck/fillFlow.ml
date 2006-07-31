@@ -4,7 +4,7 @@ open Pretty
 module IH = Inthash
 module DF = Dataflow
 module U = MemUtil
-module MA = MustAlias
+module IE = IsEquivalent
 module E = Errormsg
  
 (* Current statement needed for mustAlias analysis *)
@@ -79,7 +79,7 @@ module DFF = struct
       List.exists
         (fun target ->
            List.exists
-             (fun e -> MA.must_alias e target !currentStmt.sid)
+             (fun e -> IE.is_equiv e target !currentStmt.sid)
              filledList
         )
         !targets

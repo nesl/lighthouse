@@ -7,15 +7,13 @@ open MakeOneCFG
 
 module IH = Inthash
 module DF = DeadFlow
-module MF = MustAlias
 module OF = OwnFlow
 module FF = FillFlow
 module RF = ReturnFlow
 module U = MemUtil
-module A = AliasWrapper             
 module E = Errormsg
-module MA = MustAlias
-             
+module IE = IsEquivalent             
+
 (* State describing what happens to data from an "interesting" point in the
  * program.  Dead implies that the data is treated as dead on ALL paths from
  * that point forward.  Store implies that the data is stored exactly once on
@@ -102,7 +100,7 @@ let allocDataTreatment alloced s iop =
               | Call (Some lv, _, _, _) ->
                   List.exists 
                     (fun store -> 
-                       MA.must_alias (Lval lv) store s.sid)
+                       IE.is_equiv (Lval lv) store s.sid)
                     !OF.stores
               | _ -> false
           in
@@ -162,9 +160,7 @@ class memoryVisitor = object
     OF.currentFunc := Some f;
  
     (* Update the must alias analysis for this function *)
-    IH.clear MF.DFM.stmtStartData;
-    IH.add MF.DFM.stmtStartData (!funStartStmt).sid (Hashtbl.create 5);
-    MF.TrackF.compute [!funStartStmt];
+    IE.generate_equiv f;
 
     List.iter
       ( fun vi ->
@@ -443,16 +439,19 @@ let argDescr = [
      
       (* Debugging for alias analysis *)
 
-      ("--mem_dbg_may_alias", Arg.Unit (fun _ -> A.dbg_may_alias := true),
+      ("--mem_dbg_may_alias", Arg.Unit (fun _ -> U.dbg_may_alias := true),
        "List all may alias queries and the results");
      
-      ("--mem_dbg_must_i", Arg.Unit (fun _ -> MustFlow.dbg_must_i := true),
-       "Show must dataflow processing each instruction");
+      ("--mem_dbg_equiv_i", Arg.Unit (fun _ -> IE.dbg_equiv_i := true),
+       "Show equiv dataflow processing each instruction");
 
-      ("--mem_dbg_must_combine", Arg.Unit (fun _ -> MustFlow.dbg_must_combine := true),
-       "Show must dataflow joins");
+      ("--mem_dbg_equiv_combine", Arg.Unit (fun _ -> IE.dbg_equiv_combine := true),
+       "Show equiv dataflow joins");
 
-      ("--mem_dbg_must_df", Arg.Unit (fun _ -> MustFlow.dbg_must_df := true),
+      ("--mem_dbg_equiv_stmt_summary", Arg.Unit (fun _ -> IE.dbg_equiv_stmt_summary := true),
+       "Dump summary of equivalence sets during dataflow");
+
+      ("--mem_dbg_equiv_df", Arg.Unit (fun _ -> IE.dbg_equiv_df := true),
        "Internal dataflow debug");
 
       (* Degbugging for the fill analysis *)

@@ -4,7 +4,7 @@ open Pretty
 module IH = Inthash
 module DF = Dataflow
 module U = MemUtil
-module MA = MustAlias
+module IE = IsEquivalent
 module E = Errormsg
  
 (* Current statement needed for mustAlias analysis *)
@@ -109,7 +109,7 @@ module DFR = struct
           let returnMem = 
             List.exists
               (fun mem -> 
-                 let b = MA.must_alias e mem s.sid in
+                 let b = IE.is_equiv e mem s.sid in
                    
                    if b && !dbg_return_s then (
                      ignore (printf "RETURN S: Returning allocated data: %a\n" 

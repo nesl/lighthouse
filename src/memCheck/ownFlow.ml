@@ -4,7 +4,7 @@ open Pretty
 module IH = Inthash
 module DF = Dataflow
 module U = MemUtil
-module MA = MustAlias
+module IE = IsEquivalent
 module E = Errormsg
  
 (* Blah... *)             
@@ -47,7 +47,7 @@ let takenI i s =
       | Call (Some lv, _, _, _) ->
           List.exists 
             (fun store -> 
-               MA.must_alias (Lval lv) store s.sid)
+               IE.is_equiv (Lval lv) store s.sid)
             !stores
       | _ -> false
   in
@@ -59,7 +59,7 @@ let takenI i s =
           List.exists 
             (fun target -> 
                let b = 
-                 MA.must_alias e target s.sid
+                 IE.is_equiv e target s.sid
                in
                  if (!dbg_alloc_store_i) then (
                    if b then 
@@ -83,7 +83,7 @@ let takenI i s =
               (fun target -> 
                  List.exists
                    (fun release -> 
-                      MA.must_alias release target s.sid)
+                      IE.is_equiv release target s.sid)
                    (U.get_released i)
               )
               !targets
@@ -313,7 +313,7 @@ sid);
           
           let returnsTarget =
             List.exists 
-              (fun target -> MA.must_alias e target s.sid) 
+              (fun target -> IE.is_equiv e target s.sid) 
               !targets
           in
 
@@ -379,7 +379,7 @@ sid);
           let e1Target = 
             let e1 = (Lval lv) in
               List.exists 
-                (fun target -> MA.must_alias e1 target s.sid) 
+                (fun target -> IE.is_equiv e1 target s.sid) 
                 !targets
           in
             
@@ -407,22 +407,22 @@ sid);
       | If (BinOp (Ne, e1, e2, _), b1, _, _) ->
          
           let e1Null = 
-            MA.must_alias e1 MA.nullPtr s.sid
+            IE.is_equiv e1 IE.nullPtr s.sid
           in
 
           let e2Null = 
-            MA.must_alias e2 MA.nullPtr s.sid
+            IE.is_equiv e2 IE.nullPtr s.sid
           in
 
           let e1Target =
             List.exists 
-              (fun target -> MA.must_alias e1 target s.sid) 
+              (fun target -> IE.is_equiv e1 target s.sid) 
               !targets
           in
 
           let e2Target =
             List.exists 
-              (fun target -> MA.must_alias e2 target s.sid) 
+              (fun target -> IE.is_equiv e2 target s.sid) 
               !targets
           in
 
@@ -465,7 +465,7 @@ sid);
           let e1Target =
             let e1 = (Lval lv) in
               List.exists 
-                (fun target -> MA.must_alias e1 target s.sid) 
+                (fun target -> IE.is_equiv e1 target s.sid) 
                 !targets
           in
 
@@ -491,22 +491,22 @@ sid);
       | If (BinOp (Eq, e1, e2, _), b1, _, _) ->
          
           let e1Null = 
-            MA.must_alias e1 MA.nullPtr s.sid
+            IE.is_equiv e1 IE.nullPtr s.sid
           in
 
           let e2Null = 
-            MA.must_alias e1 MA.nullPtr s.sid
+            IE.is_equiv e1 IE.nullPtr s.sid
           in
 
           let e1Target =
             List.exists 
-              (fun target -> MA.must_alias e1 target s.sid) 
+              (fun target -> IE.is_equiv e1 target s.sid) 
               !targets
           in
 
           let e2Target =
             List.exists 
-              (fun target -> MA.must_alias e2 target s.sid) 
+              (fun target -> IE.is_equiv e2 target s.sid) 
               !targets
           in
 
