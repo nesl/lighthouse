@@ -5,14 +5,15 @@
  * Author: Roy Shea <roy@cs.ucla.edu>
  *)
 
-val dbg_mem_util: bool ref
+(** Enable verbose debugging output from calls to may_aliasWwrapper *)
 val dbg_may_alias: bool ref
-val dbg_takes_data: bool ref
 
 (** Collection of utility functions *)
-val mayAliasWrapper: Cil.exp -> Cil.exp -> bool
 
-val getVarinfoFromExp: Cil.exp -> Cil.varinfo option
+(** Wraps Ptranal.may_alias to return false when the Ptranal.may_alias throws a
+  * "Not_found" exception.  Also adds optional debugging information enabled by
+  * setting the [dbg_may_alias] flag to true. *)
+val may_alias_wrapper: Cil.exp -> Cil.exp -> bool
 
 val getOwn: Cil.instr -> Cil.exp list
 

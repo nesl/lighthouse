@@ -478,9 +478,6 @@ let argDescr = [
      
       (* Other random options *)
       
-      ("--mem_dbg_mem_util", Arg.Unit (fun _ -> U.dbg_mem_util := true),
-       "Enable extra debugging output for the functions in MemUtil.");
-     
       ("--mem_dbg_ptr_arith", Arg.Unit (fun _ -> dbg_ptr_arith := true),
        "Note when pointer arithmatic is DE_STROY_ED!!!  Ka boom.");
      

@@ -244,10 +244,12 @@ module DFM = struct
                 DF.Done state
 
           | _ -> 
-              E.warn "mustFlow doInstr:\n";
-              E.warn "  Do not understand RHS of instrurtion %a.\n" d_instr i;
-              E.warn  "  Skipping.\n";
-              DF.Done state
+              let state = ListSet.remove (Lval lv) state in
+                E.warn "mustFlow doInstr:\n";
+                E.warn "  Do not understand RHS of instrurtion %a.\n" d_instr i;
+                E.warn  "  Skipping.\n";
+                dbg (Lval lv) (Lval lv) state;
+                DF.Done state
         end
 
       | Call (Some lv, _, _, _) ->

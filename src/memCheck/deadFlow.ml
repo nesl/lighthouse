@@ -84,7 +84,7 @@ let stillDeadI i =
       (fun e1 ->
          List.exists
            (fun target -> 
-              let may = U.mayAliasWrapper e1 target in
+              let may = U.may_alias_wrapper e1 target in
               let null = IE.is_equiv e1 IE.nullPtr !currentStmt.sid in
                 if (!dbg_free_dead_i) then (
                   match (may, null) with
@@ -139,7 +139,7 @@ let stillDeadS s =
 
         let notDead = 
           List.exists
-            (fun target -> U.mayAliasWrapper e1 target)
+            (fun target -> U.may_alias_wrapper e1 target)
             !targets
         in
 
