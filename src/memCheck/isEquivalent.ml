@@ -135,6 +135,12 @@ end
 
 
 
+(*
+ ****************************************
+ Data Flow                                        
+ ****************************************
+ *)
+
 module DFM = struct
 
   (* Vital stats for this dataflow. *)
@@ -206,6 +212,25 @@ module DFM = struct
   ;;
 
 
+  (* Custom helper function to obtain the aliases of an expression *)
+  let getAliases (e:exp) (state:t) : exp list = 
+    match e with
+        Lval lv
+      | CastE (_, Lval lv) ->
+          let aliases = 
+            try (EquivSet.elements (List.find (fun eq -> EquivSet.mem (mkAddrOf lv) eq) state))
+            with Not_found -> []
+          in
+            List.map (fun e -> Lval (mkMem ~addr:e ~off:NoOffset)) aliases
+        
+      | _ -> 
+          E.warn "mustFlow getAliases:\n";
+          E.warn "  Do not understand expression %a.\n" d_exp e;
+          E.warn "  Failing to return any aliases.\n";
+          []
+  ;;
+  
+  
   (* Go go data flow!
    *)
   let doInstr (i: instr) (state: t): t DF.action =
@@ -220,17 +245,47 @@ module DFM = struct
       )
       else ()
     in
+
+    (* To kill an expression e during the data flow:
+     * 
+     * - Find aliases {l1, l2, ..., ln} of e
+     * - For each li, remove any expressions containing li
+     * - Remove e
+     *
+     * In this context an alias of e is the set containing &e (or &&e or &&&e,
+     * etc.).  For example if "&li = &e" then li is an alias of e.
+     *
+     * TODO: This must recursivly continue looking for aliases.  Currently we
+     * find one level of "address of", but this should continue until the
+     * address of the most recent expression is no longer an lval.
+     *)
+    let kill (e:exp) (state:t) : t =
+      let aliases = getAliases e state in
+        (* Print the aliases *) 
+        if (!dbg_equiv_i) then (
+          ignore (printf "Found aliases of expression %a:\n" d_exp e);
+          List.iter
+            (fun e -> ignore (printf "  %a\n" d_exp e))
+            aliases;
+          flush stdout;
+        );
+       
+        let state = 
+          List.fold_left (fun state e -> ListSet.remove e state) state aliases 
+        in
+          ListSet.remove e state
+    in
     
     match i with
 
         Set (lv, e, _) when (Util.equals e nullPtr) ->
-          let state = ListSet.remove (Lval lv) state in
+          let state = kill (Lval lv) state in
           let state = ListSet.add_pair (Lval lv) (nullPtr) state in
             dbg (Lval lv) nullPtr state;
             DF.Done state
 
       | Set (lv, e, _) when (isConstant e) || (match isInteger e with None -> false | _ -> true) ->
-          let state = ListSet.remove (Lval lv) state in
+          let state = kill (Lval lv) state in
           let state = ListSet.add_singleton (Lval lv) state in
             dbg (Lval lv) (Lval lv) state;
             DF.Done state
@@ -238,13 +293,13 @@ module DFM = struct
       | Set (lv, e, _) -> begin match e with
             Lval lv2
           | CastE (_, Lval lv2) ->
-              let state = ListSet.remove (Lval lv) state in
+              let state = kill (Lval lv) state in
               let state = ListSet.add_pair (Lval lv) (Lval lv2) state in
                 dbg (Lval lv) (Lval lv2) state;
                 DF.Done state
 
           | _ -> 
-              let state = ListSet.remove (Lval lv) state in
+              let state = kill (Lval lv) state in
                 E.warn "mustFlow doInstr:\n";
                 E.warn "  Do not understand RHS of instrurtion %a.\n" d_instr i;
                 E.warn  "  Skipping.\n";
@@ -253,7 +308,8 @@ module DFM = struct
         end
 
       | Call (Some lv, _, _, _) ->
-          let state = ListSet.remove (Lval lv) state in
+          (* TODO: need to kill all formals! *)
+          let state = kill (Lval lv) state in
           let state = ListSet.add_singleton (Lval lv) state in
             dbg (Lval lv) (Lval lv) state;
             DF.Done state
@@ -320,8 +376,33 @@ let print_equiv_sets (id:int) =
 let get_equiv_set (e:exp) (id:int) : (exp list) =
   match (get_id_state DFM.stmtStartData id) with
       Some table -> (
-        try (EquivSet.elements (List.find (fun eq -> EquivSet.mem e eq) table))
-        with Not_found -> []
+        let direct = 
+          try (EquivSet.elements (List.find (fun eq -> EquivSet.mem e eq) table))
+          with Not_found -> []
+        in
+
+        let indirect = 
+            List.fold_left 
+              (fun equiv e ->
+                equiv @ ( 
+                  try (EquivSet.elements (List.find (fun eq -> EquivSet.mem e eq) table))
+                  with Not_found -> []
+                )
+              )
+              []
+              (DFM.getAliases e table)
+        in
+
+          (*
+          ignore (printf "\n");
+          ignore (printf "Direct to %a:\n" d_exp e);
+          List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) direct;
+          ignore (printf "Inirect to %a:\n" d_exp e);
+          List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) indirect;
+          *)
+          
+          indirect @ direct
+      
       )
     | None -> []
 ;;

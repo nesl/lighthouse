@@ -15,6 +15,6 @@ val dbg_may_alias: bool ref
   * setting the [dbg_may_alias] flag to true. *)
 val may_alias_wrapper: Cil.exp -> Cil.exp -> bool
 
-val getOwn: Cil.instr -> Cil.exp list
+val get_claim: Cil.instr -> Cil.exp list
 
 val get_released: Cil.instr -> Cil.exp list

@@ -48,7 +48,7 @@ let get_fun_exps_with_attribute (i:instr) (attr_name:string): exp list =
   
       Call (lop, Lval((Var vi), NoOffset), formal_list, _) ->
       
-        let (return_type, foramls_op, is_vararg, attributes) = 
+        let (return_type, formals_op, is_vararg, attributes) = 
           splitFunctionType vi.vtype
         in
 
@@ -56,41 +56,42 @@ let get_fun_exps_with_attribute (i:instr) (attr_name:string): exp list =
           if is_vararg then (
             ignore (E.warn "MemUtil.get_own: Skipping variable argument function\n");
             []
-          );
+          ) else (
 
-          (* If storing the return value and the function prototype sets
-           * attribute for the return value, add it to the expression list.
-           *)
-          let return_exp = match lop with
-              Some lv when (hasAttribute attr_name (typeAttrs return_type)) ->
-                [Lval lv] 
-            | _ -> []
-          in
+            (* If storing the return value and the function prototype sets
+             * attribute for the return value, add it to the expression list.
+             *)
+            let return_exp = match lop with
+                Some lv when (hasAttribute attr_name (typeAttrs return_type)) ->
+                  [Lval lv] 
+              | _ -> []
+            in
 
 
-          (* TODO: Is formal_attrs the same as (typeAttrs formal_type) in the
-           * code below? *)
-          let formal_exps = match formals_op with
-              Some str_type_attr_list ->
-                List.fold_left2 
-                  (fun has_attribute (_, formal_type, formal_attrs) formal -> 
-                     if (hasAttribute attr_name formal_attrs) then
-                       foraml::has_attribute
-                     else has_attrubitue
-                  )
-                  []
-                  str_type_attr_list
-                  formal_list
-              None -> []
-          in
+            (* TODO: Is formal_attrs the same as (typeAttrs formal_type) in the
+             * code below? *)
+            let formal_exps = match formals_op with
+                Some str_type_attr_list ->
+                  List.fold_left2 
+                    (fun has_attribute (_, formal_type, formal_attrs) formal -> 
+                       if (hasAttribute attr_name formal_attrs) then
+                         formal::has_attribute
+                       else has_attribute
+                    )
+                    []
+                    str_type_attr_list
+                    formal_list
+              | None -> []
+            in
 
-            return_exp @ formal_exps
+              return_exp @ formal_exps
+          )
     
     (* Catch for functions (such as function pointers) that we are unable to
      * handle. *)
     | Call (_, _, _, _) ->
         ignore (E.warn "MemUtil.get_gun_exps_with_attribute:"); 
-        ignore (E.warn "Unable to understand function call %a.  Skipping.\n" d_inst i);
+        ignore (E.warn "Unable to understand function call %a.  Skipping.\n" d_instr i);
         []
        
     | _ -> []
@@ -132,26 +133,26 @@ let get_released (i:instr): exp list =
               vi.vname = "post_i2c" ||
               vi.vname = "post_spi" ||
               vi.vname = "post_auto") ->
-        if check_release_flag (List.nth elist 5) release then
+        if check_release_flag (List.nth formal_list 5) then
           get_fun_exps_with_attribute i "sos_may_release"
         else []
 
-    | Call (_, Lval((Var vi), NoOffset), formal_list, _)
-        if check_flag_ (List.nth elist ((List.length elist) -1)) release then
+    | Call (_, Lval((Var vi), NoOffset), formal_list, _) ->
+        if check_release_flag (List.nth formal_list ((List.length formal_list) -1)) then
           get_fun_exps_with_attribute i "sos_may_release"
         else []
     
     | Call (_, _, _, _) ->
         if (List.length (get_fun_exps_with_attribute i "sos_may_release") > 0) then
           E.s (E.error "MemCheck.get_released: Incorrect set of sos_may_release in %a\n"
-                d_inst i)
+                d_instr i)
         else []
 
     | _ -> []
              
   in
 
-    may_release & must_release
+    may_release @ must_release
 ;;
 
 

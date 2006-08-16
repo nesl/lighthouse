@@ -18,16 +18,22 @@ type test_data = {
   clone_a : exp ref;
   clone_b : exp ref;
   clone_ab : exp ref;
+  p : exp ref;
+  q : exp ref;
+  x : exp ref;
+  y : exp ref;
   label_one : string;
   label_two : string;
   label_three : string;
   label_four : string;
   label_five : string;
+  label_six : string;
   mutable id_one : int;
   mutable id_two : int;
   mutable id_three : int;
   mutable id_four : int;
   mutable id_five : int;
+  mutable id_six : int;
 };;
 
 
@@ -37,16 +43,22 @@ let equiv_test_data = {
   clone_a = ref zero;
   clone_b = ref zero;
   clone_ab = ref zero;
+  p = ref zero;
+  q = ref zero;
+  x = ref zero;
+  y = ref zero;
   label_one = "ONE";
   label_two = "TWO";
   label_three = "THREE";
   label_four = "FOUR";
   label_five = "FIVE";
+  label_six = "SIX";
   id_one = 0;
   id_two = 0;
   id_three = 0;
   id_four = 0;
   id_five = 0;
+  id_six = 0;
 };;
 
 
@@ -84,6 +96,18 @@ class testVisitor = object
       | "arrayCloneAB" ->
           equiv_test_data.clone_ab := Lval (var v);
           SkipChildren
+      | "p" ->
+          equiv_test_data.p := Lval (var v);
+          SkipChildren
+      | "q" ->
+          equiv_test_data.q := Lval (var v);
+          SkipChildren
+      | "x" ->
+          equiv_test_data.x := Lval (var v);
+          SkipChildren
+      | "y" ->
+          equiv_test_data.y := Lval (var v);
+          SkipChildren
       | _ -> SkipChildren
 
 
@@ -101,6 +125,8 @@ class testVisitor = object
              equiv_test_data.id_four <- s.sid
          | Label (name, _, _) when name = equiv_test_data.label_five -> 
              equiv_test_data.id_five <- s.sid
+         | Label (name, _, _) when name = equiv_test_data.label_six -> 
+             equiv_test_data.id_six <- s.sid
          | Label (name, _, _) -> ignore (printf "Failed for label name: %s\n" name)
          | _ -> ignore (printf "Skipping statement %a\n" d_stmt s)
       )
@@ -275,6 +301,53 @@ let test_equivClone_five =
 ;;
 
 
+let test_equivClone_six = 
+
+  let star (e:exp) : exp =
+    (Lval (mkMem e NoOffset))
+  in
+  
+  let x_to_y = 
+    IE.is_equiv 
+      !(equiv_test_data.x) 
+      !(equiv_test_data.y) 
+      equiv_test_data.id_six
+  in
+    
+  let not_sx_to_p = 
+    not (
+      IE.is_equiv
+        (star !(equiv_test_data.x))
+        !(equiv_test_data.p) 
+        equiv_test_data.id_six
+    )
+  in
+
+  let sy_to_q =
+    IE.is_equiv
+      (star !(equiv_test_data.y))
+      !(equiv_test_data.q)
+      equiv_test_data.id_six
+  in
+
+  let sx_to_sy =
+    IE.is_equiv
+      (star !(equiv_test_data.x))
+      (star !(equiv_test_data.y))
+      equiv_test_data.id_six
+  in
+  
+  let sx_to_q =
+    IE.is_equiv
+      (star !(equiv_test_data.x))
+      !(equiv_test_data.q)
+      equiv_test_data.id_six
+  in
+
+    TestCase(fun _ -> assert_bool "Incorrect clone information" 
+                      (x_to_y && not_sx_to_p && sy_to_q && sx_to_sy && sx_to_q)) 
+;;
+
 
 (* Run all the tests *)
 let suite_equivClone = 
@@ -285,6 +358,7 @@ let suite_equivClone =
                TestLabel ("equivClone.c: Three", test_equivClone_three);
                TestLabel ("equivClone.c: Four", test_equivClone_four);
                TestLabel ("equivClone.c: Five", test_equivClone_five);
+               TestLabel ("equivClone.c: Six", test_equivClone_six);
              ]
   )
 ;;

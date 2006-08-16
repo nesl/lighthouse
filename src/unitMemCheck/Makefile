@@ -48,7 +48,7 @@ ifndef SUBPROJS
 endif
 
 ####
-# General build rulse
+# General build rule
 ####
 all:	bc
 

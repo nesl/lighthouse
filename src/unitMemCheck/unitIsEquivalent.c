@@ -44,6 +44,22 @@ FOUR:
     arrayCloneAB = 0;
 FIVE:
 
+    {
+        int p;
+        int q;
+
+        int *x;
+        int *y;
+        
+        x = y;
+        *x = p;
+        // (x, y), (*x, p)
+
+        *y = q;
+        // (x, y), (p), (*y, q)
+SIX:
+    }
+
     return 0;
 }
 
