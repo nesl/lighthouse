@@ -258,7 +258,11 @@ module DFM = struct
      * TODO: This must recursivly continue looking for aliases.  Currently we
      * find one level of "address of", but this should continue until the
      * address of the most recent expression is no longer an lval.
+     *     
+     * TODO: Kill function needs to remove any expression CONTAINING a member of
+     * the kill set.
      *)
+
     let kill (e:exp) (state:t) : t =
       let aliases = getAliases e state in
         (* Print the aliases *) 
