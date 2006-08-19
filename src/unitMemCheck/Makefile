@@ -40,11 +40,18 @@ endef
 export PROJ_ie
 
 
+define PROJ_ch
+  SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/memUtil.ml ../memCheck/isEquivalent.ml cilDriver.ml unitIsEquivalent01.ml
+  RESULT = unitIsEquivalent01
+endef
+export PROJ_ch
+
+
 ####
 # Default project to bulid
 ####
 ifndef SUBPROJS
-  export SUBPROJS = cd aa pt ie
+  export SUBPROJS = cd aa pt ie ch
 endif
 
 ####

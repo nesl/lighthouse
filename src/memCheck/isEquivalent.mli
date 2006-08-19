@@ -19,6 +19,9 @@ val dbg_equiv_combine : bool ref
 (** Enable debugging of incoming statement states *)
 val dbg_equiv_stmt_summary : bool ref
 
+(** Enable debugging of search for aliases to an expression *)
+val dbg_equiv_get_aliases : bool ref
+
 (** Enable debugging of the underlying dataflow framework *)
 val dbg_equiv_df : bool ref
 

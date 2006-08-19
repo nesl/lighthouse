@@ -9,6 +9,22 @@ module E = Errormsg
 let dbg_may_alias = ref false
         
 
+(* Check to see if sub is a subexpression of e *)
+let rec is_subexpression_of (sub:exp) (e:exp) : bool =
+  if (Util.equals (stripCasts sub) (stripCasts e)) then (
+    true
+  ) else (
+    match e with
+        Lval (Mem e, _) 
+      | CastE (_, e)
+      | AddrOf (Mem e, _)
+      | StartOf (Mem e, _) ->
+          is_subexpression_of sub e
+      | _ -> false
+  )
+
+;;
+                      
                       
 (* Wrap calls to Ptranal.may_alias with extra debugging *) 
 let may_alias_wrapper e target =

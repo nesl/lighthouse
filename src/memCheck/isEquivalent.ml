@@ -12,6 +12,7 @@ module S = Set
 (* Runtime debuging flags. *)
 let dbg_equiv_i = ref false;;
 let dbg_equiv_combine = ref false;;
+let dbg_equiv_get_aliases = ref false;;
 let dbg_equiv_stmt_summary = ref false;;
 
 (* Dataflow specific debugging *)
@@ -78,10 +79,11 @@ module ListSet = struct
       eqsl1
   ;;
 
-  (* Remove element from any sets that it occupies *)
+  (* Remove element or super element from any sets that it occupies. *)
   let remove (e : exp) (eqsl: EquivSet.t list) : (EquivSet.t list) =
     List.fold_left
-      (fun result eq -> (EquivSet.remove e eq)::result)
+      (fun result eq -> 
+         (EquivSet.filter (fun e2 -> not (U.is_subexpression_of e e2)) eq)::result)
       [] eqsl
   ;;
 
@@ -212,21 +214,51 @@ module DFM = struct
   ;;
 
 
-  (* Custom helper function to obtain the aliases of an expression *)
-  let getAliases (e:exp) (state:t) : exp list = 
-    match e with
-        Lval lv
-      | CastE (_, Lval lv) ->
+  (* Custom helper function to obtain the aliases of an expression.
+   * 
+   * In this context an alias of e is the set containing &e (or &&e or &&&e,
+   * etc.).  For example if "&li = &e" then li is an alias of e.  Consiquently,
+   * this function recursivly looks for aliases "further up".
+   * 
+   * TODO: I belive that aliases should actually be:
+   * - Set containing e called s0
+   * - Elements in the set containing *x, where x is a member of a set 
+   *   containing the an element &y (y is any member of S0)
+   * - Elements in the set containing **x, where x is a member of a set 
+   *   containing the an element &&y or &z (y is any member of S0 and z is any
+   *   member of s1)
+   * - And so on...
+   *)
+  let rec getAliases (e:exp) (state:t) : exp list = 
+    
+    if !dbg_equiv_get_aliases then (
+      ignore (printf "Alias search looking at expression %a\n" d_exp e);
+      flush stdout;
+    );
+    
+    match (stripCasts e) with
+        Lval lv ->
           let aliases = 
             try (EquivSet.elements (List.find (fun eq -> EquivSet.mem (mkAddrOf lv) eq) state))
             with Not_found -> []
           in
-            List.map (fun e -> Lval (mkMem ~addr:e ~off:NoOffset)) aliases
+            List.map 
+              (fun e -> Lval (mkMem ~addr:e ~off:NoOffset)) 
+              (aliases @ (getAliases (mkAddrOf lv) state))
+
+      | AddrOf lv
+      | StartOf lv ->
+          if !dbg_equiv_get_aliases then (
+            ignore (printf "Alias search stopping with terminal expression %a\n" d_exp e);
+            flush stdout;
+          );
+          []
+
         
       | _ -> 
-          E.warn "mustFlow getAliases:\n";
-          E.warn "  Do not understand expression %a.\n" d_exp e;
-          E.warn "  Failing to return any aliases.\n";
+          E.warn "IsEquivalent.DFM.getAliases:";
+          E.warn "  Do not understand expression %a." d_exp e;
+          E.warn "  Stopping recursion and returning empty alias set for this term.";
           []
   ;;
   
@@ -252,22 +284,15 @@ module DFM = struct
      * - For each li, remove any expressions containing li
      * - Remove e
      *
-     * In this context an alias of e is the set containing &e (or &&e or &&&e,
-     * etc.).  For example if "&li = &e" then li is an alias of e.
-     *
-     * TODO: This must recursivly continue looking for aliases.  Currently we
-     * find one level of "address of", but this should continue until the
-     * address of the most recent expression is no longer an lval.
-     *     
-     * TODO: Kill function needs to remove any expression CONTAINING a member of
-     * the kill set.
+     * See getAliases for more information on what an alias is.
      *)
 
     let kill (e:exp) (state:t) : t =
       let aliases = getAliases e state in
+
         (* Print the aliases *) 
         if (!dbg_equiv_i) then (
-          ignore (printf "Found aliases of expression %a:\n" d_exp e);
+          ignore (printf "isEquiv: doInstr: Found aliases of expression %a:\n" d_exp e);
           List.iter
             (fun e -> ignore (printf "  %a\n" d_exp e))
             aliases;
@@ -294,34 +319,43 @@ module DFM = struct
             dbg (Lval lv) (Lval lv) state;
             DF.Done state
 
-      | Set (lv, e, _) -> begin match e with
+      | Set (lv, e, _) -> begin match (stripCasts e) with
             Lval lv2
-          | CastE (_, Lval lv2) ->
+          | AddrOf lv2
+          | StartOf lv2 ->
               let state = kill (Lval lv) state in
-              let state = ListSet.add_pair (Lval lv) (Lval lv2) state in
-                dbg (Lval lv) (Lval lv2) state;
+              let state = ListSet.add_pair (Lval lv) (stripCasts e) state in
+                dbg (Lval lv) (stripCasts e) state;
                 DF.Done state
 
           | _ -> 
               let state = kill (Lval lv) state in
-                E.warn "mustFlow doInstr:\n";
-                E.warn "  Do not understand RHS of instrurtion %a.\n" d_instr i;
-                E.warn  "  Skipping.\n";
+                E.warn "IsEquivalent.DFM.doInstr:";
+                E.warn "  Do not understand RHS of instrurtion %a." d_instr i;
+                E.warn  "  Skipping.";
                 dbg (Lval lv) (Lval lv) state;
                 DF.Done state
         end
 
-      | Call (Some lv, _, _, _) ->
-          (* TODO: need to kill all formals! *)
+      | Call (None, _, formals, _) ->
+          let state = List.fold_left (fun s e -> kill e s) state formals in
+            if (!dbg_equiv_i) then (
+              ignore (printf "isEquiv: doInstr: %a\n" d_instr i);
+              print_equiv_table state;
+              flush stdout;
+            );
+            DF.Done state
+
+      | Call (Some lv, _, formals, _) ->
+ 
           let state = kill (Lval lv) state in
+          let state = List.fold_left (fun s e -> kill e s) state formals in
           let state = ListSet.add_singleton (Lval lv) state in
             dbg (Lval lv) (Lval lv) state;
             DF.Done state
 
       | _ -> 
-          (* TODO: Remove this after debugging and replace with version
-           * commented out below. *)
-          E.warn "mustFlow doInstr: Ignoring instruction %a\n" d_instr i;
+          E.warn "IsEquivalent.DFM.doInstr: Ignoring instruction %a" d_instr i;
           DF.Done state
   ;;
 
@@ -397,13 +431,14 @@ let get_equiv_set (e:exp) (id:int) : (exp list) =
               (DFM.getAliases e table)
         in
 
-          (*
-          ignore (printf "\n");
-          ignore (printf "Direct to %a:\n" d_exp e);
-          List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) direct;
-          ignore (printf "Inirect to %a:\n" d_exp e);
-          List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) indirect;
-          *)
+          if !dbg_equiv_get_aliases then (
+            ignore (printf "\n");
+            ignore (printf "Direct to %a:\n" d_exp e);
+            List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) direct;
+            ignore (printf "Inirect to %a:\n" d_exp e);
+            List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) indirect;
+            flush stdout;
+          );
           
           indirect @ direct
       
