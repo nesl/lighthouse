@@ -13,6 +13,7 @@ module S = Set
 let dbg_equiv_i = ref false;;
 let dbg_equiv_combine = ref false;;
 let dbg_equiv_get_aliases = ref false;;
+let dbg_equiv_get_equiv_set = ref false;;
 let dbg_equiv_stmt_summary = ref false;;
 
 (* Dataflow specific debugging *)
@@ -216,11 +217,7 @@ module DFM = struct
 
   (* Custom helper function to obtain the aliases of an expression.
    * 
-   * In this context an alias of e is the set containing &e (or &&e or &&&e,
-   * etc.).  For example if "&li = &e" then li is an alias of e.  Consiquently,
-   * this function recursivly looks for aliases "further up".
-   * 
-   * TODO: I belive that aliases should actually be:
+   * An equivalent value is:
    * - Set containing e called s0
    * - Elements in the set containing *x, where x is a member of a set 
    *   containing the an element &y (y is any member of S0)
@@ -228,38 +225,117 @@ module DFM = struct
    *   containing the an element &&y or &z (y is any member of S0 and z is any
    *   member of s1)
    * - And so on...
+   *
+   * A simple way to accomplish this is to:
+   * - Call getEquiv
+   * - Sort and uniqify the resulting list and call this l_0
+   * - Call getEquiv on each element of l_0
+   * - Sort and uniquify the union of these calls and call this l_1
+   * - Continue this procedure until l_n = l_(n-1)
+   *
+   * Note that in contrast to this is an ALIAS of an expression e:
+   * - Find the equiv set of &e
+   * - Dereference each of these
    *)
-  let rec getAliases (e:exp) (state:t) : exp list = 
+  let getEquiv (e:exp) (state:t) : exp list = 
     
     if !dbg_equiv_get_aliases then (
-      ignore (printf "Alias search looking at expression %a\n" d_exp e);
+      ignore (printf 
+                "IsEquivalent.DFM.getEquiv: Alias search looking at expression %a\n" 
+                d_exp e);
       flush stdout;
     );
     
-    match (stripCasts e) with
-        Lval lv ->
-          let aliases = 
-            try (EquivSet.elements (List.find (fun eq -> EquivSet.mem (mkAddrOf lv) eq) state))
-            with Not_found -> []
-          in
-            List.map 
-              (fun e -> Lval (mkMem ~addr:e ~off:NoOffset)) 
-              (aliases @ (getAliases (mkAddrOf lv) state))
+    let rec get_aliases_helper (e:exp) =  
+      match (stripCasts e) with
+          Lval lv ->
+            let aliases = 
+              try (EquivSet.elements 
+                     (List.find 
+                        (fun eq -> EquivSet.mem (mkAddrOf lv) eq) 
+                        state
+                     )
+              )
+              with Not_found -> []
+            in
+              List.map 
+                (fun e -> Lval (mkMem ~addr:e ~off:NoOffset)) 
+                (aliases @ (get_aliases_helper (mkAddrOf lv)))
 
-      | AddrOf lv
-      | StartOf lv ->
-          if !dbg_equiv_get_aliases then (
-            ignore (printf "Alias search stopping with terminal expression %a\n" d_exp e);
-            flush stdout;
-          );
-          []
+        | AddrOf lv
+        | StartOf lv ->
+            if !dbg_equiv_get_aliases then (
+              ignore (printf "Alias search stopping with terminal expression %a\n" d_exp e);
+              flush stdout;
+            );
+            []
 
-        
-      | _ -> 
-          E.warn "IsEquivalent.DFM.getAliases:";
-          E.warn "  Do not understand expression %a." d_exp e;
-          E.warn "  Stopping recursion and returning empty alias set for this term.";
-          []
+
+        | _ -> 
+            E.warn "IsEquivalent.DFM.getEquiv:";
+            E.warn "  Do not understand expression %a." d_exp e;
+            E.warn "  Stopping recursion and returning empty alias set for this term.";
+            []
+    in
+
+
+    let sort_and_uniq (el:exp list) : exp list =
+      let rec uniq el = match el with
+          [] -> []
+        | hd::[] -> [hd]
+        | hd::next::rest ->
+            if (Util.equals hd next) then
+              uniq (hd::rest)
+            else
+              hd::(uniq (next::rest))
+      in
+      uniq (List.sort compare el)
+    in
+
+  
+    let get_all_aliases (el:exp list) : exp list = 
+
+      let direct = 
+        (List.fold_left
+           (fun el e ->
+              try (EquivSet.elements (List.find (fun eq -> EquivSet.mem e eq) state))
+              with Not_found -> [])
+           [] el
+        )
+      in
+
+      let indirect = 
+        (List.fold_left
+           (fun el e -> (sort_and_uniq (get_aliases_helper e) @ el))
+           [] el
+        )
+      in
+
+        sort_and_uniq (direct @ indirect)
+    in
+      
+    let l0 = ref [] in
+    let l1 = ref [] in
+ 
+      l0 := get_all_aliases [e];
+      l1 := get_all_aliases !l0;
+
+      while not ((compare !l0 !l1) = 0) do
+        if !dbg_equiv_get_aliases then (
+          ignore (printf "Aliases of expression %a:\n" d_exp e);
+          List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) !l0;
+          flush stdout;
+        );
+        l0 := !l1;
+        l1 := (get_all_aliases !l0);
+      done;
+  
+      if !dbg_equiv_get_aliases then (
+        ignore (printf "Aliases of expression %a:\n" d_exp e);
+        List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) !l0;
+        flush stdout;
+      );
+      !l0
   ;;
   
   
@@ -284,11 +360,29 @@ module DFM = struct
      * - For each li, remove any expressions containing li
      * - Remove e
      *
-     * See getAliases for more information on what an alias is.
+     * See getEquiv for more information on what an alias is.
      *)
-
     let kill (e:exp) (state:t) : t =
-      let aliases = getAliases e state in
+
+      let address_of (e:exp) : exp option =
+        match (stripCasts e) with
+            Lval lv -> Some (mkAddrOf lv)
+        | _ -> 
+            E.warn "IsEquivalent.DFM.doInstr:";
+            E.warn "  Unable to make address of non-lval expression %a." d_exp e;
+            E.warn "  Skipping.";
+            None
+      in
+
+
+      let aliases =
+        List.map  
+          (fun e -> Lval (mkMem ~addr:e ~off:NoOffset)) 
+          (match (address_of e) with
+               Some a -> getEquiv a state
+             | _ -> []
+          )
+      in
 
         (* Print the aliases *) 
         if (!dbg_equiv_i) then (
@@ -419,19 +513,10 @@ let get_equiv_set (e:exp) (id:int) : (exp list) =
           with Not_found -> []
         in
 
-        let indirect = 
-            List.fold_left 
-              (fun equiv e ->
-                equiv @ ( 
-                  try (EquivSet.elements (List.find (fun eq -> EquivSet.mem e eq) table))
-                  with Not_found -> []
-                )
-              )
-              []
-              (DFM.getAliases e table)
+        let indirect = (DFM.getEquiv e table)
         in
 
-          if !dbg_equiv_get_aliases then (
+          if !dbg_equiv_get_equiv_set then (
             ignore (printf "\n");
             ignore (printf "Direct to %a:\n" d_exp e);
             List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) direct;
@@ -440,7 +525,19 @@ let get_equiv_set (e:exp) (id:int) : (exp list) =
             flush stdout;
           );
           
-          indirect @ direct
+          let sort_and_uniq (el:exp list) : exp list =
+            let rec uniq el = match el with
+                [] -> []
+              | hd::[] -> [hd]
+              | hd::next::rest ->
+                  if (Util.equals hd next) then
+                    uniq (hd::rest)
+                  else
+                    hd::(uniq (next::rest))
+            in
+              uniq (List.sort compare el)
+          in
+            sort_and_uniq (indirect @ direct)
       
       )
     | None -> []

@@ -45,8 +45,9 @@ class testVisitor = object
   method vfunc (f:fundec) =
     IE.dbg_equiv_i := false;
     IE.dbg_equiv_combine := false;
-    IE.dbg_equiv_stmt_summary := false;
-    IE.dbg_equiv_get_aliases := true;
+    IE.dbg_equiv_stmt_summary := true;
+    IE.dbg_equiv_get_aliases := false;
+    IE.dbg_equiv_get_equiv_set := true;
     IE.dbg_equiv_df := false;
 
     IE.generate_equiv f;
@@ -121,7 +122,10 @@ let test_check =
       !(equiv_test_data.x)
       equiv_test_data.id_check
   in
-  TestCase(fun _ -> assert_bool "Incorrect clone information" (x_y && ap_x))
+    TestCase(fun _ -> assert_bool "Incorrect clone information" (x_y && ap_x))
+   (*
+      TestCase(fun _ -> assert_bool "Incorrect clone information" (x_y && true))
+    *)
 ;;
 
 

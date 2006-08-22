@@ -71,7 +71,9 @@ class testVisitor = object
   method vfunc (f:fundec) =
     IE.dbg_equiv_i := false;
     IE.dbg_equiv_combine := false;
-    IE.dbg_equiv_stmt_summary := false;
+    IE.dbg_equiv_stmt_summary := true;
+    IE.dbg_equiv_get_aliases := false;
+    IE.dbg_equiv_get_equiv_set := true;
     IE.dbg_equiv_df := false;
 
     IE.generate_equiv f;
@@ -144,7 +146,9 @@ let is_dead (e:exp) (id:int) : bool =
   match IE.get_equiv_set e id with
       [e] -> true
     | [] -> true
-    | _ -> false
+    | el -> 
+        List.iter (fun e -> ignore (printf "*** %a\n" d_exp e)) el;
+        false
 ;;
 
 
@@ -187,7 +191,6 @@ let test_equivClone_two =
   TestCase(fun _ -> assert_bool "Incorrect clone information" 
                       (ca_to_a && a_to_ca && cb_to_b && b_to_cb && cab_dead))
 ;;
-
 
 
 let test_equivClone_three = 
@@ -245,7 +248,6 @@ let test_equivClone_three =
 ;;
 
 
-
 let test_equivClone_four = 
   let ca_to_a = 
     IE.is_equiv 
@@ -275,7 +277,6 @@ let test_equivClone_four =
   TestCase(fun _ -> assert_bool "Incorrect clone information" 
                       (ca_to_a && a_to_ca && cb_to_b && b_to_cb && cab_dead))
 ;;
-
 
 
 let test_equivClone_five = 
@@ -347,7 +348,6 @@ let test_equivClone_six =
     TestCase(fun _ -> assert_bool "Incorrect clone information" 
                       (x_to_y && not_sx_to_p && sy_to_q && sx_to_sy && sx_to_q)) 
 ;;
-
 
 (* Run all the tests *)
 let suite_equivClone = 

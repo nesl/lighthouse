@@ -22,6 +22,9 @@ val dbg_equiv_stmt_summary : bool ref
 (** Enable debugging of search for aliases to an expression *)
 val dbg_equiv_get_aliases : bool ref
 
+(** Enable debugging of quries to get_equiv_set (called by is_equiv) *)
+val dbg_equiv_get_equiv_set : bool ref
+
 (** Enable debugging of the underlying dataflow framework *)
 val dbg_equiv_df : bool ref
 
