@@ -113,14 +113,17 @@ let get_fun_exps_with_attribute (i:instr) (attr_name:string): exp list =
     | _ -> []
 ;;
 
- 
+
+(* Return list of expressions in function call that have the "sos_claim"
+ * attribute set *)
 let get_claim (i:instr): exp list =
   get_fun_exps_with_attribute i "sos_claim"
 ;;
 
 
 (* Given an instruction return a list of expressions corresponding to
- * foramal paramaters that have the 'sos_release' flag set. *)
+ * foramal paramaters that have the 'sos_release' flag set, or that have the
+ * 'sos_may_release' flag set and pass a may release test. *)
 let get_released (i:instr): exp list =
 
   let must_release = get_fun_exps_with_attribute i "sos_release" in
