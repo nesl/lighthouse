@@ -8,166 +8,167 @@ module E = Errormsg
 module IE = IsEquivalent
 
 (* Reference to the varinfo ID that we are interested in *)
-let target = ref []
-let freeLineNum = ref (-1)
+let target = ref [];;
+let freeLineNum = ref (-1);;
                 
 (* Reference to the current statment *)
-let currentStmt = ref (mkEmptyStmt ())
+let currentStmt = ref (mkEmptyStmt ());;
 
 (* Dead varinfos should never appear on the rhs of an expression.  A varinfo
  * can transition into being hidden by appearing as an lval.  This may result
  * in the old value being overwritten by a new value.  From this point forward
  * that varinfo is safe to use.  Finally, an error occures if an instruction
  * attempts to use a dead lval.  *)
-type status = Dead | Loops | Error
+type status = Dead | Loops | Error;;
 
 (* Runtime debuging flags. *)
-let dbg_free_dead_s = ref false
-let dbg_free_dead_i = ref false
-let dbg_free_combine = ref false
-let enable_loop = ref false
+let dbg_free_dead_s = ref false;;
+let dbg_free_dead_i = ref false;;
+let dbg_free_combine = ref false;;
+let enable_loop = ref false;;
                          
 (* Dataflow specific debugging *)
-let dbg_free_df = ref false
+let dbg_free_df = ref false;;
 
-(* Check to see if an instructions treats data as being dead.*)
-let stillDeadI i =
 
-  (* Bundle together all incoming expressions *)
-  let incoming_exps: exp list  =
-    match i with
-        Set ((Var v, NoOffset), e, _) when 
-          (Str.string_match (Str.regexp "__cil_tmp") v.vname 0) -> 
-          begin
-           match e with
-             | Lval (Mem e1, NoOffset) -> [e]
-             | _ -> []
-          end
-      | Set (lv, e, _) -> [e]
-      | Call (Some lv, _, el, _) -> el
-      | Call (None, _, el, _) -> el
-      | _ -> []
+
+(****************************************)
+(****************************************)
+(* Low layer utility functions used within this code. *)
+(****************************************)
+(****************************************)
+
+(* Grab all expressions on the right hand side of an instruction. *)
+let get_rhs_exps (i:instr) : exp list =                    
+  match i with
+      Set ((Var v, NoOffset), e, _) when 
+        (Str.string_match (Str.regexp "__cil_tmp") v.vname 0) -> 
+        (* TODO: Why is this special case needed for the __cil_tmp variabels?
+         *)
+        begin 
+          match e with
+              Lval (Mem e1, NoOffset) -> [e]
+            | _ -> []
+        end
+    | Set (_, e, _) -> [e]
+    | Call (_, _, el, _) -> el
+    | _ -> []
+;;
+
+
+(* Generate a list that includes expression e and all sub-expressions. *)
+let sub_exps_of (e:exp) : exp list =
+  match e with
+      Const c 
+    | AddrOf (v, NoOffset) 
+    | StartOf (v, NoOffset)
+    | Lval (Var v, _) ->
+        e :: exps
+
+    | BinOp (_, e1, e2, _) -> 
+        (expressions e1) @ (expressions e2) @ exps
+
+    | UnOp (_, e1, _)
+    | CastE (_, e1) -> 
+        (expressions e1) @ exps
+
+    | Lval (Mem e1, NoOffset) -> 
+        e :: (expressions e1) @ exps
+
+    | _ -> E.bug "Running simplify should eliminate this bug!\n"; []
+;;
+
+
+(* Check to see if an instruction dereferences dead data *)
+let is_dead_exp (e:exp) : bool =
+
+  let sub_exps = sub_exps_of incoming_exps in
+
+  (* TODO: What CIL translation is causing the need for this NULL check? *)
+  let non_null = 
+    List.filter 
+      (fun e -> not (IE.is_equiv e IE.nullPtr !currentStmt.sid)) 
+      sub_exps 
   in
 
-  (* CHECK *)
-  (* Extract those expressions that could be of interest in the analysis.
-   * This requires that some complex expressions be "traversed" so that
-   * "sub-expressions" are included. *)
-  let exps =
-    List.fold_left
-      (fun exps e ->
+    List.exists (fun e -> U.may_alias_wrapper e1 !target) non_null
+;;
 
-         let rec expressions e =
-           match e with
-               Const c -> [e]
-             | AddrOf (v, NoOffset) -> [e]
-             | StartOf (v, NoOffset) -> [e]
-             | BinOp (_, e1, e2, _) -> (expressions e1) @ (expressions e2)
-             | UnOp (_, e1, _) -> expressions e1
-             | CastE (_, e1) -> expressions e1
-             | Lval (Mem e1, NoOffset) -> e::(expressions e1)
-             | Lval (Var v, o) -> [e]
 
-             | _ -> E.bug "Running simplify should eliminate this bug!\n"; []
-         in
 
-           (expressions e) @ exps
-      )
-      []
-      incoming_exps
-  in
+(* Check to see if an instructions is safe by insuring that it does not attempt
+ * to access dead data. *)
+let safe_instruction (i:instr) : status =
 
-  (* See if any of these expressions are in the list of expressions that must
-   * be treated as dead. *)
-  let notDead =
-    List.exists
-      (fun e1 ->
-              let may = U.may_alias_wrapper e1 !target in
-              let null = IE.is_equiv e1 IE.nullPtr !currentStmt.sid in
-                if (!dbg_free_dead_i) then (
-                  match (may, null) with
-                      (_, true) ->
-                        ignore (printf "DEAD INSTR: Expression %a must alias NULL\n" 
-                                  d_exp e1);
-                    | (true, _) ->
-                        ignore (printf "DEAD INSTR: Expression %a may alias target %a:\n" 
-                                  d_exp e1 d_exp !target);
-                    | (false, _) ->
-                        ignore (printf "DEAD INSTR: Expression %a may NOT alias target %a:\n" 
-                                  d_exp e1 d_exp !target);
-                );
-                (may && (not null))
-           )
-      exps
-  in
+  let incoming_exps = get_rhs_exps i in
 
-    if notDead then
-      (
-        match i with
-            Set (_, _, loc) 
-          | Call (_, _, _, loc)
-              when !freeLineNum >= loc.line ->
-              if !dbg_free_dead_i then
-                ignore (printf "DEAD INSTR: Looped instruction uses a dead expression: %a\n" 
-                          d_instr i);
-              if !enable_loop then
-                ignore(E.warn "Dead var in %a\nappears to be accessed in a loop" d_instr i);
-              Loops
-          | _ ->
-              if !dbg_free_dead_i then
-                ignore (printf "DEAD INSTR: Instruction uses a dead expression: %a\n" 
-                          d_instr i);
-              ignore(E.warn "Var in %a\nshould be treated as dead" d_instr i);
-              Error
+  (* If an instruction trys to use an expression that should be treated as dead,
+   * then it is unsafe *)
+  let unsafe = List.mem is_dead_exp incoming_exps in
+  
+    (* If an instruction touches a dead expression than it is unsafe *)
+    if (!dbg_free_dead_i) then (
+      ignore (printf "IsDead.safe_instruction: Instruction %a" d_instr i); 
+      if unsafe then (
+        ignore (printf "dereferences dead expression %a\n" !target)
       ) else (
-        if !dbg_free_dead_i then
-          ignore (printf "DEAD INSTR: Instruction is safe: %a\n" d_instr i);
-        Dead
+        ignore (printf "is safe with respect to expression %a\n" !target)
       )
+    );
+
+    if (unsafe && (!freeLineNum >= (get_instrLoc i).line)) then 
+      Loops
+    else if (unsafe) then 
+      Error
+    else Dead
+;;
 
 
-(* CHECK *)
 (* Check to see if a statement treats data as being dead. *)
-let stillDeadS s =
-  match s.skind with
-    | Return (Some e1, loc)
-    | If (e1, _, _, loc)
-    | Switch (e1, _, _, loc) ->
+let safe_statement (s:stmt) : status =
 
-        let notDead = U.may_alias_wrapper e1 !target in
+  let unsafe = 
+    match s.skind with
+      | Return (Some e, _)
+      | If (e, _, _, _)
+      | Switch (e, _, _, _) -> 
+          is_dead_exp e
+      
+      | Return _
+      | Instr _
+      | Goto _
+      | Break _
+      | Continue _
+      | Loop _
+      | Block _
+      | TryFinally _
+      | TryExcept _ -> 
+          false
+  in
+                                   
+    (* If an statement touches a dead expression than it is unsafe *)
+    if (!dbg_free_dead_s) then (
+      ignore (printf "IsDead.safe_statement: Statement %a" d_stmt s); 
+      if unsafe then (
+        ignore (printf "dereferences dead expression %a\n" !target)
+      ) else (
+        ignore (printf "is safe with respect to expression %a\n" !target)
+      )
+    );
 
-          if notDead then
-            (
-              if !freeLineNum >= loc.line then (
-                if !dbg_free_dead_s then
-                  ignore (printf "DEAD STMT: Looped statement uses a dead expression: %a\n" 
-                            d_stmt s);
-                ignore(E.warn "Dead var in %a\nappears to be accessed in a loop" d_stmt s);
-                Loops
-              ) else (
-                if !dbg_free_dead_s then
-                  ignore (printf "DEAD STMT: Statement uses a dead expression: %a\n" 
-                            d_stmt s);
-                ignore(E.warn "Var in %a\nshould be treated as dead" d_stmt s);
-                Error
-              )
-            ) else (
-              if !dbg_free_dead_s then
-                ignore (printf "DEAD STMT: Statement is safe: %a\n" d_stmt s);
-              Dead
-            )
-
-    | Return _
-    | Instr _
-    | Goto _
-    | Break _
-    | Continue _
-    | Loop _
-    | Block _
-    | TryFinally _
-    | TryExcept _ -> Dead
+    if (unsafe && (!freeLineNum >= (get_stmtLoc i).line)) then 
+      Loops
+    else if (unsafe) then 
+      Error
+    else Dead
+;;
 
 
+(****************************************)
+(****************************************)
+(* Data  flow implementation *)
+(****************************************)
+(****************************************)
 module DFD = struct
 
   (* Vital stats for this dataflow. *)
@@ -197,8 +198,8 @@ module DFD = struct
    * data that (appears to) be accessed when it should have been treated as dead 
    * because of a loop construct in the code.
    * 
-   * Error dominates Loops.  Loops dominates Dead.
-   * *)
+   * Loops dominates Error dominates Dead
+   *)
   let combinePredecessors (s: stmt) ~(old: status) (new_state: status) =
     match (new_state, old) with
 
@@ -207,31 +208,23 @@ module DFD = struct
       | (Error, Error)
       | (Dead, Loops) -> None
 
-      (* TODO: CLEANING CODE AROUND HERE 
-       * Not sure if these extra in this block cases are needed...*)                           
-      | (Error, Dead) 
-      | (Error, Loops) -> None
-                           
       | (Loops, Dead) -> Some Loops
                           
       | _ -> Some Error
   ;;
 
 
-  (* Go go data flow!
-   * An instruction can cause a state to transition from dead into an error
-   * state.  The error state is a sink that never changes.
-   *)
+  (* Go go data flow! *)
+
+  (* The error state is treated as a sink that never changes.  The analysis
+   * reports the first location within the flow that things turn sour. *)
+  (* TODO: I think that Loops and Error can simply return DF.Default *)
   let doInstr (i: instr) (state: t): t DF.action =
-   
-    (* We may as well let the entire analysis run.  Performance is not a
-     * concern. SCRATCH THAT!  One mistage (especially in a loop) tends to
-     * indicate many pts of error.  This overwhelms user.  We will just give
-     * them a little output at a time. *) 
     match state with
-        Dead -> DF.Done (stillDeadI i)
+        Dead -> DF.Done (safe_instruction i)
       | Loops -> DF.Done Loops
       | Error -> DF.Done Error
+  ;;
 
 
   (* If the statment is a Null check for the element of interest, then set the
@@ -241,16 +234,10 @@ module DFD = struct
     
     match state with
         Dead ->
-          begin
-            match (stillDeadS s) with
-                Dead -> 
-                  DF.SDefault
-              | Loops -> 
-                  IH.replace stmtStartData s.sid Loops;
-                  DF.SDone
-              | Error ->
-                  IH.replace stmtStartData s.sid Error;
-                  DF.SDone
+          begin match (safe_statement s) with
+              Dead -> DF.SDefault
+            | Loops -> IH.replace stmtStartData s.sid Loops; DF.SDone
+            | Error -> IH.replace stmtStartData s.sid Error; DF.SDone
           end
 
       | Loops 
@@ -262,16 +249,31 @@ module DFD = struct
   (* All blocks go on worklist. *)
   let filterStmt _ = true
 
-end
+end;;
 
-module Track = DF.ForwardsDataFlow(DFD)
+module Track = DF.ForwardsDataFlow(DFD);;
+
+(****************************************)
+(****************************************)
+(* Interface Functions *)
+(****************************************)
+(****************************************)
+
+
+(* Low layer interface to analysis inforamation.  Not currently used. *)
+(*
+let getStmtState (data: status IH.t) (s: stmt): status option =
+  try Some (IH.find data s.sid)
+  with Not_found -> None (* Assume that data is not taken *)
+*)
+
 
 (* Run the data flow to generate must alias information for a function *)
-let is_dead (e:exp) (s:stmt) (line:int) =
+let is_dead (e:exp) (s:stmt) =
 
   (* Set state required by the data flow *)
-  target := freed;
-  freeLineNum := line;
+  target := e;
+  freeLineNum := (get_stmtLoc s).line;
 
   (* Run the data flow *) 
   IH.clear DFD.stmtStartData;
@@ -299,10 +301,5 @@ let is_dead (e:exp) (s:stmt) (line:int) =
       | (false, _) -> false
   
 ;;
-
-
-let getStmtState (data: status IH.t) (s: stmt): status option =
-  try Some (IH.find data s.sid)
-  with Not_found -> None (* Assume that data is not taken *)
 
 

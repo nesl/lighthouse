@@ -38,5 +38,5 @@ val enable_loop : bool ref
   * program, return false if the expression could be dereferenced before it goes
   * out of scope or before it is made valid again (ie. via a call to a malloc
   * function) *)
-val is_dead : Cil.exp Cil.stmt int -> bool
+val is_dead : Cil.exp Cil.stmt -> bool
   
