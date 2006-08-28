@@ -5,7 +5,7 @@ open CilDriver
   
 (* Read annotations from a file into a hash table *)
 let test_cilDriver_makeCilFile = 
-  let inputFile = "foo.c" in
+  let inputFile = "cilDriverUnit.c" in
   let cilFile = makeCilFile inputFile in
     TestCase(fun _ -> assert_equal (cilFile.fileName) inputFile);;
 

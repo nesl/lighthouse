@@ -18,7 +18,7 @@ let test_addAnnotations_getAnnotations =
 let test_addAnnotations_addFunAttributes_decl =
 
   let annotations = AddAnnotations.getAnnotations "addAnnotationsUnit.txt" in
-  let inputFile = "foo.c" in
+  let inputFile = "addAnnotationsUnit.c" in
   let cilFile = makeCilFile inputFile in
   let attributes = Hashtbl.find annotations "createIntArray" in
 
@@ -45,7 +45,7 @@ let test_addAnnotations_addFunAttributes_decl =
 let test_addAnnotations_addFunAttributes_def =
 
   let annotations = AddAnnotations.getAnnotations "addAnnotationsUnit.txt" in
-  let inputFile = "foo.c" in
+  let inputFile = "addAnnotationsUnit.c" in
   let cilFile = makeCilFile inputFile in
   let attributes = Hashtbl.find annotations "createIntArray" in
 

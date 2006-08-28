@@ -13,18 +13,3 @@ let _ = Ptranal.compute_results true;;
                                       
 let main = Ptranal.print_types ()
 
-(*
-let test_cilDriver_makeCilFile = 
-  let inputFile = "foo.c" in
-  let cilFile = makeCilFile inputFile in
-    TestCase(fun _ -> assert_equal (cilFile.fileName) inputFile);;
-
-let suite_ptranal = 
-  TestLabel ("CIL File Manipulation", 
-             TestList [
-               TestLabel ("makeCilFile", test_cilDriver_makeCilFile)
-             ]
-  );;
-
-let main = run_test_tt_main suite_cilDriver
- *)
