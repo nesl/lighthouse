@@ -27,47 +27,6 @@ let dbg_alloc_exp = ref false
 let dbg_alloc_stores = ref false
 let dbg_ptr_arith = ref false
                          
-(* Given an instruction of interest, determine what the flow state for the
- * data involved in the instruction is. *)
-let freeDataTreatment freed s =   
-
-  if (List.length freed > 1) then
-    ignore(E.bug "Analysis unable to handle statement freeing multiple expressions\n");
-  
-  DF.targets := freed;
-  DF.freeLineNum := !currentLoc.line;
- 
-  if !dbg_free_exp then
-    (
-      ignore(printf "FREE EXP: Statement %a frees:\n" d_stmt s);
-      List.iter 
-        (fun e -> ignore (printf "FREE EXP:  %a\n" d_exp e)) 
-        !DF.targets;
-    );
-  
-  IH.clear DF.DFD.stmtStartData;
-
-  List.iter (fun s -> IH.add DF.DFD.stmtStartData s.sid DF.Dead) s.succs;
-  
-  DF.Track.compute s.succs;
-     
-  let (stillDead, noLoops) = 
-    IH.fold
-      (fun sid t (sd, nl) -> 
-         match t with   
-             DF.Dead -> (sd, nl)
-           | DF.Loops -> (sd, false)
-           | DF.Error -> (false, nl)
-      )
-      DF.DFD.stmtStartData
-      (true, true)
-  in
-
-    match (stillDead, noLoops) with
-        (true, true) -> Dead
-      | (true, false) -> Loops
-      | (false, _) -> Error
-  
 
 (* Determine if allocated data is stored into a store. *)
 let allocDataTreatment alloced s iop = 
@@ -197,7 +156,7 @@ class memoryVisitor = object
                     ignore (E.warn 
                               "Formal var %s must be stored or released in function %s\n" 
                               vi.vname f.svar.vname);
-                    ()
+          
           );
 
 
@@ -221,31 +180,10 @@ class memoryVisitor = object
             OF.stores := (Lval (var vi))::(!OF.stores);
 
             (* Check that this reference is filled in before function returns. *)
-            FF.targets := [Lval (var vi)];
-            IH.clear FF.DFF.stmtStartData;
-            IH.add FF.DFF.stmtStartData (List.hd f.sbody.bstmts).sid FF.Empty;
-            FF.Track.compute [List.hd f.sbody.bstmts];
-
-            let (error, full) = 
-              IH.fold
-                (fun sid t (error, taken) -> 
-                   match t with   
-                       FF.Empty -> (error, taken)
-                     | FF.Full -> (error, true)
-                     | FF.Error -> (true, taken)
-                )
-                FF.DFF.stmtStartData
-                (false, false)
-            in
-
-              if (not error && full) then
-                ()
-              else (
-                ignore (E.warn 
-                          "Formal var %s must be referenced to memory before end of function %s\n" 
-                          vi.vname f.svar.vname);
-                ()
-              );
+            if not (FF.lval_is_allocated vi f) then
+              ignore (E.warn 
+                        "Formal var %s must be referenced to memory before end of function %s\n" 
+                        vi.vname f.svar.vname);
           );
           ()
       )
@@ -344,23 +282,26 @@ class memoryVisitor = object
         (* Free -> insure that data is treated as 'dead' on each path between
          * here and a return, or between here and a new overriding alloc site.
          * Debug output listing free site and validity (with proof). *)  
+        (* TODO: Looping specfic warning output is missing due to the limits of
+         * the is_dead interface *)
         | (false, true) ->
-            begin
-              match (freeDataTreatment freed !currentStmt) with
-                  Dead ->
-                    DoChildren
-                | Loops ->
-                    if !DF.enable_loop then
-                    ignore (E.warn 
-                              "Potential loop access to dead data freed in instruction %a\n" 
-                              d_instr i);
-                    DoChildren
-                | _ -> 
-                    ignore (E.warn 
-                              "Potential access to dead data freed in instruction %a\n"
-                              d_instr i);
-                    DoChildren
-            end
+            
+            List.iter 
+              (fun e ->
+
+                 if !dbg_free_exp then
+                   ignore (printf 
+                             "FREE EXP: Statement %a frees: %a\n" 
+                             d_stmt s d_exp e);
+                 
+                 if not (is_dead e s) then
+                   ignore (E.warn 
+                             "Potential access to dead data freed in instruction %a\n"
+                             d_instr i);
+              )
+              freed;
+
+            DoChildren
 
         (* Combo -> flag an error since CIL should prohibit this *)  
         | (true, true) ->

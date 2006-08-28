@@ -8,7 +8,7 @@ module E = Errormsg
 module IE = IsEquivalent
 
 (* Reference to the varinfo ID that we are interested in *)
-let target = ref [];;
+let target = ref mone;;
 let freeLineNum = ref (-1);;
                 
 (* Reference to the current statment *)
@@ -285,13 +285,12 @@ let is_dead (e:exp) (s:stmt) =
    * loops within the code. *)
   let (is_dead, no_loops) = 
     IH.fold
-      (fun sid t (sd, nl) -> 
-         match t with   
-             DF.Dead -> (sd, nl)
-           | DF.Loops -> (sd, false)
-           | DF.Error -> (false, nl)
+      (fun _ t (sd, nl) -> match t with   
+           Dead -> (sd, nl)
+         | Loops -> (sd, false)
+         | Error -> (false, nl)
       )
-      DF.DFD.stmtStartData
+      DFD.stmtStartData
       (true, true)
   in
 

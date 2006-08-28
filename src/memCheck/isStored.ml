@@ -12,7 +12,7 @@ let currentStmt = ref (mkEmptyStmt ())
 let currentFunc = ref None
                     
 (* Reference to the varinfo ID that we are interested in *)
-let targets: exp list ref = ref []
+let target: exp ref = ref mone
 let stores: exp list ref = ref []
                               
 type status = MustTake | Taken | Error | Null | IfNull | ReturnTaken
@@ -56,22 +56,16 @@ let takenI i s =
   let isTarget =
     match i with
         Set (_, e, _) -> 
-          List.exists 
-            (fun target -> 
-               let b = 
-                 IE.is_equiv e target s.sid
-               in
-                 if (!dbg_alloc_store_i) then (
-                   if b then 
-                     ignore (printf "ALLOC STORE I: Expression %a matches target %a!\n"
-                               d_exp e d_exp target)
-                   else
-                     ignore (printf "ALLOC STORE I: Expression %a does not match target %a\n"
-                               d_exp e d_exp target)
-                 );
-                 b
-            ) 
-            !targets
+          let b = IE.is_equiv e !target s.sid in
+            if (!dbg_alloc_store_i) then (
+              if b then 
+                ignore (printf "ALLOC STORE I: Expression %a matches target %a!\n"
+                          d_exp e d_exp target)
+              else
+                ignore (printf "ALLOC STORE I: Expression %a does not match target %a\n"
+                          d_exp e d_exp target)
+            );
+            b
       | _ -> false
   in
 
@@ -79,14 +73,9 @@ let takenI i s =
   let isReleased =
     match i with
         Call (_, _, el, _) -> 
-            List.exists
-              (fun target -> 
-                 List.exists
-                   (fun release -> 
-                      IE.is_equiv release target s.sid)
-                   (U.get_released i)
-              )
-              !targets
+          List.exists
+            (fun release -> IE.is_equiv release !target s.sid)
+            (U.get_released i)
       | _ -> false
   in
 
@@ -144,6 +133,28 @@ module DFO = struct
         | Error -> "Error"
         | ReturnTaken -> "ReturnTaken"
     )
+  ;;
+
+  
+  let debug_combine (s: stmt) (transition: t option) (old_state: t): () =
+    if !dbg_fill_combine then (
+      ignore (printf "XXX.combinePredecessors: Join at statement %a" d_stmt s);
+      match transition with
+          Some state -> ignore (printf "Transitions to %a\n" pretty state);
+        | None -> ignore (printf "Stays in %a\n" pretty old);
+    )
+  ;;
+
+
+  let debug_instr (s: stmt) (transition: t option) (old_state: t): () =
+    if !dbg_fill_combine then (
+      ignore (printf "XXX.combinePredecessors: Join at statement %a" d_stmt s);
+      match transition with
+          Some state -> ignore (printf "Transitions to %a\n" pretty state);
+        | None -> ignore (printf "Stays in %a\n" pretty old);
+    )
+  ;;
+
 
   (* Statments do not have a default state *)
   let computeFirstPredecessor (s: stmt) (state: status): status = state
@@ -152,95 +163,41 @@ module DFO = struct
    * This indicates that the dead data was accessed at some point earlier in
    * the program. *)
   let combinePredecessors (s: stmt) ~(old: status) (new_state: status) = 
-    match (new_state, old) with
+    let transition = match (new_state, old) with
 
-      | (Null, Null) ->
-	  if !dbg_alloc_combine then (
-	    ignore (printf "ALLOC COMBINE: Join stays in Null for %d\n" s.
-sid);
-          );
-	  None
-
-
-      | (MustTake, IfNull) ->
-          if !dbg_alloc_combine then (
-            ignore (printf "ALLOC COMBINE: Join transitions to Null for %d\n" s.sid);
-          );
-          Some Null
-          
-      | (Taken, IfNull) ->
-          if !dbg_alloc_combine then (
-            ignore (printf "ALLOC COMBINE: Join transitions to Taken for %d\n" s.sid);
-          );
-          Some Taken
-        
-      | (MustTake, MustTake) ->
-          if !dbg_alloc_combine then (
-            ignore (printf "ALLOC COMBINE: Join stays in in MustTake for %d\n" s.sid);
-          );
-          None
-
-      (* Either mustTake or error, also effect ownFlow module statment analysis *)
-    
-      | (MustTake, Null) ->
-          if !dbg_alloc_combine then (
-            ignore (printf "ALLOC COMBINE: Join trasitions to MustTake for %d\n" s.sid);
-          );
-          Some MustTake
-      
-      | (Null, MustTake) ->
-          if !dbg_alloc_combine then (
-            ignore (printf "ALLOC COMBINE: Join stays in MustTake for %d\n" s.sid);
-          );
-          None
-
+      | (Null, Null) 
       | (Taken, Taken)
-      | (Null, Taken) -> 
-          if !dbg_alloc_combine then (
-            ignore (printf "ALLOC COMBINE: Join stays in Taken for %d\n" s.sid);
-          );
-          None
-
+      | (MustTake, MustTake)
+      | (ReturnTaken, ReturnTaken)
+      | (Error, Error) -> None
       
-      | (Taken, Null) -> 
-          if !dbg_alloc_combine then (
-            ignore (printf "ALLOC COMBINE: Join transitions to Taken for %d\n" s.sid);
-          );
-          Some Taken
+      | (MustTake, IfNull) -> Some Null
+          
+      | (Taken, IfNull) -> Some Taken
+    
+      | (MustTake, Null) -> Some MustTake
+      
+      | (Null, MustTake) -> None
 
-      | (Error, Error) -> 
-          if !dbg_alloc_combine then (
-            ignore (printf "ALLOC COMBINE: Join stays in Error for %d\n" s.sid);
-          );
-          None
+      | (Null, Taken) -> None
+
+      | (Taken, Null) -> Some Taken
 
       | (Null, ReturnTaken)
-      | (Taken, ReturnTaken)
-      | (ReturnTaken, ReturnTaken) ->
-          if !dbg_alloc_combine then (
-            ignore (printf "ALLOC COMBINE: Join stays in ReturnTaken for %d\n" s.sid);
-          );
-          None
+      | (Taken, ReturnTaken) -> None 
 
-      | (MustTake, ReturnTaken) ->
-          if !dbg_alloc_combine then (
-            ignore (printf "ALLOC COMBINE: Join transitions to MustTake for %d\n" s.sid);
-          );
-          Some MustTake
+      | (MustTake, ReturnTaken) -> Some MustTake
 
       | (ReturnTaken, Null)
-      | (ReturnTaken, Taken) ->
-          if !dbg_alloc_combine then (
-            ignore (printf "ALLOC COMBINE: Join stays in ReturnTaken for %d\n" s.sid);
-          );
-          Some ReturnTaken
+      | (ReturnTaken, Taken) -> Some ReturnTaken
 
-      | _ ->
-          if !dbg_alloc_combine then (
-            ignore (printf "ALLOC COMBINE: Join transitions to Error for %d\n" s.sid);
-            ignore (printf "ALLOC COMBINE: .... new: %a old %a\n" pretty new_state pretty old);
-          );
-          Some Error
+      | _ -> Some Error
+    in
+
+      debug_combine s transition old;
+      transition
+  ;;
+
 
   (* Go go data flow!  An instruction can cause a state to transition from dead
    * to any of: dead, hidden, or error.  The hidden state can only transition as
@@ -248,50 +205,25 @@ sid);
    * join point.  The error state is a sink that never changes.
    *)
   let doInstr (i: instr) (state: t): t DF.action = 
-    match (state, (takenI i !currentStmt)) with
-        (MustTake, true) -> 
-          if (!dbg_alloc_store_i) then
-            ignore (printf "ALLOC STORE I: %d Transitioning to Taken\n" !currentStmt.sid);
-          DF.Done Taken
-      | (MustTake, false) -> 
-          if (!dbg_alloc_store_i) then
-            ignore (printf "ALLOC STORE I: %d Still in MustTake\n" !currentStmt.sid);
-          DF.Done MustTake
+    let transition = match (state, (takenI i !currentStmt)) with
+        (MustTake, true) -> Some Taken
+      | (MustTake, false) -> None
       | (Taken, true) -> 
-          let target = 
-            match !targets with
-                hd::[] ->
-                  ignore (E.warn 
-                            "Alloced data %a may be stored a second time in %a\n" 
-                            d_exp hd d_instr i);
-              | _ -> 
-                  ignore (E.warn 
-                            "Alloced data may be stored a second time in %a\n" 
-                            d_instr i);
-          in
-            if (!dbg_alloc_store_i) then
-              ignore (printf "ALLOC STORE I: %d Double take still in Taken\n" !currentStmt.sid);
-            DF.Done Taken
-      | (Taken, false) -> 
-          if (!dbg_alloc_store_i) then
-            ignore (printf "ALLOC STORE I: %d Still in Taken\n" !currentStmt.sid);
-          DF.Done Taken
-      | (Null, _) ->
-          if (!dbg_alloc_store_i) then
-            ignore (printf "ALLOC STORE I: %d Still in Null\n" !currentStmt.sid);
-          DF.Done Null
-      | (Error, _) -> 
-          if (!dbg_alloc_store_i) then
-            ignore (printf "ALLOC STORE I: %d Stuck in Error\n" !currentStmt.sid);
-          DF.Done Error
-      | (IfNull, _) -> 
-          if (!dbg_alloc_store_i) then
-            E.bug (E.s  "Should never have IfNull state for instruction\n");
-          DF.Done Error
-      | (ReturnTaken, _) ->
-          if (!dbg_alloc_store_i) then
-            E.bug (E.s  "Should never have ReturnXXX state for instruction\n");
-          DF.Done Error
+          ignore (E.warn "Alloced data %a may be stored a second time in %a\n" 
+                    d_exp !target d_instr i);
+            None
+      | (Taken, false) -> None
+      | (Null, _) -> None
+      | (Error, _) -> None
+      | (IfNull, _) -> Some Error
+      | (ReturnTaken, _) -> Some Error
+    in
+
+      debug_instr s transition state;
+      match transition with 
+          Some new_state -> DF.Done new_state
+        | None -> DF.Done state
+  ;;
 
 
   (* Can a statement take control of data?  Yes, it can by returning the data
@@ -311,11 +243,7 @@ sid);
     match s.skind with 
         Return (Some e, _) ->
           
-          let returnsTarget =
-            List.exists 
-              (fun target -> IE.is_equiv e target s.sid) 
-              !targets
-          in
+          let returnsTarget = IE.is_equiv e !target s.sid in
 
           let releaseAttribute =
             match !currentFunc with
@@ -376,12 +304,7 @@ sid);
 
       | If (Lval lv, b1, _, _) ->
 
-          let e1Target = 
-            let e1 = (Lval lv) in
-              List.exists 
-                (fun target -> IE.is_equiv e1 target s.sid) 
-                !targets
-          in
+          let e1Target = IE.is_equiv (Lval lv) !target s.sid in
             
           if e1Target then (
             
@@ -414,17 +337,9 @@ sid);
             IE.is_equiv e2 IE.nullPtr s.sid
           in
 
-          let e1Target =
-            List.exists 
-              (fun target -> IE.is_equiv e1 target s.sid) 
-              !targets
-          in
+          let e1Target = IE.is_equiv e1 !target s.sid in
 
-          let e2Target =
-            List.exists 
-              (fun target -> IE.is_equiv e2 target s.sid) 
-              !targets
-          in
+          let e2Target = IE.is_equiv e2 !target s.sid in
 
           let b1Statements = 
             (List.length b1.bstmts) > 0
@@ -462,12 +377,7 @@ sid);
 
       | If (UnOp (LNot, (Lval lv), _), b1, _, _) ->
               
-          let e1Target =
-            let e1 = (Lval lv) in
-              List.exists 
-                (fun target -> IE.is_equiv e1 target s.sid) 
-                !targets
-          in
+          let e1Target = IE.is_equiv (Lval lv) !target s.sid in
 
           let b1Statements = 
             (List.length b1.bstmts) > 0
@@ -498,17 +408,9 @@ sid);
             IE.is_equiv e1 IE.nullPtr s.sid
           in
 
-          let e1Target =
-            List.exists 
-              (fun target -> IE.is_equiv e1 target s.sid) 
-              !targets
-          in
+          let e1Target = IE.is_equiv e1 !target s.sid in
 
-          let e2Target =
-            List.exists 
-              (fun target -> IE.is_equiv e2 target s.sid) 
-              !targets
-          in
+          let e2Target = IE.is_equiv e2 !target s.sid in
 
           let b1Statements = 
             (List.length b1.bstmts) > 0
