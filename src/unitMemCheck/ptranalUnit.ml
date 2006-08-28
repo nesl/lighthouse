@@ -4,7 +4,7 @@ open Cil
 open CilDriver
   
 (* Set up a file for running tests *)
-let inputFile = "unitPtranal.c";;
+let inputFile = "ptranalUnit.c";;
 let cilFile = makeCilFile inputFile;;
 
 (* Prepare the file for pointer analysis queries *)

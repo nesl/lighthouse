@@ -13,36 +13,36 @@ export INCDIRS = /home/rshea/mote/cil-1.3.5/obj/x86_LINUX +oUnit
 # Add projects here
 #### 
 define PROJ_cd
-  SOURCES = cilDriver.ml unitCilDriver.ml
-  RESULT = unitCilDriver
+  SOURCES = cilDriver.ml cilDriverUnit.ml
+  RESULT = cilDriverUnit
 endef
 export PROJ_cd
 
 
 define PROJ_aa
-  SOURCES = ../memCheck/addAnnotations.ml cilDriver.ml unitAddAnnotations.ml
-  RESULT = unitAddAnnotations
+  SOURCES = ../memCheck/addAnnotations.ml cilDriver.ml addAnnotationsUnit.ml
+  RESULT = addAnnotationsUnit
 endef
 export PROJ_aa
 
 
 define PROJ_pt
-  SOURCES = cilDriver.ml unitPtranal.ml
-  RESULT = unitPtranal
+  SOURCES = cilDriver.ml ptranalUnit.ml
+  RESULT = ptranalUnit
 endef
 export PROJ_pt
 
 
 define PROJ_ie
-  SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/memUtil.ml ../memCheck/isEquivalent.ml cilDriver.ml unitIsEquivalent.ml
-  RESULT = unitIsEquivalent
+  SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/memUtil.ml ../memCheck/isEquivalent.ml cilDriver.ml isEquivalent00Unit.ml
+  RESULT = isEquivalent00Unit
 endef
 export PROJ_ie
 
 
 define PROJ_ch
-  SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/memUtil.ml ../memCheck/isEquivalent.ml cilDriver.ml unitIsEquivalent01.ml
-  RESULT = unitIsEquivalent01
+  SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/memUtil.ml ../memCheck/isEquivalent.ml cilDriver.ml isEquivalent01Unit.ml
+  RESULT = isEquivalent01Unit
 endef
 export PROJ_ch
 

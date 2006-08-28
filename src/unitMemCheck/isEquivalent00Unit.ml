@@ -7,7 +7,7 @@ module IE = IsEquivalent
 module IH = Inthash
 
 (* Set up a file for running tests *)
-let inputFile = "unitIsEquivalent.c";;
+let inputFile = "isEquivalent00Unit.c";;
 let cilFile = makeCilFile inputFile;;
 ignore (MakeOneCFG.feature.fd_doit cilFile);;
 
@@ -71,9 +71,9 @@ class testVisitor = object
   method vfunc (f:fundec) =
     IE.dbg_equiv_i := false;
     IE.dbg_equiv_combine := false;
-    IE.dbg_equiv_stmt_summary := true;
+    IE.dbg_equiv_stmt_summary := false;
     IE.dbg_equiv_get_aliases := false;
-    IE.dbg_equiv_get_equiv_set := true;
+    IE.dbg_equiv_get_equiv_set := false;
     IE.dbg_equiv_df := false;
 
     IE.generate_equiv f;

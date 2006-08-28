@@ -7,7 +7,7 @@ open Cil
   
 (* Read annotations from a file into a hash table *)
 let test_addAnnotations_getAnnotations = 
-  let annotations = AddAnnotations.getAnnotations "config.txt" in
+  let annotations = AddAnnotations.getAnnotations "addAnnotationsUnit.txt" in
     TestCase(fun _ -> assert_equal 
                         ~msg:"Incorrect number of attribute mappings loaded"
                         (Hashtbl.length annotations) 2)
@@ -17,7 +17,7 @@ let test_addAnnotations_getAnnotations =
 (* Add attributes to the createIntArray function *)
 let test_addAnnotations_addFunAttributes_decl =
 
-  let annotations = AddAnnotations.getAnnotations "config.txt" in
+  let annotations = AddAnnotations.getAnnotations "addAnnotationsUnit.txt" in
   let inputFile = "foo.c" in
   let cilFile = makeCilFile inputFile in
   let attributes = Hashtbl.find annotations "createIntArray" in
@@ -44,7 +44,7 @@ let test_addAnnotations_addFunAttributes_decl =
 (* Add attributes to the createIntArray function *)
 let test_addAnnotations_addFunAttributes_def =
 
-  let annotations = AddAnnotations.getAnnotations "config.txt" in
+  let annotations = AddAnnotations.getAnnotations "addAnnotationsUnit.txt" in
   let inputFile = "foo.c" in
   let cilFile = makeCilFile inputFile in
   let attributes = Hashtbl.find annotations "createIntArray" in
