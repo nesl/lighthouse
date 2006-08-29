@@ -46,12 +46,17 @@ define PROJ_ch
 endef
 export PROJ_ch
 
+define PROJ_memUtil
+  SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/addAnnotations.ml ../memCheck/memUtil.ml cilDriver.ml memUtilUnit.ml
+  RESULT = memUtilUnit
+endef
+export PROJ_memUtil
 
 ####
 # Default project to bulid
 ####
 ifndef SUBPROJS
-  export SUBPROJS = cd aa pt ie ch
+  export SUBPROJS = cd aa pt ie ch memUtil
 endif
 
 ####
