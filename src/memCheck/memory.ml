@@ -6,10 +6,10 @@ open Simplify
 open MakeOneCFG
 
 module IH = Inthash
-module DF = DeadFlow
-module OF = OwnFlow
-module FF = FillFlow
-module RF = ReturnFlow
+module DF = IsDead
+module OF = IsStored
+module FF = CallerAllocatesLval
+module RF = CallerAllocatesReturn
 module U = MemUtil
 module E = Errormsg
 module IE = IsEquivalent             

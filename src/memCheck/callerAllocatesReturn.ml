@@ -48,7 +48,7 @@ module DFR = struct
   (********************)
   (********************)
 
-  let debug_combine (s: stmt) (state: status) : () =
+  let debug_combine (s: stmt) (state: status) : unit =
     if !dbg_fill_combine then (
       ignore (printf "XXX.combinePredecessors: Join at statement %a" d_stmt s);
       match transition with
@@ -58,7 +58,7 @@ module DFR = struct
   ;;
 
 
-  let debug_instr (i: instr) (allocated_exps: exp list) : () = 
+  let debug_instr (i: instr) (allocated_exps: exp list) : unit = 
     if !dbg_fill_i then (
       ignore (printf "XXX.doInstr: Instruction %a allocates: " d_instr i);
       List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) allocated_exps;
@@ -66,7 +66,7 @@ module DFR = struct
   ;;
 
 
-  let debug_stmt (returns_mem: bool) (s: stmt) : () =
+  let debug_stmt (returns_mem: bool) (s: stmt) : unit =
     if !dbg_return_s then (
       ignore (printf "XXX.doStmt: Statment %a " d_stmt s);
       if returns_mem then (

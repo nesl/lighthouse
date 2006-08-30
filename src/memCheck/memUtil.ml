@@ -18,8 +18,13 @@ let rec is_subexpression_of (sub:exp) (e:exp) : bool =
         Lval (Mem e, _) 
       | CastE (_, e)
       | AddrOf (Mem e, _)
-      | StartOf (Mem e, _) ->
+      | StartOf (Mem e, _)
+      | UnOp (_, e, _) ->
           is_subexpression_of sub e
+
+      | BinOp (_, e1, e2, _) ->
+          (is_subexpression_of sub e1) || (is_subexpression_of sub e2)
+
       | _ -> false
   )
 

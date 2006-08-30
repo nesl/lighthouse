@@ -136,7 +136,7 @@ module DFO = struct
   ;;
 
   
-  let debug_combine (s: stmt) (transition: t option) (old_state: t): () =
+  let debug_combine (s: stmt) (transition: t option) (old_state: t): unit =
     if !dbg_fill_combine then (
       ignore (printf "XXX.combinePredecessors: Join at statement %a" d_stmt s);
       match transition with
@@ -146,7 +146,7 @@ module DFO = struct
   ;;
 
 
-  let debug_instr (s: stmt) (transition: t option) (old_state: t): () =
+  let debug_instr (s: stmt) (transition: t option) (old_state: t): unit =
     if !dbg_fill_combine then (
       ignore (printf "XXX.combinePredecessors: Join at statement %a" d_stmt s);
       match transition with

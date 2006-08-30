@@ -23,7 +23,6 @@ let dbg_fill_s = ref false;;
 (* Dataflow specific debugging. *)
 let dbg_fill_df = ref false;;
 
-
 module DFF = struct
 
   (* Vital stats for this dataflow. *)
@@ -42,17 +41,13 @@ module DFF = struct
         | Error -> "Error"
     );;
 
-  (* Statments do not have a default state *)
-  let computeFirstPredecessor (s: stmt) (state: status): status = state;;
-
-
   (********************)
   (********************)
   (* Helper functions for debugging *)
   (********************)
   (********************)
 
-  let debug_combine (state: status) : () =
+  let debug_combine (state: status) : unit =
     if !dbg_fill_combine then (
       ignore (printf "CallerAllocates.DFF.combinePredecessors: ");
       match transition with
@@ -62,7 +57,7 @@ module DFF = struct
   ;;
 
 
-  let debug_instr (i: instr) (is_filled: bool) : () = 
+  let debug_instr (i: instr) (is_filled: bool) : unit = 
     if !dbg_fill_i then (
       ignore (printf "CallerAllocates.DFF.doInstr: Expression %a " d_exp !target);
       if is_filled then
@@ -71,6 +66,11 @@ module DFF = struct
         ignore (printf "NOT filled in instruction\n%a\n" d_instr i)
     )
   ;;
+
+
+
+  (* Statments do not have a default state *)
+  let computeFirstPredecessor (s: stmt) (state: status): status = state;;
 
 
   (* If any predecessor is in an error state, the error propigates forward. *)
