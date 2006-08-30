@@ -52,11 +52,17 @@ define PROJ_memUtil
 endef
 export PROJ_memUtil
 
+define PROJ_mayUtil
+  SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/addAnnotations.ml ../memCheck/mayAliasWrapper.ml cilDriver.ml mayAliasWrapperUnit.ml
+  RESULT = mayAliasWrapperUnit
+endef
+export PROJ_mayUtil
+
 ####
 # Default project to bulid
 ####
 ifndef SUBPROJS
-  export SUBPROJS = cd aa pt ie ch memUtil
+  export SUBPROJS = cd aa pt ie ch memUtil mayUtil
 endif
 
 ####

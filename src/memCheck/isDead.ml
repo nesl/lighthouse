@@ -6,7 +6,8 @@ module DF = Dataflow
 module U = MemUtil
 module E = Errormsg
 module IE = IsEquivalent
-
+module MA = MayAliasWrapper
+              
 (* Reference to the varinfo ID that we are interested in *)
 let target = ref mone;;
 let freeLineNum = ref (-1);;
@@ -91,7 +92,7 @@ let is_dead_exp (e:exp) : bool =
       sub_exps 
   in
 
-    List.exists (fun e -> U.may_alias_wrapper e1 !target) non_null
+    List.exists (fun e -> MA.may_alias_wrapper e1 !target) non_null
 ;;
 
 

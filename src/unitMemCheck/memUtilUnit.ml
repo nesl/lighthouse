@@ -11,8 +11,6 @@ let inputFile = "memUtilUnit.c";;
 let cilFile = makeCilFile inputFile;;
 
 ignore (MakeOneCFG.feature.fd_doit cilFile);;
-let _ = Ptranal.analyze_file cilFile;;
-let _ = Ptranal.compute_results false;;
 ignore (AddAnnotations.feature.fd_doit cilFile);;
 
 (*
@@ -120,41 +118,6 @@ val get_released: Cil.instr -> Cil.exp list;;
 *)
 
 (* Tests!!! *)
-let test_may_alias_wrapper = 
-  
-  let g_and_ga = 
-    MU.may_alias_wrapper 
-      !(mem_util_data.g)
-      !(mem_util_data.ga)
-  in
-  
-  let ga_and_g =
-    MU.may_alias_wrapper 
-      !(mem_util_data.ga)
-      !(mem_util_data.g)
-  in
-  
-  let g_and_gna =
-    not
-      (MU.may_alias_wrapper 
-         !(mem_util_data.g)
-         !(mem_util_data.gna)
-      )
-  in
-  
-  let gna_and_ga =
-    not
-      (MU.may_alias_wrapper 
-         !(mem_util_data.gna)
-         !(mem_util_data.ga)
-      )
-  in
-  
-    TestCase(fun _ -> assert_bool "Incorrect MU.may_alias information" 
-                        (g_and_ga && ga_and_g && g_and_gna && gna_and_ga))
-;;
-
-
 let test_is_subexpression_of = 
   
   let ga_arrow_edge = 
@@ -268,7 +231,6 @@ let test_get =
 let suite_equivClone = 
   TestLabel ("MemUtil", 
              TestList [
-               TestLabel ("memUtilUnit.c may_alias:", test_may_alias_wrapper);
                TestLabel ("memUtilUnit.c is_subexpression_of:", test_is_subexpression_of);
                TestLabel ("memUtilUnit.c get_claim / get_released:", test_get);
              ]
