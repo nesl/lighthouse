@@ -26,12 +26,19 @@ Stats.time "printCIL"
  *)
 
 (* Describe what we are interested in examining within CIL *)
+(* TODO: Start here.  Need to: 
+* - add in tests for return data
+* - write unit tests that overwrite allocated data and fail
+* - write unit tests that release allocated data and fail
+* - move the two callerAllocates* modules and tests to a single module
+* *)
 type test_data = {
   ker_malloc : bool ref;
   ker_free : bool ref;
   make_graph_return : bool ref;
   make_graph_formal : bool ref;
-  make_graph_formal_bad : bool ref;
+  make_graph_formal_bad_a : bool ref;
+  make_graph_formal_bad_b : bool ref;
   free_graph : bool ref;
 };;
 
@@ -41,7 +48,8 @@ let mem_util_data = {
   ker_free = ref false;
   make_graph_return = ref false;
   make_graph_formal = ref false;
-  make_graph_formal_bad = ref false;
+  make_graph_formal_bad_a = ref false;
+  make_graph_formal_bad_b = ref false;
   free_graph = ref false;
 };;
 
@@ -81,8 +89,12 @@ class testVisitor = object (self)
             mem_util_data.make_graph_formal :=  check_alloc f.sformals;
             DoChildren
 
-        | _ when (f.svar.vname = "make_graph_formal_bad") ->
-            mem_util_data.make_graph_formal :=  not (check_alloc f.sformals);
+        | _ when (f.svar.vname = "make_graph_formal_bad_a") ->
+            mem_util_data.make_graph_formal_bad_a :=  not (check_alloc f.sformals);
+            DoChildren
+
+        | _ when (f.svar.vname = "make_graph_formal_bad_b") ->
+            mem_util_data.make_graph_formal_bad_b :=  not (check_alloc f.sformals);
             DoChildren
 
         | _ when (f.svar.vname = "free_graph") ->
@@ -103,7 +115,8 @@ let test_cal =
                         !(mem_util_data.ker_free) &&
                         !(mem_util_data.make_graph_return) &&
                         !(mem_util_data.make_graph_formal) &&
-                        !(mem_util_data.make_graph_formal_bad) &&
+                        !(mem_util_data.make_graph_formal_bad_a) &&
+                        !(mem_util_data.make_graph_formal_bad_b) &&
                         !(mem_util_data.free_graph) &&
                         true
                       )

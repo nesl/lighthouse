@@ -25,3 +25,8 @@ val dbg_caller_allocates_lval_s : bool ref;;
 val lval_is_allocated: Cil.varinfo -> Cil.fundec -> bool;;
 
 
+(* Check to see that function [f] is allocating data into the expression
+ * returned by the function. *)
+val return_is_allocated: Cil.fundec -> bool;;
+
+

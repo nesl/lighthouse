@@ -63,8 +63,10 @@ module DFF = struct
   ;;
 
 
-  let merge_lists (el1:exp list) (el2:exp list) : exp list =
+  let union_lists (el1:exp list) (el2:exp list) : exp list =
+
     let el = (el1 @ el2) in
+
     let rec uniq el = match el with
         [] -> []
       | hd::[] -> [hd]
@@ -75,6 +77,20 @@ module DFF = struct
             hd::(uniq (next::rest))
     in
       uniq (List.sort compare el)
+  ;;
+
+
+
+  let intersect_lists (el1:exp list) (el2:exp list) : exp list =
+    
+    let intersection = 
+      List.fold_left 
+        (fun el e -> if (List.mem e el1) then e::el else el)
+        []
+        el2
+    in
+      
+      List.sort compare intersection
   ;;
 
 
@@ -90,7 +106,7 @@ module DFF = struct
       if (compare old new_state = 0) then 
         None
       else 
-        (Some (merge_lists old new_state))
+        (Some (intersect_lists old new_state))
     in
       
       debug_combine old transition;
@@ -106,7 +122,7 @@ module DFF = struct
   let doInstr (i: instr) (state: t): t DF.action = 
 
     let filled_exps = U.get_claim i in
-    let new_state = merge_lists state filled_exps in
+    let new_state = union_lists state filled_exps in
 
       debug_instr i new_state;
       DF.Done new_state
@@ -146,26 +162,50 @@ let getStmtState (data: exp list IH.t) (s: stmt): exp list option =
 ;;
  *)
 
-let lval_is_allocated (v: varinfo) (f: fundec) = 
-            
+let run_dataflow (f: fundec) : unit =
   IH.clear DFF.stmtStartData;
   IH.add DFF.stmtStartData (List.hd f.sbody.bstmts).sid [];
   Track.compute [List.hd f.sbody.bstmts];
+  ()
+;;
 
-  let return_statements = 
-    List.filter 
-      (fun s -> match s.skind with Return _ -> true | _ -> false) 
-      f.sbody.bstmts
-  in
 
-    List.for_all 
-      (fun s ->
-         let claim_list = IH.find DFF.stmtStartData s.sid in
-           List.exists
-             (fun e -> IE.is_equiv (Lval (var v)) e s.sid)
-             claim_list
-      )
-      return_statements
+let get_return_statements (f: fundec) : stmt list =
+  List.filter 
+    (fun s -> match s.skind with Return _ -> true | _ -> false) 
+    f.sbody.bstmts
+;;
+
+
+let lval_is_allocated (v: varinfo) (f: fundec) = 
+
+  run_dataflow f;
+
+  List.for_all 
+    (fun s ->
+       let claim_list = IH.find DFF.stmtStartData s.sid in
+         List.exists
+           (fun e -> IE.is_equiv (Lval (var v)) e s.sid)
+           claim_list
+    )
+    (get_return_statements f)
+  
+;;
+
+
+let return_is_allocated (f: fundec) = 
+    
+  run_dataflow f;  
+
+  List.for_all 
+    (fun s -> match s.skind with
+         Return (Some return, _) ->
+             List.exists
+               (fun e -> IE.is_equiv return e s.sid)
+               (IH.find DFF.stmtStartData s.sid)
+       | _ -> false 
+    )
+    (get_return_statements f)
   
 ;;
 
