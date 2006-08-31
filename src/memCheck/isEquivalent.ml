@@ -19,6 +19,9 @@ let dbg_equiv_stmt_summary = ref false;;
 (* Dataflow specific debugging *)
 let dbg_equiv_df = ref false;;
 
+(* Reference to the current statment *)
+let currentStmt = ref (mkEmptyStmt ());;
+
 (* Equivalency information will be stored as sets of expressions *)
 module Equiv =
 struct
@@ -367,10 +370,11 @@ module DFM = struct
       let address_of (e:exp) : exp option =
         match (stripCasts e) with
             Lval lv -> Some (mkAddrOf lv)
+        | _ when isIntegralType (typeOf e) -> None
         | _ -> 
-            E.warn "IsEquivalent.DFM.doInstr:";
-            E.warn "  Unable to make address of non-lval expression %a." d_exp e;
-            E.warn "  Skipping.";
+            E.warn 
+              "IsEquivalent.DFM.doInstr: Unable to make address of non-lval expression %a." 
+              d_exp e;
             None
       in
 
@@ -459,6 +463,9 @@ module DFM = struct
 
   (* Statements should not effect alias information *) 
   let doStmt (s: stmt) (state: t) = 
+    
+    currentStmt := s;
+    
     if (!dbg_equiv_stmt_summary) then (
       ignore (printf "isEquiv: doInstr: Entering statement %d with state\n" s.sid); 
       print_equiv_table state;
@@ -540,7 +547,9 @@ let get_equiv_set (e:exp) (id:int) : (exp list) =
             sort_and_uniq (indirect @ direct)
       
       )
-    | None -> []
+    | None -> 
+        E.warn "IsEquivalent.get_equiv_state: Attempt to lookup state %d that is not in table\n" id;
+        []
 ;;
 
 

@@ -46,23 +46,29 @@ define PROJ_ch
 endef
 export PROJ_ch
 
-define PROJ_memUtil
+define PROJ_mem
   SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/addAnnotations.ml ../memCheck/memUtil.ml cilDriver.ml memUtilUnit.ml
   RESULT = memUtilUnit
 endef
-export PROJ_memUtil
+export PROJ_mem
 
-define PROJ_mayUtil
-  SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/addAnnotations.ml ../memCheck/mayAliasWrapper.ml cilDriver.ml mayAliasWrapperUnit.ml
+define PROJ_may
+  SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/mayAliasWrapper.ml cilDriver.ml mayAliasWrapperUnit.ml
   RESULT = mayAliasWrapperUnit
 endef
-export PROJ_mayUtil
+export PROJ_may
+
+define PROJ_cal
+  SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/addAnnotations.ml ../memCheck/memUtil.ml ../memCheck/isEquivalent.ml ../memCheck/callerAllocatesLval.ml cilDriver.ml callerAllocatesLvalUnit.ml
+  RESULT = callerAllocatesLvalUnit
+endef
+export PROJ_cal
 
 ####
 # Default project to bulid
 ####
 ifndef SUBPROJS
-  export SUBPROJS = cd aa pt ie ch memUtil mayUtil
+  export SUBPROJS = cd aa pt ie ch mem may cal
 endif
 
 ####

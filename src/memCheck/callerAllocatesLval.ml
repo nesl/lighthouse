@@ -7,18 +7,10 @@ module U = MemUtil
 module IE = IsEquivalent
 module E = Errormsg
 
-(* Current statement needed for mustAlias analysis *)
-let currentStmt = ref (mkEmptyStmt ());;
-
-(* Reference to the varinfo ID that we are interested in *)
-let target = ref mone;;
-
-type status = Empty | Full | Error;;
-
 (* Runtime debugging flags. *)
-let dbg_fill_combine = ref false;;
-let dbg_fill_i = ref false;;
-let dbg_fill_s = ref false;;
+let dbg_caller_allocates_lval_combine = ref false;;
+let dbg_caller_allocates_lval_i = ref false;;
+let dbg_caller_allocates_lval_s = ref false;;
 
 (* Dataflow specific debugging. *)
 let dbg_fill_df = ref false;;
@@ -28,17 +20,17 @@ module DFF = struct
   (* Vital stats for this dataflow. *)
   let name = "fillFlow";;
   let debug = dbg_fill_df;;
-  type t = status;;
+  type t = exp list;;
 
   (* Basic util functions to jumpstart dataflow. *)           
   let stmtStartData: t IH.t = IH.create 17;;
   let copy (state: t) = state;;
   let pretty () (state: t) =
     dprintf "{%s}" ( 
-      match state with 
-          Empty -> "Empty"
-        | Full -> "Full"
-        | Error -> "Error"
+      List.fold_left 
+        (fun s e -> s ^ (sprint ~width:40 (dprintf "%a " d_exp e))) 
+        "" 
+        state
     );;
 
   (********************)
@@ -47,66 +39,84 @@ module DFF = struct
   (********************)
   (********************)
 
-  let debug_combine (state: status) : unit =
-    if !dbg_fill_combine then (
-      ignore (printf "CallerAllocates.DFF.combinePredecessors: ");
+  let debug_combine (state: t) (transition: t option): unit =
+    if !dbg_caller_allocates_lval_combine then (
+      ignore (printf "CallerAllocatesLval.DFF.combinePredecessors: ");
       match transition with
-          Some _ -> ignore (printf "Join transitions to Error\n");
-        | None -> ignore (printf "Join stays in %a\n" pretty old);
-    )
+          Some _ -> ignore (printf "Join updates to:\n%a\n" pretty state);
+        | None -> ignore (printf "Join stays in:\n%a\n" pretty state);
+    );
+    flush stdout;
+    ()
   ;;
 
 
-  let debug_instr (i: instr) (is_filled: bool) : unit = 
-    if !dbg_fill_i then (
-      ignore (printf "CallerAllocates.DFF.doInstr: Expression %a " d_exp !target);
-      if is_filled then
-        ignore (printf "filled in instruction\n%a\n" d_instr i)
-      else
-        ignore (printf "NOT filled in instruction\n%a\n" d_instr i)
-    )
+  let debug_instr (i: instr) (state: t) : unit = 
+    if !dbg_caller_allocates_lval_i then (
+      ignore (printf 
+                "CallerAllocatesLval.DFF.doInstr: Instruction %a results in state:\n" 
+                d_instr i);
+      ignore (printf "%a\n" pretty state);
+    );
+    flush stdout;
+    ()
+  ;;
+
+
+  let merge_lists (el1:exp list) (el2:exp list) : exp list =
+    let el = (el1 @ el2) in
+    let rec uniq el = match el with
+        [] -> []
+      | hd::[] -> [hd]
+      | hd::next::rest ->
+          if (Util.equals hd next) then
+            uniq (hd::rest)
+          else
+            hd::(uniq (next::rest))
+    in
+      uniq (List.sort compare el)
   ;;
 
 
 
   (* Statments do not have a default state *)
-  let computeFirstPredecessor (s: stmt) (state: status): status = state;;
+  let computeFirstPredecessor (s: stmt) (state: t): t = state;;
 
 
   (* If any predecessor is in an error state, the error propigates forward. *)
-  let combinePredecessors (s: stmt) ~(old: status) (new_state: status) = 
-    let transition = match (new_state, old) with
-        (Empty, Empty) | (Full, Full) | (Error, Error) -> None
-        | _ -> Some Error
+  let combinePredecessors (s: stmt) ~(old: t) (new_state: t) = 
+    
+    let transition = 
+      if (compare old new_state = 0) then 
+        None
+      else 
+        (Some (merge_lists old new_state))
     in
-      debug_combine old;
+      
+      debug_combine old transition;
       transition
   ;;
 
 
   (* An instruction can cause a state to transition from Empty to Full if it
    * stores allocated data into the target. *)
+  (* TODO: Current implementation ignores this latter point and is assuming that
+   * an expression never has to leave the table. 
+   *)
   let doInstr (i: instr) (state: t): t DF.action = 
 
     let filled_exps = U.get_claim i in
+    let new_state = merge_lists state filled_exps in
 
-    let is_target_filled =
-      List.exists (fun e -> IE.is_equiv e !target !currentStmt.sid) filledList
-    in
-
-      debug_instr i is_target_filled;
-
-      match (filled, state) with
-          (true, Empty) 
-        | (false, Full) -> DF.Done Full
-        | (false, Empty) -> DF.Done Empty
-        | _ -> DF.Done Error
+      debug_instr i new_state;
+      DF.Done new_state
   ;;
 
   (* Can a statement take control of data? *)
   let doStmt (s: stmt) (state: t) = 
-    if !dbg_fill_s then ignore (printf "FILL S: Examining statement %d %a\n" s.sid d_stmt s);
-    currentStmt := s;
+    if !dbg_caller_allocates_lval_s then 
+      ignore (printf "CallerAllocatesLval.Dff.doStmt: Examining statement %d %a\n" 
+                s.sid d_stmt s);
     DF.SDefault
   ;;
 
@@ -130,7 +140,7 @@ module Track = DF.ForwardsDataFlow(DFF);;
 
 (* Low layer interface to analysis inforamation.  Not currently used. *)
 (*
-let getStmtState (data: status IH.t) (s: stmt): status option =
+let getStmtState (data: exp list IH.t) (s: stmt): exp list option =
   try Some (IH.find data s.sid)
   with Not_found -> None (* Assume that data is not taken *)
 ;;
@@ -138,24 +148,24 @@ let getStmtState (data: status IH.t) (s: stmt): status option =
 
 let lval_is_allocated (v: varinfo) (f: fundec) = 
             
-  targets := [Lval (var v)];
   IH.clear DFF.stmtStartData;
-  IH.add DFF.stmtStartData (List.hd f.sbody.bstmts).sid Empty;
+  IH.add DFF.stmtStartData (List.hd f.sbody.bstmts).sid [];
   Track.compute [List.hd f.sbody.bstmts];
 
-  let (error, full) = 
-    IH.fold
-      (fun _ t (error, taken) -> match t with   
-           Empty -> (error, taken)
-         | Full -> (error, true)
-         | Error -> (true, taken)
-      )
-      DFF.stmtStartData
-      (false, false)
+  let return_statements = 
+    List.filter 
+      (fun s -> match s.skind with Return _ -> true | _ -> false) 
+      f.sbody.bstmts
   in
 
-    match (error, full) with
-        (false, true) -> true
-      | _ -> false
+    List.for_all 
+      (fun s ->
+         let claim_list = IH.find DFF.stmtStartData s.sid in
+           List.exists
+             (fun e -> IE.is_equiv (Lval (var v)) e s.sid)
+             claim_list
+      )
+      return_statements
+  
 ;;
 
