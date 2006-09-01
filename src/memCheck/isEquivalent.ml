@@ -513,41 +513,44 @@ let print_equiv_sets (id:int) =
 
 (* Helper function to return the items that an expression is equivalent to *)
 let get_equiv_set (e:exp) (id:int) : (exp list) =
-  match (get_id_state DFM.stmtStartData id) with
-      Some table -> (
-        let direct = 
-          try (EquivSet.elements (List.find (fun eq -> EquivSet.mem e eq) table))
-          with Not_found -> []
-        in
 
-        let indirect = (DFM.getEquiv e table)
-        in
-
-          if !dbg_equiv_get_equiv_set then (
-            ignore (printf "\n");
-            ignore (printf "Direct to %a:\n" d_exp e);
-            List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) direct;
-            ignore (printf "Inirect to %a:\n" d_exp e);
-            List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) indirect;
-            flush stdout;
-          );
-          
-          let sort_and_uniq (el:exp list) : exp list =
-            let rec uniq el = match el with
-                [] -> []
-              | hd::[] -> [hd]
-              | hd::next::rest ->
-                  if (Util.equals hd next) then
-                    uniq (hd::rest)
-                  else
-                    hd::(uniq (next::rest))
-            in
-              uniq (List.sort compare el)
+  let e = stripCasts e in
+  
+    match (get_id_state DFM.stmtStartData id) with
+        Some table -> (
+          let direct = 
+            try (EquivSet.elements (List.find (fun eq -> EquivSet.mem e eq) table))
+            with Not_found -> []
           in
-            sort_and_uniq (indirect @ direct)
-      
-      )
-    | None -> 
+
+          let indirect = (DFM.getEquiv e table)
+          in
+
+            if !dbg_equiv_get_equiv_set then (
+              ignore (printf "\n");
+              ignore (printf "Direct to %a:\n" d_exp (stripCasts e));
+              List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) direct;
+              ignore (printf "Inirect to %a:\n" d_exp e);
+              List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) indirect;
+              flush stdout;
+            );
+
+            let sort_and_uniq (el:exp list) : exp list =
+              let rec uniq el = match el with
+                  [] -> []
+                | hd::[] -> [hd]
+                | hd::next::rest ->
+                    if (Util.equals hd next) then
+                      uniq (hd::rest)
+                    else
+                      hd::(uniq (next::rest))
+              in
+                uniq (List.sort compare el)
+            in
+              sort_and_uniq (indirect @ direct)
+
+        )
+      | None -> 
         E.warn "IsEquivalent.get_equiv_state: Attempt to lookup state %d that is not in table\n" id;
         []
 ;;
@@ -555,7 +558,9 @@ let get_equiv_set (e:exp) (id:int) : (exp list) =
 
 (* Retrun true if expression e1 must alias expression e2 *)
 let is_equiv (e1:exp) (e2:exp) (id:int) : (bool) =
-  List.mem e2 (get_equiv_set e1 id)
+  let e1 = stripCasts e1 in
+  let e2 = stripCasts e2 in
+    List.mem e2 (get_equiv_set e1 id)
 ;;
 
 

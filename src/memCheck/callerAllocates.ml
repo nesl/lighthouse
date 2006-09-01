@@ -57,8 +57,8 @@ module DFF = struct
                 "CallerAllocatesLval.DFF.doInstr: Instruction %a results in state:\n" 
                 d_instr i);
       ignore (printf "%a\n" pretty state);
+      flush stdout;
     );
-    flush stdout;
     ()
   ;;
 
