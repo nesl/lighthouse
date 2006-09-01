@@ -64,11 +64,17 @@ define PROJ_cal
 endef
 export PROJ_cal
 
+define PROJ_id
+  SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/addAnnotations.ml ../memCheck/memUtil.ml ../memCheck/isEquivalent.ml ../memCheck/mayAliasWrapper.ml ../memCheck/isDead.ml cilDriver.ml isDeadUnit.ml
+  RESULT = isDeadUnit
+endef
+export PROJ_id
+
 ####
 # Default project to bulid
 ####
 ifndef SUBPROJS
-  export SUBPROJS = cd aa pt ie ch mem may cal
+  export SUBPROJS = cd aa pt ie ch mem may cal id
 endif
 
 ####

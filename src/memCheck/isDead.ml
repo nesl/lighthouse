@@ -23,9 +23,9 @@ let currentStmt = ref (mkEmptyStmt ());;
 type status = Dead | Loops | Error;;
 
 (* Runtime debuging flags. *)
-let dbg_free_dead_s = ref false;;
-let dbg_free_dead_i = ref false;;
-let dbg_free_combine = ref false;;
+let dbg_is_dead_s = ref false;;
+let dbg_is_dead_i = ref false;;
+let dbg_is_dead_combine = ref false;;
 let enable_loop = ref false;;
                          
 (* Dataflow specific debugging *)
@@ -58,32 +58,32 @@ let get_rhs_exps (i:instr) : exp list =
 
 
 (* Generate a list that includes expression e and all sub-expressions. *)
-let sub_exps_of (e:exp) : exp list =
+let rec sub_exps_of (e:exp) : exp list =
   match e with
-      Const c 
-    | AddrOf (v, NoOffset) 
-    | StartOf (v, NoOffset)
-    | Lval (Var v, _) ->
-        e :: exps
+      Const _ 
+    | AddrOf (_, NoOffset) 
+    | StartOf (_, NoOffset)
+    | Lval (Var _, _) ->
+        [e]
 
     | BinOp (_, e1, e2, _) -> 
-        (expressions e1) @ (expressions e2) @ exps
+        e :: (sub_exps_of e1) @ (sub_exps_of e2)
 
     | UnOp (_, e1, _)
     | CastE (_, e1) -> 
-        (expressions e1) @ exps
+        e :: (sub_exps_of e1)
 
     | Lval (Mem e1, NoOffset) -> 
-        e :: (expressions e1) @ exps
+        e :: (sub_exps_of e1)
 
-    | _ -> E.bug "Running simplify should eliminate this bug!\n"; []
+    | _ -> E.s (E.bug "IsDead.sub_exps_of: Running simplify should eliminate this bug!\n")
 ;;
 
 
 (* Check to see if an instruction dereferences dead data *)
 let is_dead_exp (e:exp) : bool =
 
-  let sub_exps = sub_exps_of incoming_exps in
+  let sub_exps = sub_exps_of e in
 
   (* TODO: What CIL translation is causing the need for this NULL check? *)
   let non_null = 
@@ -92,7 +92,7 @@ let is_dead_exp (e:exp) : bool =
       sub_exps 
   in
 
-    List.exists (fun e -> MA.may_alias_wrapper e1 !target) non_null
+    List.exists (fun e -> MA.may_alias_wrapper e !target) non_null
 ;;
 
 
@@ -105,15 +105,15 @@ let safe_instruction (i:instr) : status =
 
   (* If an instruction trys to use an expression that should be treated as dead,
    * then it is unsafe *)
-  let unsafe = List.mem is_dead_exp incoming_exps in
+  let unsafe = List.exists is_dead_exp incoming_exps in
   
     (* If an instruction touches a dead expression than it is unsafe *)
-    if (!dbg_free_dead_i) then (
+    if (!dbg_is_dead_i) then (
       ignore (printf "IsDead.safe_instruction: Instruction %a" d_instr i); 
       if unsafe then (
-        ignore (printf "dereferences dead expression %a\n" !target)
+        ignore (printf "dereferences dead expression %a\n" d_exp !target)
       ) else (
-        ignore (printf "is safe with respect to expression %a\n" !target)
+        ignore (printf "is safe with respect to expression %a\n" d_exp !target)
       )
     );
 
@@ -148,16 +148,16 @@ let safe_statement (s:stmt) : status =
   in
                                    
     (* If an statement touches a dead expression than it is unsafe *)
-    if (!dbg_free_dead_s) then (
+    if (!dbg_is_dead_s) then (
       ignore (printf "IsDead.safe_statement: Statement %a" d_stmt s); 
       if unsafe then (
-        ignore (printf "dereferences dead expression %a\n" !target)
+        ignore (printf "dereferences dead expression %a\n" d_exp !target)
       ) else (
-        ignore (printf "is safe with respect to expression %a\n" !target)
+        ignore (printf "is safe with respect to expression %a\n" d_exp !target)
       )
     );
 
-    if (unsafe && (!freeLineNum >= (get_stmtLoc i).line)) then 
+    if (unsafe && (!freeLineNum >= (get_stmtLoc s.skind).line)) then 
       Loops
     else if (unsafe) then 
       Error
@@ -274,7 +274,7 @@ let is_dead (e:exp) (s:stmt) =
 
   (* Set state required by the data flow *)
   target := e;
-  freeLineNum := (get_stmtLoc s).line;
+  freeLineNum := (get_stmtLoc s.skind).line;
 
   (* Run the data flow *) 
   IH.clear DFD.stmtStartData;

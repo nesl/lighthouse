@@ -19,7 +19,7 @@ val dbg_is_dead_s : bool ref
 val dbg_is_dead_i : bool ref
 
 (** Enablei verbose output for debugging of joint points *) 
-val dbg_is_combine : bool ref
+val dbg_is_dead_combine : bool ref
 
 
 (** {b Analysis Configuration} Options to configure the analysis *)
@@ -38,5 +38,5 @@ val enable_loop : bool ref
   * program, return false if the expression could be dereferenced before it goes
   * out of scope or before it is made valid again (ie. via a call to a malloc
   * function) *)
-val is_dead : Cil.exp Cil.stmt -> bool
+val is_dead : Cil.exp -> Cil.stmt -> bool
   

@@ -551,7 +551,6 @@ let get_equiv_set (e:exp) (id:int) : (exp list) =
 
         )
       | None -> 
-        E.warn "IsEquivalent.get_equiv_state: Attempt to lookup state %d that is not in table\n" id;
         []
 ;;
 
