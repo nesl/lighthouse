@@ -8,8 +8,8 @@ open MakeOneCFG
 module IH = Inthash
 module DF = IsDead
 module OF = IsStored
-module FF = CallerAllocatesLval
-module RF = CallerAllocatesReturn
+module FF = CallerAllocates
+module RF = CallerAllocates
 module U = MemUtil
 module E = Errormsg
 module IE = IsEquivalent             
@@ -27,6 +27,11 @@ let dbg_alloc_exp = ref false
 let dbg_alloc_stores = ref false
 let dbg_ptr_arith = ref false
                          
+(* State collected by the memory module to help with calls to the IsStored
+ * module *)
+let global_stores: exp list ref = ref [];;
+let local_stores: exp list ref = ref [];;
+let current_func: fundex ref = ref dummyFunDec;;
 
 (* Determine if allocated data is stored into a store. *)
 let allocDataTreatment alloced s iop = 
@@ -101,6 +106,7 @@ let allocDataTreatment alloced s iop =
   in
 
     if (not error && taken) then Store else Error
+;;
   
 
 (* CIL visitor to verify that a strict "exactly one owner" memory model is
@@ -114,9 +120,8 @@ class memoryVisitor = object
                     
   method vfunc (f:fundec) = 
     funStartStmt := List.hd f.sbody.bstmts;
-    
-    (* Flow analysis for own needs to know the current function *)
-    OF.currentFunc := Some f;
+    local_stores := [];
+    current_func := f;
  
     (* Update the must alias analysis for this function *)
     IE.generate_equiv f;
@@ -136,7 +141,7 @@ class memoryVisitor = object
              * to the store AFTER we look at all formal parameters!  This
              * prevents us from using this formal parameter as a store for
              * another formal parameter. *)
-            OF.stores := (Lval (var vi))::(!OF.stores);
+            local_stores := (Lval (var vi))::(!local_stores);
 
           );
           
@@ -448,7 +453,7 @@ let doFile fn =
 
     (* Generate a table to note persistent stores *)
     (* TODO: this assumes that the store is a global *)
-    OF.stores := 
+    global_stores := 
     foldGlobals 
       f
       (fun s g -> match g with
@@ -459,8 +464,8 @@ let doFile fn =
              (Lval (var v))::s
        | GFun (fd, l) -> s
        | _ -> s
-    ) 
-    [];
+      ) 
+      [];
 
     let mVisitor = new memoryVisitor in
       visitCilFileSameGlobals mVisitor f;

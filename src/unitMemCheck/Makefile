@@ -5,8 +5,8 @@ OCAMLMAKEFILE = OCamlMakefile
 # Global build options
 ####
 export LIBS = unix str cil oUnit
-export INCDIRS = /home/rshea/mote/cil-1.3.5/obj/x86_LINUX +oUnit
-#export INCDIRS = /home/rshea/research/cil-1.3.5/obj/x86_LINUX +oUnit
+#export INCDIRS = /home/rshea/mote/cil-1.3.5/obj/x86_LINUX +oUnit
+export INCDIRS = /home/rshea/research/cil-1.3.5/obj/x86_LINUX +oUnit
 
 
 ####
@@ -70,11 +70,17 @@ define PROJ_id
 endef
 export PROJ_id
 
+define PROJ_is
+  SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/addAnnotations.ml ../memCheck/memUtil.ml ../memCheck/isEquivalent.ml ../memCheck/isStored.ml cilDriver.ml isStoredUnit.ml
+  RESULT = isStoredUnit
+endef
+export PROJ_is
+
 ####
 # Default project to bulid
 ####
 ifndef SUBPROJS
-  export SUBPROJS = cd aa pt ie ch mem may cal id
+  export SUBPROJS = cd aa pt ie ch mem may cal id is
 endif
 
 ####
