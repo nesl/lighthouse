@@ -33,6 +33,6 @@ val is_stored_func : Cil.exp -> Cil.fundec -> Cil.exp list -> bool;;
 (** Given a target expression [e] and location within function [f] specified by
   * instruction [i] and statement [s], see if the expression is sored in one of
   * the stores [new_stores]. *)
-val is_stored_inst : 
+val is_stored_instr : 
   Cil.exp -> Cil.stmt -> Cil.instr -> Cil.fundec -> Cil.exp list -> bool;;
   

@@ -425,7 +425,7 @@ let is_stored_func (e: exp) (f: fundec) (new_stores: exp list) : bool =
 
 (* Check to see that the expression e is stored before the end of the current
  * function f *)
-let is_stored_inst 
+let is_stored_instr
       (e: exp) (s: stmt) (i: instr) (f: fundec) (new_stores: exp list)
       : bool = 
   

@@ -24,19 +24,19 @@ int main() {
     int *pa;
     int *pb;
     int *pc;
-    int *pd;
+    int *fd;
 
     pa = malloc(3 * sizeof(int));
     pb = malloc(1 * sizeof(int));
     pc = malloc(4 * sizeof(int));
-    pd = malloc(1 * sizeof(int));
+    fd = malloc(1 * sizeof(int));
 
 ONE:
 
     store_a(pa);
     store_b(pb);
     fail_a(pc);
-    pd++;
+    fd++;
     
     return 0;
 }

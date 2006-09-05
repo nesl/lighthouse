@@ -34,7 +34,7 @@ type test_data_type = {
   pa : exp ref;
   pb : exp ref;
   pc : exp ref;
-  pd : exp ref;
+  fd : exp ref;
   sa : fundec ref;
   sb : fundec ref;
   sc : fundec ref;
@@ -48,7 +48,7 @@ let test_data = {
   pa = ref zero;
   pb = ref zero;
   pc = ref zero;
-  pd = ref zero;
+  fd = ref zero;
   sa = ref dummyFunDec;
   sb = ref dummyFunDec;
   sc = ref dummyFunDec;
@@ -75,8 +75,8 @@ class testVisitor = object
       | "pc" ->
           test_data.pc := Lval (var v);
           SkipChildren
-      | "pd" ->
-          test_data.pd := Lval (var v);
+      | "fd" ->
+          test_data.fd := Lval (var v);
           SkipChildren
       | _ -> SkipChildren
 
@@ -204,6 +204,64 @@ let test_fail_a =
 ;;
 
 
+let test_pa = 
+  let test = 
+    IE.generate_equiv !(test_data.main) cilFile;
+    IS.is_stored_instr 
+      !(test_data.pa)
+      !(test_data.stmt_one) 
+      dummyInstr      
+      !(test_data.main) 
+      (stores !(test_data.main))
+  in
+    TestCase(fun _ -> assert_bool "pa" test) 
+;;
+
+let test_pb = 
+  let test = 
+    IE.generate_equiv !(test_data.main) cilFile;
+    IS.is_stored_instr 
+      !(test_data.pb)
+      !(test_data.stmt_one) 
+      dummyInstr      
+      !(test_data.main) 
+      (stores !(test_data.main))
+  in
+    TestCase(fun _ -> assert_bool "pb" test) 
+;;
+
+
+let test_pc = 
+  let test = 
+    IE.generate_equiv !(test_data.main) cilFile;
+    IS.is_stored_instr 
+      !(test_data.pc)
+      !(test_data.stmt_one) 
+      dummyInstr      
+      !(test_data.main) 
+      (stores !(test_data.main))
+  in
+    TestCase(fun _ -> assert_bool "pc" test) 
+;;
+
+
+let test_fd = 
+  let test =
+    not ( 
+      IE.generate_equiv !(test_data.main) cilFile;
+      IS.is_stored_instr 
+        !(test_data.fd)
+        !(test_data.stmt_one) 
+        dummyInstr      
+        !(test_data.main) 
+        (stores !(test_data.main))
+    )
+  in
+    TestCase(fun _ -> assert_bool "fd" test) 
+;;
+
+
+
 
 (* Run all the tests *)
 let suite_is_stored = 
@@ -213,6 +271,10 @@ let suite_is_stored =
                TestLabel ("IsStored: ", test_store_b);
                TestLabel ("IsStored: ", test_store_c);
                TestLabel ("IsStored: ", test_fail_a);
+               TestLabel ("IsStored: ", test_pa);
+               TestLabel ("IsStored: ", test_pb);
+               TestLabel ("IsStored: ", test_pc);
+               TestLabel ("IsStored: ", test_fd);
              ]
   )
 ;;
