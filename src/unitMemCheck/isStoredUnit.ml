@@ -3,41 +3,57 @@ open CilDriver;;
 open Pretty;;
 open Cil;;
 
+module IE = IsEquivalent;;
 module IS = IsStored;;
 
 
+IS.dbg_is_store_i := false;;
+IS.dbg_is_store_s := false;;
+IS.dbg_is_store_g := false;;
+IS.dbg_is_store_c := false;;
+
+  
 (* Set up a file for running tests *)
 let inputFile = "isStoredUnit.c";;
 let cilFile = makeCilFile inputFile;;
 ignore (MakeOneCFG.feature.fd_doit cilFile);;
 
+let global_stores = 
+  foldGlobals 
+    cilFile
+    (fun s g -> match g with
+         GVarDecl (v, l) | GVar (v, _, l) -> (Lval (var v))::s
+       | GFun (fd, l) -> s
+       | _ -> s
+    ) 
+    []
+;;
+
 (* Describe what we are interested in examining within CIL *)
-type test_data = {
-  safe_a : exp ref;
-  safe_b : exp ref;
-  unsafe_a : exp ref;
-  unsafe_b : exp ref;
-  unsafe_c : exp ref;
-  unsafe_d : exp ref;
-  unsafe_e : exp ref;
-  unsafe_f : exp ref;
-  unsafe_g : exp ref;
-  label_one : string;
+type test_data_type = {
+  pa : exp ref;
+  pb : exp ref;
+  pc : exp ref;
+  pd : exp ref;
+  sa : fundec ref;
+  sb : fundec ref;
+  sc : fundec ref;
+  fa : fundec ref;
+  main : fundec ref;
   stmt_one : stmt ref;
 };;
 
 
-let is_dead_test_data = {
-  safe_a = ref zero;
-  safe_b = ref zero;
-  unsafe_a = ref zero;
-  unsafe_b = ref zero;
-  unsafe_c = ref zero;
-  unsafe_d = ref zero;
-  unsafe_e = ref zero;
-  unsafe_f = ref zero;
-  unsafe_g = ref zero;
-  label_one = "ONE";
+let test_data = {
+  pa = ref zero;
+  pb = ref zero;
+  pc = ref zero;
+  pd = ref zero;
+  sa = ref dummyFunDec;
+  sb = ref dummyFunDec;
+  sc = ref dummyFunDec;
+  fa = ref dummyFunDec;
+  main = ref dummyFunDec;
   stmt_one = ref dummyStmt;
 };;
 
@@ -46,51 +62,55 @@ let is_dead_test_data = {
 (* Create a visitor to examine clones *)
 class testVisitor = object
   inherit nopCilVisitor
-
+  
   (* Snarf the variables of interest *)
   method vvdec (v:varinfo) =
     match v.vname with
-        "safe_a" ->
-          is_dead_test_data.safe_a := Lval (var v);
+      | "pa" ->
+          test_data.pa := Lval (var v);
           SkipChildren
-      | "safe_b" ->
-          is_dead_test_data.safe_b := Lval (var v);
+      | "pb" ->
+          test_data.pb := Lval (var v);
           SkipChildren
-      | "unsafe_a" ->
-          is_dead_test_data.unsafe_a := Lval (var v);
+      | "pc" ->
+          test_data.pc := Lval (var v);
           SkipChildren
-      | "unsafe_b" ->
-          is_dead_test_data.unsafe_b := Lval (var v);
-          SkipChildren
-      | "unsafe_c" ->
-          is_dead_test_data.unsafe_c := Lval (var v);
-          SkipChildren
-      | "unsafe_d" ->
-          is_dead_test_data.unsafe_d := Lval (var v);
-          SkipChildren
-      | "unsafe_e" ->
-          is_dead_test_data.unsafe_e := Lval (var v);
-          SkipChildren
-      | "unsafe_f" ->
-          is_dead_test_data.unsafe_f := Lval (var v);
-          SkipChildren
-      | "unsafe_g" ->
-          is_dead_test_data.unsafe_g := Lval (var v);
+      | "pd" ->
+          test_data.pd := Lval (var v);
           SkipChildren
       | _ -> SkipChildren
 
+  
+  method vfunc (f:fundec) = match f with
+      _ when (f.svar.vname = "store_a") ->
+          test_data.sa := f;
+          DoChildren
+    | _ when (f.svar.vname = "store_b") ->
+          test_data.sb := f;
+          DoChildren
+    | _ when (f.svar.vname = "store_c") ->
+          test_data.sc := f;
+          DoChildren
+    | _ when (f.svar.vname = "fail_a") ->
+          test_data.fa := f;
+          DoChildren
+    | _ when (f.svar.vname = "main") ->
+          test_data.main := f;
+          DoChildren
+    | _ -> DoChildren
 
-  (* Snarf the states of interest *)
+
   method vstmt (s:stmt) =
     List.iter 
       (fun l -> match l with 
-           Label (name, _, _) when name = is_dead_test_data.label_one -> 
-             is_dead_test_data.stmt_one := s
+           Label (name, _, _) when name = "ONE" -> 
+             test_data.stmt_one := s
          | Label (name, _, _) -> ignore (printf "Failed for label name: %s\n" name)
          | _ -> ignore (printf "Skipping statement %a\n" d_stmt s)
       )
       s.labels;
     SkipChildren
+
 end
 
 
@@ -99,22 +119,105 @@ let tv = new testVisitor;;
 visitCilFileSameGlobals tv cilFile;;
 
 
+let get_released_exps (f:fundec) : exp list =
+
+  let attr_name = "sos_release" in
+
+  let (_, formals_op, _, _) = splitFunctionType f.svar.vtype in
+
+  let released_formal_exps = match formals_op with
+      Some attr_list ->
+        List.fold_left2 
+          (fun has_attribute (_, formal_type, formal_attrs) formal -> 
+             if (hasAttribute attr_name formal_attrs) then
+               (Lval (var formal))::has_attribute
+             else has_attribute
+          )
+          []
+          attr_list
+          f.sformals
+    | None -> []
+  in
+
+    released_formal_exps
+;;
+
+
+let stores (f:fundec) : exp list = 
+
+  let local_stores = 
+    List.map 
+      (fun v -> (Lval (var v)))
+      (List.filter (fun v -> hasAttribute "sos_store" v.vattr) f.slocals)
+  in
+
+    local_stores @ global_stores
+;;
+
+
 (* Tests!!! *)
-let test_isStored_safe_a = 
-  let test = true in
-    TestCase(fun _ -> assert_bool "safe_a" test) 
+let test_store_a = 
+  let test = 
+    IE.generate_equiv !(test_data.sa) cilFile;
+    List.for_all
+      (fun e -> IS.is_stored_func e !(test_data.sa) (stores !(test_data.sa)))
+      (get_released_exps !(test_data.sa))
+  in
+    TestCase(fun _ -> assert_bool "store_a" test) 
+;;
+
+
+let test_store_b = 
+  let test = 
+    IE.generate_equiv !(test_data.sb) cilFile;
+    List.for_all
+      (fun e -> IS.is_stored_func e !(test_data.sb) (stores !(test_data.sb)))
+      (get_released_exps !(test_data.sb))
+  in
+    TestCase(fun _ -> assert_bool "store_b" test) 
+;;
+
+
+let test_store_c = 
+  let test = 
+    IE.generate_equiv !(test_data.sc) cilFile;
+ 
+    List.for_all
+      (fun e -> IS.is_stored_func e !(test_data.sc) (stores !(test_data.sc)))
+      (get_released_exps !(test_data.sc))
+  in
+    
+    TestCase(fun _ -> assert_bool "store_c" test) 
+;;
+
+
+let test_fail_a = 
+  let test = 
+    IE.generate_equiv !(test_data.fa) cilFile;
+    not (
+      List.for_all
+        (fun e -> IS.is_stored_func e !(test_data.fa) (stores !(test_data.fa)))
+        (get_released_exps !(test_data.fa))
+    )
+  in
+    TestCase(fun _ -> assert_bool "fail_a" test) 
 ;;
 
 
 
 (* Run all the tests *)
 let suite_is_stored = 
-  TestLabel ("IsDead", 
+  TestLabel ("IsStored", 
              TestList [
-               TestLabel ("safe_a", test_isStored_safe_a);
+               TestLabel ("IsStored: ", test_store_a);
+               TestLabel ("IsStored: ", test_store_b);
+               TestLabel ("IsStored: ", test_store_c);
+               TestLabel ("IsStored: ", test_fail_a);
              ]
   )
 ;;
 
-let main = run_test_tt suite_is_stored
+
+
+let main = run_test_tt suite_is_stored;;
 

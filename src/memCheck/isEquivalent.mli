@@ -43,7 +43,7 @@ val nullPtr : Cil.exp
   * other calls are made. *)
 
 (** Create the equivalency information for a function *)
-val generate_equiv : Cil.fundec -> unit
+val generate_equiv : Cil.fundec -> Cil.file -> unit
 
 (** Query the equivalency information to see if expression e1 is equivalent in
   * value to expression e2 *)

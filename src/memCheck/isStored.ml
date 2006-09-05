@@ -71,6 +71,23 @@ let instr_stores (i: instr) (sid: int) : instr_status =
       (fun release -> IE.is_equiv release !target id)
       (U.get_claim i)
   in
+
+    if !dbg_is_store_i then (
+      ignore (printf "IsStored.instr_stores trying to store \"%a\":\n" d_exp !target);
+      ignore (printf "...is_released: %b\n" (is_released i sid));
+      ignore (printf "...is_overwritten: %b\n" (is_overwritten i sid));
+      (match i with
+           Set (lv, e, _) ->
+             ignore (printf "...is_target \"%a\": %b\n" d_lval lv (is_target (Lval lv) sid));
+             ignore (printf "...is_store \"%a\": %b\n" d_lval lv (is_store (Lval lv) sid));
+             ignore (printf "...is_target \"%a\": %b\n" d_exp e (is_target e sid));
+             ignore (printf "...is_store \"%a\": %b\n" d_exp e (is_store e sid));
+         | Call (Some lv, _, _, _) ->
+             ignore (printf "...is_target \"%a\": %b\n" d_lval lv (is_target (Lval lv) sid));
+         | _ -> ()
+      );
+      flush stdout;
+    );
     
     match i with
       | Set (lv, _, _) when (is_target (Lval lv) sid)
@@ -111,7 +128,7 @@ module DFO = struct
   let pretty () (state: t) =
     dprintf "{%s}" ( 
       match state with 
-          MustTake -> "Must Take"
+          MustTake -> "MustTake"
         | Taken -> "Taken"
         | Null -> "Null"
         | Error -> "Error"
@@ -138,7 +155,7 @@ module DFO = struct
 
   let debug_instr (i: instr) (transition: t DF.action) (old: t): unit =
     if !dbg_is_store_i then (
-      ignore (printf "IsStored.DFO.doInstr: Instruction %a" d_instr i);
+      ignore (printf "IsStored.DFO.doInstr: Instruction  %a\nwith effect:\n" d_instr i);
       match transition with
           DF.Done new_state -> ignore (printf "Transitions from %a to %a\n" 
                                          pretty old pretty new_state);
@@ -163,7 +180,8 @@ module DFO = struct
     
   let debug_stmt (s: stmt) (transition: t DF.stmtaction) : unit =
     if (!dbg_is_store_s) then (
-      ignore (printf "IsStored.DFO.doStmt: Examining statement %d:\n" s.sid);
+      ignore (printf "IsStored.DFO.doStmt: Examining statement %d \n%a\nwith effect:" 
+                s.sid d_stmt s);
       match transition with 
           DF.SUse new_state -> ignore (printf " propogates %a\n" pretty new_state);
         | DF.SDefault -> ignore (printf " has no special effect\n");

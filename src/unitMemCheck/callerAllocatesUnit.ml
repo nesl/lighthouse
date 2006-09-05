@@ -80,7 +80,7 @@ class testVisitorLval = object (self)
 
   method vfunc (f:fundec) = 
 
-    IsEquivalent.generate_equiv f;
+    IsEquivalent.generate_equiv f cilFile;
     
     let check_alloc_lval (vl: varinfo list) : bool =
       
@@ -151,7 +151,7 @@ class testVisitorReturn = object (self)
 
   method vfunc (f:fundec) = 
 
-    IsEquivalent.generate_equiv f;
+    IsEquivalent.generate_equiv f cilFile;
     
       match f with 
           _ when (f.svar.vname = "ker_malloc") ->

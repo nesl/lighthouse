@@ -50,7 +50,7 @@ class testVisitor = object
     IE.dbg_equiv_get_equiv_set := false;
     IE.dbg_equiv_df := false;
 
-    IE.generate_equiv f;
+    IE.generate_equiv f cilFile;
     DoChildren
 
 

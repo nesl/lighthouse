@@ -484,10 +484,31 @@ end
 
 module TrackF = DF.ForwardsDataFlow(DFM)
 
-(* Run the data flow to generate must alias information for a function *)
-let generate_equiv (f:fundec) =
+(* Run the data flow to generate must alias information for a function.  Need to
+ * jump start the dataflow with information about global variables and formals.
+ *)
+let generate_equiv (f:fundec) (cilFile:file): unit =
+
+  let global_vars = 
+    foldGlobals 
+      cilFile
+      (fun s g -> match g with
+           GVarDecl (v, l) | GVar (v, _, l) -> v::s
+         | GFun (fd, l) -> s
+         | _ -> s
+      ) 
+      []
+  in
+
+  let start_state = 
+    List.fold_left
+      (fun start_state v -> ListSet.add_singleton (Lval (var v)) start_state)
+      []
+      (global_vars @ f.sformals @ f.slocals)
+  in
+
   IH.clear DFM.stmtStartData;
-  IH.add DFM.stmtStartData (List.hd f.sbody.bstmts).sid [];
+  IH.add DFM.stmtStartData (List.hd f.sbody.bstmts).sid start_state;
   TrackF.compute [(List.hd f.sbody.bstmts)]
 ;;
 
