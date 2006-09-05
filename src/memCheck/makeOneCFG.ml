@@ -61,6 +61,22 @@ class vidVisitor = object
     incr count ; SkipChildren
 end 
 
+  
+let make_one_cfg (f: file) = 
+  let oVisitor = new makeOneCFG in
+  let vVisitor = new vidVisitor in
+         
+    visitCilFileSameGlobals oVisitor f;  
+    visitCilFileSameGlobals vVisitor f;
+    iterGlobals 
+      f 
+      (fun glob -> 
+         match glob with
+             GFun(fd,_) -> prepareCFG fd; ignore (computeCFGInfo fd true)
+           | _ -> ()
+      ) 
+;;
+
 
 (* Feature description *)
 let feature : featureDescr = {
@@ -68,21 +84,7 @@ let feature : featureDescr = {
   fd_enabled = ref true;
   fd_description = "make the program look more like a CFG with one instruction per statement";
   fd_extraopt = [];
-  fd_doit = 
-    (fun f -> 
-       let oVisitor = new makeOneCFG in
-       let vVisitor = new vidVisitor in
-         
-         visitCilFileSameGlobals oVisitor f;  
-         visitCilFileSameGlobals vVisitor f;
-         iterGlobals 
-           f 
-           (fun glob -> 
-              match glob with
-                  GFun(fd,_) -> prepareCFG fd; ignore (computeCFGInfo fd true)
-                | _ -> ()
-           ) 
-    );
+  fd_doit = make_one_cfg;
   fd_post_check = true;
 } 
 ;;

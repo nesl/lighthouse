@@ -15,6 +15,7 @@ let dbg_equiv_combine = ref false;;
 let dbg_equiv_get_aliases = ref false;;
 let dbg_equiv_get_equiv_set = ref false;;
 let dbg_equiv_stmt_summary = ref false;;
+let verbose = ref false;;
 
 (* Dataflow specific debugging *)
 let dbg_equiv_df = ref false;;
@@ -274,10 +275,12 @@ module DFM = struct
             []
 
 
-        | _ -> 
-            E.warn "IsEquivalent.DFM.getEquiv:";
-            E.warn "  Do not understand expression %a." d_exp e;
-            E.warn "  Stopping recursion and returning empty alias set for this term.";
+        | _ ->
+            if !verbose then (
+              E.warn "IsEquivalent.DFM.getEquiv:";
+              E.warn "  Do not understand expression %a." d_exp e;
+              E.warn "  Stopping recursion and returning empty alias set for this term.";
+            );
             []
     in
 
@@ -428,10 +431,12 @@ module DFM = struct
 
           | _ -> 
               let state = kill (Lval lv) state in
-                E.warn "IsEquivalent.DFM.doInstr:";
-                E.warn "  Do not understand RHS of instrurtion %a." d_instr i;
-                E.warn  "  Skipping.";
-                dbg (Lval lv) (Lval lv) state;
+                if !verbose then (
+                  E.warn "IsEquivalent.DFM.doInstr:";
+                  E.warn "  Do not understand RHS of instrurtion %a." d_instr i;
+                  E.warn  "  Skipping.";
+                  dbg (Lval lv) (Lval lv) state;
+                );
                 DF.Done state
         end
 

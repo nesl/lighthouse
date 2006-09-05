@@ -9,7 +9,7 @@ module IH = Inthash
 (* Set up a file for running tests *)
 let inputFile = "isEquivalent00Unit.c";;
 let cilFile = makeCilFile inputFile;;
-ignore (MakeOneCFG.feature.fd_doit cilFile);;
+ignore (MakeOneCFG.make_one_cfg cilFile);;
 
 (* Describe what we are interested in examining within CIL *)
 type test_data = {

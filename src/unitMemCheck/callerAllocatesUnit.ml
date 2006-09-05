@@ -18,7 +18,7 @@ IsEquivalent.dbg_equiv_get_aliases := false;;
 let inputFile = "callerAllocatesUnit.c";;
 let cilFile = makeCilFile inputFile;;
 
-ignore (MakeOneCFG.feature.fd_doit cilFile);;
+ignore (MakeOneCFG.make_one_cfg cilFile);;
 ignore (AddAnnotations.feature.fd_doit cilFile);;
 
 (*

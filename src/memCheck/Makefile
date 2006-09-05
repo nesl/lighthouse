@@ -1,9 +1,9 @@
 OCAMLMAKEFILE = OCamlMakefile
 
-SOURCES	= memUtil.ml isEquivalent.ml deadFlow.ml fillFlow.ml ownFlow.ml returnFlow.ml addAnnotations.ml makeOneCFG.ml memory.ml
+SOURCES	= memUtil.ml isEquivalent.ml mayAliasWrapper.ml addAnnotations.ml callerAllocates.ml isStored.ml isDead.ml makeOneCFG.ml memory.ml
 RESULT	= memory
 
-DOC_FILES = addAnnotations.mli isEquivalent.mli
+DOC_FILES = memUtil.mli isEquivalent.mli mayAliasWrapper.mli addAnnotations.mli callerAllocates.mli isStored.mli isDead.mli makeOneCFG.mli
 OCAMLDOCFLAGS = -stars
 
 LIBS = unix str cil

@@ -10,7 +10,7 @@ module MA = MayAliasWrapper;;
 let inputFile = "mayAliasWrapperUnit.c";;
 let cilFile = makeCilFile inputFile;;
 
-ignore (MakeOneCFG.feature.fd_doit cilFile);;
+ignore (MakeOneCFG.make_one_cfg cilFile);;
 let _ = Ptranal.analyze_file cilFile;;
 let _ = Ptranal.compute_results false;;
 

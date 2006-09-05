@@ -9,7 +9,7 @@ module ID = IsDead;;
 (* Set up a file for running tests *)
 let inputFile = "isDeadUnit.c";;
 let cilFile = makeCilFile inputFile;;
-ignore (MakeOneCFG.feature.fd_doit cilFile);;
+ignore (MakeOneCFG.make_one_cfg cilFile);;
 ignore (Ptranal.analyze_file cilFile);;
 ignore (Ptranal.compute_results false);;
 

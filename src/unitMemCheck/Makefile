@@ -27,8 +27,8 @@ export PROJ_aa
 
 
 define PROJ_pt
-  SOURCES = cilDriver.ml ptranalUnit.ml
-  RESULT = ptranalUnit
+  SOURCES = cilDriver.ml ptranalTest.ml
+  RESULT = ptranalTest
 endef
 export PROJ_pt
 

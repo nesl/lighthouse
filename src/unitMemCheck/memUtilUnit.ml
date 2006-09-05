@@ -10,7 +10,7 @@ module MU = MemUtil;;
 let inputFile = "memUtilUnit.c";;
 let cilFile = makeCilFile inputFile;;
 
-ignore (MakeOneCFG.feature.fd_doit cilFile);;
+ignore (MakeOneCFG.make_one_cfg cilFile);;
 ignore (AddAnnotations.feature.fd_doit cilFile);;
 
 (*

@@ -16,7 +16,7 @@ IS.dbg_is_store_c := false;;
 (* Set up a file for running tests *)
 let inputFile = "isStoredUnit.c";;
 let cilFile = makeCilFile inputFile;;
-ignore (MakeOneCFG.feature.fd_doit cilFile);;
+ignore (MakeOneCFG.make_one_cfg cilFile);;
 
 let global_stores = 
   foldGlobals 
