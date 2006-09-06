@@ -114,7 +114,6 @@ let test_isDead_safe_b =
 ;;
 
 
-(* TODO: IsDead needs to be expanded to handle this case *)
 let test_isDead_unsafe_a = 
   let test = not (ID.is_dead !(is_dead_test_data.unsafe_a) !(is_dead_test_data.stmt_one)) in
     TestCase(fun _ -> assert_bool "unsafe_a" test) 
