@@ -582,9 +582,16 @@ let get_equiv_set (e:exp) (id:int) : (exp list) =
 
 
 (* Retrun true if expression e1 must alias expression e2 *)
+(* TODO: The stripping of type casts is going to require a bit more thought *)
 let is_equiv (e1:exp) (e2:exp) (id:int) : (bool) =
-  let e1 = stripCasts e1 in
-  let e2 = stripCasts e2 in
+  let e1 = 
+    if (isZero e1) then e1
+    else stripCasts e1 
+  in
+  let e2 = 
+    if (isZero e2) then e2
+    else stripCasts e2 
+  in
     List.mem e2 (get_equiv_set e1 id)
 ;;
 

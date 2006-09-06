@@ -3,8 +3,14 @@ open CilDriver
 open Pretty
 open Cil
 
-module IE = IsEquivalent
-module IH = Inthash
+module IE = IsEquivalent;;
+
+IE.dbg_equiv_i := false;;
+IE.dbg_equiv_combine := false;;
+IE.dbg_equiv_stmt_summary := false;;
+IE.dbg_equiv_get_aliases := false;;
+IE.dbg_equiv_get_equiv_set := false;;
+IE.dbg_equiv_df := false;;
 
 (* Set up a file for running tests *)
 let inputFile = "isEquivalent00Unit.c";;
@@ -22,12 +28,6 @@ type test_data = {
   q : exp ref;
   x : exp ref;
   y : exp ref;
-  label_one : string;
-  label_two : string;
-  label_three : string;
-  label_four : string;
-  label_five : string;
-  label_six : string;
   mutable id_one : int;
   mutable id_two : int;
   mutable id_three : int;
@@ -47,12 +47,6 @@ let equiv_test_data = {
   q = ref zero;
   x = ref zero;
   y = ref zero;
-  label_one = "ONE";
-  label_two = "TWO";
-  label_three = "THREE";
-  label_four = "FOUR";
-  label_five = "FIVE";
-  label_six = "SIX";
   id_one = 0;
   id_two = 0;
   id_three = 0;
@@ -69,13 +63,7 @@ class testVisitor = object
 
   (* Prepare equiv clone information *)
   method vfunc (f:fundec) =
-    IE.dbg_equiv_i := false;
-    IE.dbg_equiv_combine := false;
-    IE.dbg_equiv_stmt_summary := false;
-    IE.dbg_equiv_get_aliases := false;
-    IE.dbg_equiv_get_equiv_set := false;
-    IE.dbg_equiv_df := false;
-
+    
     IE.generate_equiv f cilFile;
     DoChildren
 
@@ -117,17 +105,17 @@ class testVisitor = object
   method vstmt (s:stmt) =
     List.iter 
       (fun l -> match l with 
-           Label (name, _, _) when name = equiv_test_data.label_one -> 
+           Label (name, _, _) when name = "ONE" -> 
              equiv_test_data.id_one <- s.sid
-         | Label (name, _, _) when name = equiv_test_data.label_two -> 
+         | Label (name, _, _) when name = "TWO" -> 
              equiv_test_data.id_two <- s.sid
-         | Label (name, _, _) when name = equiv_test_data.label_three -> 
+         | Label (name, _, _) when name = "THREE" -> 
              equiv_test_data.id_three <- s.sid
-         | Label (name, _, _) when name = equiv_test_data.label_four -> 
+         | Label (name, _, _) when name = "FOUR" -> 
              equiv_test_data.id_four <- s.sid
-         | Label (name, _, _) when name = equiv_test_data.label_five -> 
+         | Label (name, _, _) when name = "FIVE" -> 
              equiv_test_data.id_five <- s.sid
-         | Label (name, _, _) when name = equiv_test_data.label_six -> 
+         | Label (name, _, _) when name = "SIX" -> 
              equiv_test_data.id_six <- s.sid
          | Label (name, _, _) -> ignore (printf "Failed for label name: %s\n" name)
          | _ -> ignore (printf "Skipping statement %a\n" d_stmt s)
@@ -279,26 +267,36 @@ let test_equivClone_four =
 ;;
 
 
-let test_equivClone_five = 
+let test_equivClone_five_a = 
   let a_good = 
     IE.is_equiv 
       !(equiv_test_data.clone_a) 
       IE.nullPtr
       equiv_test_data.id_five
   in
+    TestCase(fun _ -> assert_bool "a should be Null" a_good) 
+;;
+
+
+let test_equivClone_five_b = 
   let b_good = 
     IE.is_equiv
       !(equiv_test_data.clone_b) 
       IE.nullPtr
       equiv_test_data.id_five
   in
+  TestCase(fun _ -> assert_bool "b should be Null" b_good) 
+;;
+
+
+let test_equivClone_five_ab = 
   let ab_good = 
     IE.is_equiv
       !(equiv_test_data.clone_ab) 
       IE.nullPtr
       equiv_test_data.id_five
   in
-  TestCase(fun _ -> assert_bool "Incorrect clone information" (a_good && b_good && ab_good)) 
+  TestCase(fun _ -> assert_bool "ab should be Null" ab_good) 
 ;;
 
 
@@ -351,17 +349,19 @@ let test_equivClone_six =
 
 (* Run all the tests *)
 let suite_equivClone = 
-  TestLabel ("Add Annotations", 
+  TestLabel ("IsEquivalent", 
              TestList [
-               TestLabel ("equivClone.c: One", test_equivClone_one);
-               TestLabel ("equivClone.c: Two", test_equivClone_two);
-               TestLabel ("equivClone.c: Three", test_equivClone_three);
-               TestLabel ("equivClone.c: Four", test_equivClone_four);
-               TestLabel ("equivClone.c: Five", test_equivClone_five);
-               TestLabel ("equivClone.c: Six", test_equivClone_six);
+               TestLabel ("ONE", test_equivClone_one);
+               TestLabel ("TWO", test_equivClone_two);
+               TestLabel ("THREE", test_equivClone_three);
+               TestLabel ("FOUR", test_equivClone_four);
+               TestLabel ("FIVE", test_equivClone_five_a);
+               TestLabel ("FIVE", test_equivClone_five_b);
+               TestLabel ("FIVE", test_equivClone_five_ab);
+               TestLabel ("SIX", test_equivClone_six);
              ]
   )
 ;;
 
-let main = run_test_tt suite_equivClone
+let main = run_test_tt suite_equivClone;;
 
