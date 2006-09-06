@@ -40,7 +40,7 @@ let dbg_free_df = ref false;;
 (****************************************)
 
 (* Grab all expressions on the right hand side of an instruction. *)
-let get_rhs_exps (i:instr) : exp list =                    
+let get_dereferenced_exps (i:instr) : exp list =                    
   match i with
       Set ((Var v, NoOffset), e, _) when 
         (Str.string_match (Str.regexp "__cil_tmp") v.vname 0) -> 
@@ -51,7 +51,9 @@ let get_rhs_exps (i:instr) : exp list =
               Lval (Mem e1, NoOffset) -> [e]
             | _ -> []
         end
+    | Set ((Mem e, _), e2, _) -> [e; e2]
     | Set (_, e, _) -> [e]
+    | Call (Some (Mem e, _), _, el, _) -> e::el
     | Call (_, _, el, _) -> el
     | _ -> []
 ;;
@@ -101,7 +103,7 @@ let is_dead_exp (e:exp) : bool =
  * to access dead data. *)
 let safe_instruction (i:instr) : status =
 
-  let incoming_exps = get_rhs_exps i in
+  let incoming_exps = get_dereferenced_exps i in
 
   (* If an instruction trys to use an expression that should be treated as dead,
    * then it is unsafe *)
@@ -219,12 +221,11 @@ module DFD = struct
 
   (* The error state is treated as a sink that never changes.  The analysis
    * reports the first location within the flow that things turn sour. *)
-  (* TODO: I think that Loops and Error can simply return DF.Default *)
   let doInstr (i: instr) (state: t): t DF.action =
     match state with
         Dead -> DF.Done (safe_instruction i)
-      | Loops -> DF.Done Loops
-      | Error -> DF.Done Error
+      | Loops -> DF.Default
+      | Error -> DF.Default
   ;;
 
 
