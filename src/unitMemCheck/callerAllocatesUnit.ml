@@ -28,15 +28,6 @@ Stats.time "printCIL"
  *)
 
 (* Describe what we are interested in examining within CIL *)
-(* TODO: Start here.  Need to: 
- *
- * - write unit tests that overwrite allocated data and fail
- *
- * - write unit tests that release allocated data and fail
- * 
- * Both of these problems result from the claims list not being properly updated
- * within the CallerAllocates module
- *)
 
 type test_data = {
   lval_ker_malloc : bool ref;
@@ -53,6 +44,8 @@ type test_data = {
   return_make_graph_return_bad_a : bool ref;
   return_make_graph_return_bad_b : bool ref;
   return_free_graph : bool ref;
+  bad_allocate_a : bool ref;
+  bad_allocate_b : bool ref;
 };;
 
 
@@ -71,6 +64,8 @@ let mem_util_data = {
   return_make_graph_return_bad_a = ref false;
   return_make_graph_return_bad_b = ref false;
   return_free_graph = ref false;
+  bad_allocate_a = ref false;
+  bad_allocate_b = ref false;
 };;
 
 
@@ -146,6 +141,7 @@ let test_lval =
 ;;
 
 
+
 class testVisitorReturn = object (self)
   inherit nopCilVisitor
 
@@ -203,12 +199,73 @@ let test_return =
   )
 ;;
 
+
+
+(* TODO: Start here.  Need to: 
+ *
+ * - write unit tests that overwrite allocated data and fail
+ *
+ * - write unit tests that release allocated data and fail
+ * 
+ * Both of these problems result from the claims list not being properly updated
+ * within the CallerAllocates module
+ *)
+class testVisitorBadAllocate = object (self)
+  inherit nopCilVisitor
+
+  method vfunc (f:fundec) =
+
+    IsEquivalent.generate_equiv f cilFile;
+    
+    let check_alloc_lval (vl: varinfo list) : bool =
+      
+      let allocated = 
+        List.filter (fun v -> hasAttribute "sos_claim" v.vattr) vl
+      in
+        
+        List.for_all (fun v -> CAL.lval_is_allocated v f) allocated
+    in
+           
+    
+      match f with 
+          _ when (f.svar.vname = "bad_allocate_a") ->
+            mem_util_data.bad_allocate_a :=  not (check_alloc_lval f.sformals);
+            DoChildren
+
+        | _ when (f.svar.vname = "bad_allocate_b") ->
+            mem_util_data.bad_allocate_b :=  not (check_alloc_lval f.sformals);
+            DoChildren
+
+        | _ -> DoChildren
+end
+
+
+let test_bad_allocate_a = 
+  visitCilFileSameGlobals (new testVisitorBadAllocate) cilFile;
+  TestCase(fun _ -> 
+             assert_bool "Incorrect upkeep of allocated data"
+               !(mem_util_data.bad_allocate_a) 
+  )
+;;
+
+
+let test_bad_allocate_b = 
+  visitCilFileSameGlobals (new testVisitorBadAllocate) cilFile;
+  TestCase(fun _ -> 
+             assert_bool "Incorrect upkeep of allocated data"
+               !(mem_util_data.bad_allocate_b) 
+  )
+;;
+
+
 (* Run all the tests *)
 let suite_equivClone = 
   TestLabel ("CallerAllocatesLval", 
              TestList [
                TestLabel ("callerAllocatesUnit.c test_lval:", test_lval);
                TestLabel ("callerAllocatesUnit.c test_return:", test_return);
+               TestLabel ("Upkeep", test_bad_allocate_a);
+               TestLabel ("Upkeep", test_bad_allocate_b);
              ]
   )
 ;;

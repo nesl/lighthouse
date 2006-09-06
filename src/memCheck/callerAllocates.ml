@@ -117,7 +117,12 @@ module DFF = struct
   (* An instruction can cause a state to transition from Empty to Full if it
    * stores allocated data into the target. *)
   (* TODO: Current implementation ignores this latter point and is assuming that
-   * an expression never has to leave the table. 
+   * an expression never has to leave the table.  Unit tests that demonstarte
+   * this:
+   *
+   * - overwrite allocated data
+   *
+   * - release allocated data
    *)
   let doInstr (i: instr) (state: t): t DF.action = 
 

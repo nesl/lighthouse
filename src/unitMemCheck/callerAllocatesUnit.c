@@ -138,6 +138,23 @@ void free_graph(struct graph * g __attribute__((sos_release))) {
 }
 
 
+void* __attribute__((sos_claim)) bad_allocate_a(int size) {
+    void *ptr;
+    ptr = malloc(size);
+    ptr = 0;
+    return ptr;
+}
+
+
+void* __attribute__((sos_claim)) bad_allocate_b(int size) {
+    void *ptr;
+    ptr = malloc(size);
+    free(ptr);
+    return ptr;
+}
+
+
+
 // Set up data for testing!!!
 
 int main() {
