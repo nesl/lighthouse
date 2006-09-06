@@ -201,14 +201,10 @@ let test_return =
 
 
 
-(* TODO: Start here.  Need to: 
- *
- * - write unit tests that overwrite allocated data and fail
- *
- * - write unit tests that release allocated data and fail
- * 
- * Both of these problems result from the claims list not being properly updated
- * within the CallerAllocates module
+(*
+ * Both of these functions test to see if the claims list is being properly 
+ * updated within the CallerAllocates module.  At the time of writing, both of
+ * these tests fail :-(  
  *)
 class testVisitorBadAllocate = object (self)
   inherit nopCilVisitor
