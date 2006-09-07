@@ -10,15 +10,15 @@ module S = Set
 
 
 (* Runtime debuging flags. *)
-let dbg_equiv_i = ref false;;
-let dbg_equiv_combine = ref false;;
-let dbg_equiv_get_aliases = ref false;;
-let dbg_equiv_get_equiv_set = ref false;;
-let dbg_equiv_stmt_summary = ref false;;
+let dbg_is_equiv_i = ref false;;
+let dbg_is_equiv_c = ref false;;
+let dbg_is_equiv_get_aliases = ref false;;
+let dbg_is_equiv_get_equiv_set = ref false;;
+let dbg_is_equiv_stmt_summary = ref false;;
 let verbose = ref false;;
 
 (* Dataflow specific debugging *)
-let dbg_equiv_df = ref false;;
+let dbg_is_equiv_df = ref false;;
 
 (* Reference to the current statment *)
 let currentStmt = ref (mkEmptyStmt ());;
@@ -152,7 +152,7 @@ module DFM = struct
 
   (* Vital stats for this dataflow. *)
   let name = "equivFlow";;
-  let debug = dbg_equiv_df;;
+  let debug = dbg_is_equiv_df;;
   type t = equiv_table;;
 
   (* Basic util functions to jumpstart dataflow. *)
@@ -172,7 +172,7 @@ module DFM = struct
   let combinePredecessors (s: stmt) ~(old: t) (new_state: t) : t option =  
 
     (* Print incoming state *)
-    if (!dbg_equiv_combine) then (
+    if (!dbg_is_equiv_c) then (
       ignore (printf "IS_EQUIV COMBINE: Examining State: %d:\n" s.sid);
       ignore (printf "IS_EQUIV COMBINE: Incoming old state:\n");
       print_equiv_table old;
@@ -208,7 +208,7 @@ module DFM = struct
         [] old
     in
 
-      if (!dbg_equiv_combine) then (
+      if (!dbg_is_equiv_c) then (
         ignore (printf "IS_EQUIV COMBINE: Outging state:\n");
         print_equiv_table state;
         flush stdout;
@@ -243,7 +243,7 @@ module DFM = struct
    *)
   let getEquiv (e:exp) (state:t) : exp list = 
     
-    if !dbg_equiv_get_aliases then (
+    if !dbg_is_equiv_get_aliases then (
       ignore (printf 
                 "IsEquivalent.DFM.getEquiv: Alias search looking at expression %a\n" 
                 d_exp e);
@@ -268,7 +268,7 @@ module DFM = struct
 
         | AddrOf lv
         | StartOf lv ->
-            if !dbg_equiv_get_aliases then (
+            if !dbg_is_equiv_get_aliases then (
               ignore (printf "Alias search stopping with terminal expression %a\n" d_exp e);
               flush stdout;
             );
@@ -327,7 +327,7 @@ module DFM = struct
       l1 := get_all_aliases !l0;
 
       while not ((compare !l0 !l1) = 0) do
-        if !dbg_equiv_get_aliases then (
+        if !dbg_is_equiv_get_aliases then (
           ignore (printf "Aliases of expression %a:\n" d_exp e);
           List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) !l0;
           flush stdout;
@@ -336,7 +336,7 @@ module DFM = struct
         l1 := (get_all_aliases !l0);
       done;
   
-      if !dbg_equiv_get_aliases then (
+      if !dbg_is_equiv_get_aliases then (
         ignore (printf "Aliases of expression %a:\n" d_exp e);
         List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) !l0;
         flush stdout;
@@ -351,7 +351,7 @@ module DFM = struct
    
     (* Debugging  helper function *)
     let dbg e1 e2 t =
-      if (!dbg_equiv_i) then (
+      if (!dbg_is_equiv_i) then (
         ignore (printf "isEquiv: doInstr: %a\n  maps exp %a to %a\n" 
                   d_instr i d_exp e1 d_exp e2);
         print_equiv_table t;
@@ -392,7 +392,7 @@ module DFM = struct
       in
 
         (* Print the aliases *) 
-        if (!dbg_equiv_i) then (
+        if (!dbg_is_equiv_i) then (
           ignore (printf "isEquiv: doInstr: Found aliases of expression %a:\n" d_exp e);
           List.iter
             (fun e -> ignore (printf "  %a\n" d_exp e))
@@ -442,7 +442,7 @@ module DFM = struct
 
       | Call (None, _, formals, _) ->
           let state = List.fold_left (fun s e -> kill e s) state formals in
-            if (!dbg_equiv_i) then (
+            if (!dbg_is_equiv_i) then (
               ignore (printf "isEquiv: doInstr: %a\n" d_instr i);
               print_equiv_table state;
               flush stdout;
@@ -471,7 +471,7 @@ module DFM = struct
     
     currentStmt := s;
     
-    if (!dbg_equiv_stmt_summary) then (
+    if (!dbg_is_equiv_stmt_summary) then (
       ignore (printf "isEquiv: doInstr: Entering statement %d with state\n" s.sid); 
       print_equiv_table state;
       flush stdout
@@ -552,7 +552,7 @@ let get_equiv_set (e:exp) (id:int) : (exp list) =
           let indirect = (DFM.getEquiv e table)
           in
 
-            if !dbg_equiv_get_equiv_set then (
+            if !dbg_is_equiv_get_equiv_set then (
               ignore (printf "\n");
               ignore (printf "Direct to %a:\n" d_exp (stripCasts e));
               List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) direct;

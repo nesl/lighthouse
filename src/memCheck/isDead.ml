@@ -25,7 +25,7 @@ type status = Dead | Loops | Error;;
 (* Runtime debuging flags. *)
 let dbg_is_dead_s = ref false;;
 let dbg_is_dead_i = ref false;;
-let dbg_is_dead_combine = ref false;;
+let dbg_is_dead_c = ref false;;
 let enable_loop = ref false;;
                          
 (* Dataflow specific debugging *)

@@ -43,12 +43,12 @@ class testVisitor = object
 
   (* Prepare equiv clone information *)
   method vfunc (f:fundec) =
-    IE.dbg_equiv_i := false;
-    IE.dbg_equiv_combine := false;
-    IE.dbg_equiv_stmt_summary := false;
-    IE.dbg_equiv_get_aliases := false;
-    IE.dbg_equiv_get_equiv_set := false;
-    IE.dbg_equiv_df := false;
+    IE.dbg_is_equiv_i := false;
+    IE.dbg_is_equiv_c := false;
+    IE.dbg_is_equiv_stmt_summary := false;
+    IE.dbg_is_equiv_get_aliases := false;
+    IE.dbg_is_equiv_get_equiv_set := false;
+    IE.dbg_is_equiv_df := false;
 
     IE.generate_equiv f cilFile;
     DoChildren

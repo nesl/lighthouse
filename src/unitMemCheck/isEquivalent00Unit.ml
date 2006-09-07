@@ -5,12 +5,12 @@ open Cil
 
 module IE = IsEquivalent;;
 
-IE.dbg_equiv_i := false;;
-IE.dbg_equiv_combine := false;;
-IE.dbg_equiv_stmt_summary := false;;
-IE.dbg_equiv_get_aliases := false;;
-IE.dbg_equiv_get_equiv_set := false;;
-IE.dbg_equiv_df := false;;
+IE.dbg_is_equiv_i := false;;
+IE.dbg_is_equiv_c := false;;
+IE.dbg_is_equiv_stmt_summary := false;;
+IE.dbg_is_equiv_get_aliases := false;;
+IE.dbg_is_equiv_get_equiv_set := false;;
+IE.dbg_is_equiv_df := false;;
 
 (* Set up a file for running tests *)
 let inputFile = "isEquivalent00Unit.c";;

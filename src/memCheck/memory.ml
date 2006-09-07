@@ -1,339 +1,248 @@
-open Pretty
-open Cil
+(** Driver module for the Lighthouse application *)
 
-open Simplemem
-open Simplify
-open MakeOneCFG
+(* Core CIL functionality *)
+open Pretty;;
+open Cil;;
+module E = Errormsg;;
 
-module IH = Inthash
-module DF = IsDead
-module OF = IsStored
-module FF = CallerAllocates
-module RF = CallerAllocates
-module U = MemUtil
-module E = Errormsg
-module IE = IsEquivalent             
+(* Custom analysis *)
+module ID = IsDead;;
+module IS = IsStored;;
+module CA = CallerAllocates;;
+module MU = MemUtil;;
+module IE = IsEquivalent;;
+module MA = MayAliasWrapper
 
-(* State describing what happens to data from an "interesting" point in the
- * program.  Dead implies that the data is treated as dead on ALL paths from
- * that point forward.  Store implies that the data is stored exactly once on
- * EACH path from that point forward.  Any other state is an Error state.
- *)
-type flowState = Error | Loops | Dead | Store
-  
-(* Run time debugging flags. *)
-let dbg_free_exp = ref false
-let dbg_alloc_exp = ref false
-let dbg_alloc_stores = ref false
-let dbg_ptr_arith = ref false
-                         
-(* State collected by the memory module to help with calls to the IsStored
- * module *)
+(** {1 Overview of Transformations} 
+  *
+  * Lighthouse performs a number of transformations to produce a C file
+  * that is easier to analyze.  These transformations include:
+  * 
+  * - [Simplemem] all lvalues involve at most one memory reference
+  * - [Simplify] a form of three-address code
+  * - [Oneret] all function bodies have at most one return statement
+  * - [MakeOneCFG] seperate each instruction into its own [Cil.stmt] 
+  * - [Ptranal] interprocedural points-to analyses (must be run exactly once)
+  * - [AddAnnotations] use external file to add attributes to function formals
+  *)                                      
+ 
+
+
+(** {1 Debugging Options}
+  *
+  * Enable more verbose output from the analysis.  Usefull for debugging
+  * purposes.
+  *)
+let dbg_free_exp = ref false;;
+let dbg_alloc_exp = ref false;;
+let dbg_alloc_stores = ref false;;
+let dbg_ptr_arith = ref false;;
+
+
+
+(** {1 Global State}
+  *
+  * Lighthouse uses global state to shuttle information between different parts
+  * of its analysis.  These states include:
+  *)
+
+(** [global_stores] Global variables. *)
 let global_stores: exp list ref = ref [];;
+
+(** [local_stores] Local variables that have the "sos_store" attribute set
+  * indicating that they may be used to persistently store data. *)
 let local_stores: exp list ref = ref [];;
-let current_func: fundex ref = ref dummyFunDec;;
 
-(* Determine if allocated data is stored into a store. *)
-let allocDataTreatment alloced s iop = 
-  OF.targets := alloced;
-  
-  if (List.length alloced > 1) then
-    ignore(E.bug "Analysis unable to handle statement allocing multiple expressions\n");
-  
-  if !dbg_alloc_exp then
-    (
-      ignore(printf "ALLOC EXP: Statement %a allocates:\n" d_stmt s);
-      List.iter 
-        (fun e -> ignore (printf "ALLOC EXP:  %a\n" d_exp e)) 
-        !OF.targets;
-    );
+(** [cil_file] CIL file being analyzed. *)
+let cil_file: file ref = ref dummyFile;;
 
+(** {2 State Utility Functions}
+  *
+  * Along with the global state are utility functions used to help gather the
+  * state.  At some point the global variables may be replaced with direct
+  * function calls to generate the state of interest. 
+  *)
 
-  IH.clear OF.DFO.stmtStartData;
-
-  (*List.iter (fun s -> IH.add OF.DFO.stmtStartData s.sid OF.MustTake) s.succs;*)
-  (*OF.Track.compute s.succs;*)
- 
-  begin
-    match iop with 
-        Some i ->
-          (* Note is instruction saves data into a store *)  
-          let isStore = 
-            match i with
-                Set (lv, _, _) 
-              | Call (Some lv, _, _, _) ->
-                  List.exists 
-                    (fun store -> 
-                       IE.is_equiv (Lval lv) store s.sid)
-                    !OF.stores
-              | _ -> false
-          in
-              
-            if (isStore) then (
-              IH.add OF.DFO.stmtStartData s.sid OF.Taken;
-            ) else (
-              IH.add OF.DFO.stmtStartData s.sid OF.MustTake;
-            );
-      | None ->
-          IH.add OF.DFO.stmtStartData s.sid OF.MustTake;
-  end;
-  
-  OF.Track.compute [s];
-     
-  (* Track the tuple (seen error, been taken) *)
-  
-  let (error, taken) = 
-    IH.fold
-      (fun sid t (error, taken) -> 
-         match t with   
-           | OF.ReturnTaken 
-             -> 
-               (error, true)
-           
-           | OF.MustTake 
-           | OF.Taken 
-           | OF.Null 
-             -> 
-               (error, taken)
-           
-           | OF.IfNull 
-           | OF.Error 
-             -> 
-               (true, taken)
-      )
-      OF.DFO.stmtStartData
-      (false, false)
-  in
-
-    if (not error && taken) then Store else Error
+let get_global_vars (f: file): exp list = 
+  foldGlobals 
+    f
+    (fun s g -> match g with
+         GVarDecl (v, l) | GVar (v, _, l) -> (Lval (var v))::s
+       | GFun (fd, l) -> s
+       | _ -> s
+    ) 
+    []
 ;;
-  
-
-(* CIL visitor to verify that a strict "exactly one owner" memory model is
-* followed in a program. *)
-class memoryVisitor = object
-  inherit nopCilVisitor
-
-  val funStartStmt = ref (mkEmptyStmt ());
-  val currentStmt = ref (mkEmptyStmt ());
-
-                    
-  method vfunc (f:fundec) = 
-    funStartStmt := List.hd f.sbody.bstmts;
-    local_stores := [];
-    current_func := f;
- 
-    (* Update the must alias analysis for this function *)
-    IE.generate_equiv f;
-
-    List.iter
-      ( fun vi ->
-          
-          (* If formal var has store attribute set we can add it as a valid
-           * store. *)
-          if hasAttribute "sos_store" vi.vattr then (
-            if (!dbg_alloc_stores) then 
-              ignore (printf "ALLOC STORES: Store foraml var: %s\n" vi.vname);
-
-            (* Add formal prameteres that release data to caller into stores
-             * used by the ownFlow analysis. *)
-            (* TODO: Technically, all of these should be saved up and appended
-             * to the store AFTER we look at all formal parameters!  This
-             * prevents us from using this formal parameter as a store for
-             * another formal parameter. *)
-            local_stores := (Lval (var vi))::(!local_stores);
-
-          );
-          
-         
-
-          (* If formal var has release attribute set, then this function must
-           * store or release that formal variable. *) 
-          if (hasAttribute "sos_release" vi.vattr) && (not (f.svar.vname = "ker_free")) then (
-            if !dbg_alloc_exp then
-              ignore (printf "ALLOC EXP: Function %s has formal var %s with release attribute\n" 
-                        f.svar.vname vi.vname);
-
-            let alloced = [Lval (var vi)] in
-              match (allocDataTreatment alloced (List.hd f.sbody.bstmts) None) with
-                  Store -> ()
-                | _ -> 
-                    ignore (E.warn 
-                              "Formal var %s must be stored or released in function %s\n" 
-                              vi.vname f.svar.vname);
-          
-          );
 
 
-          (* If formal var has claim attribute set, then this function must
-           * store or release that formal variable. Also, we need to add the var
-           * to our list of "stores". *) 
-
-          if hasAttribute "sos_claim" vi.vattr then (
-            if !dbg_free_exp then
-              ignore (printf "FREE EXP: Function %s has formal var %s with claim attribute\n" 
-                        f.svar.vname vi.vname);
-            if (!dbg_alloc_stores) then 
-              ignore (printf "ALLOC STORES: Store foraml var: %s\n" vi.vname);
-
-            (* Add formal prameteres that release data to caller into stores
-             * used by the ownFlow analysis. *)
-            (* TODO: Technically, all of these should be saved up and appended
-             * to the store AFTER we look at all formal parameters!  This
-             * prevents us from using this formal parameter as a store for
-             * another formal parameter. *)
-            OF.stores := (Lval (var vi))::(!OF.stores);
-
-            (* Check that this reference is filled in before function returns. *)
-            if not (FF.lval_is_allocated vi f) then
-              ignore (E.warn 
-                        "Formal var %s must be referenced to memory before end of function %s\n" 
-                        vi.vname f.svar.vname);
-          );
-          ()
-      )
-      f.sformals;
-    
-    (* Use a special case to monitor for attributes on return values. *)
-    (* TODO: Merge this into the code above. *)
-    begin
-      match f.svar.vtype with
-          TFun (t, _, _, _) when 
-            (
-              (hasAttribute "sos_claim" (typeAttrs t)) && 
-              (not (f.svar.vname = "ker_msg_take_data")) &&
-              (not (f.svar.vname = "ker_malloc"))
-            ) ->
-            begin          
-
-              if !dbg_free_exp then
-                ignore (printf "FREE EXP: Function %s returns value with claim attribute\n" 
-                          f.svar.vname);
-
-              (* Check that this reference is filled in before function returns. *)
-              IH.clear RF.DFR.stmtStartData;
-              IH.add RF.DFR.stmtStartData (List.hd f.sbody.bstmts).sid RF.Empty;
-              RF.Track.compute [List.hd f.sbody.bstmts];
-
-
-              let (error, full) = 
-                IH.fold
-                  (fun sid t (error, taken) -> 
-                     match t with   
-                         RF.Empty -> (error, taken)
-                       | RF.Full -> (error, true)
-                       | RF.Error -> (true, taken)
-                  )
-                  RF.DFR.stmtStartData
-                  (false, false)
-              in
-
-                if (not error && full) then
-                  ()
-                else (
-                  ignore (
-                    E.warn 
-                      "Return value must reference memory in function %s\n" 
-                      f.svar.vname);
-                  ()
-                )
-
-            end
-
-        | TFun (t, _, _, _) when (hasAttribute "sos_release" (typeAttrs t)) ->
-            ignore (E.warn 
-                      "Not allowed to set sos_release attribute.  Found in function %s\n"
-                      f.svar.vname);
-            ()
-        | _ -> 
-            ()
-    end;
+let get_local_stores (f: fundec): exp list = 
+  List.map 
+    (fun v -> (Lval (var v)))
+    (List.filter (fun v -> hasAttribute "sos_store" v.vattr) (f.slocals @ f.sformals))
+;;
         
-    DoChildren
+
+
+(** {1 Lighthouse Visitor} 
+  *
+  * This is where all the action is.  This visitor traverses a [Cil.file] to
+  * look for violations of a strict "exactly once" resource ownership model.
+  * The basic idea behind this model is that a given resource is always owned by
+  * exactly one entity.  Ownership can be transfered, but never deplicated or
+  * removed.
+  *
+  * An example of this can be seen in memory allocation.  The [malloc] operation
+  * in C can be thought of as transfering ownership for a block of memory from
+  * the kernel to a function.  Conversly, [free] transfers memory from the
+  * function back to the kernel.  A memory leak appears as a failure for the
+  * function to properly (presestantly) store a reference to the memory it
+  * allocated.  Attempting to dereferece a pointer to freed memory appears as a
+  * violation of each resource having exactly one owner, since the freed memory
+  * is now owned by the kernel but a user function is trying to access it.
+  *)
+
+class memoryVisitor = object inherit nopCilVisitor
+
+  (** {2 Visitor State} *)
+                               
+  (** Global state used to leak statement information to other parts of the
+    * visitor. *)
+  val currentStmt = ref (mkEmptyStmt ());
+  val currentFunc = ref dummyFunDec;
+
                     
+  (** {2 Visitor Methods} *)
+
+  (** {3 Function Visitor} *)
+  method vfunc (f:fundec) = 
+
+    (** The function visitor looks for violations of the promises made by the
+      * function prototype.  The visitor checkes that:
+      *
+      * - formals with the "sos_release" attribute are either stored or released
+      * by the function
+      * 
+      * - formals (or return value) with the "sos_claim" attribute set referece
+      * dynamicly memory that can be released to the caller by the end of the
+      * function
+      *
+      * This is accomplished via the following steps *)
+
+    (** - Note the current function *)
+    currentFunc := f;
+
+    (** - Update the must alias analysis for this function *)
+    IE.generate_equiv f !cil_file;
+
+    (* - Generate the local stores for this function *)
+    local_stores := get_local_stores f;
+
+    (** - Ensure that each formal with the "sos_release" attribute set is stored or
+      * relead by this function, since it is being released by the caller. *)
+    let bad_formal_storage = 
+      List.filter
+        (fun v -> not (IS.is_stored_func (Lval (var v)) f (!local_stores @ !global_stores)))
+        (List.filter (fun v -> hasAttribute "sos_release" v.vattr) f.sformals)
+    in
+
+    (** - Ensure that each formal with the "sos_claim" attribute set is allocated
+      * by the function, so that it can be claimed by the caller. *)
+    let bad_formal_allocation = 
+      List.filter  
+        (fun v -> not (CA.var_is_allocated v f))
+        (List.filter (fun v -> hasAttribute "sos_release" v.vattr) f.sformals)
+    in
+
+    (** - If the return value has the "sos_claim" attribute set, ensure that this
+      * function is allocating data to return to the caller. *)
+    let (return_type, _, _, _) = splitFunctionType f.svar.vtype in
+    let bad_return_allocation = 
+      if (hasAttribute "sos_release" (typeAttrs return_type)) then 
+        not (CA.return_is_allocated f)
+      else 
+        false
+    in
+
+
+      (** - Print error messages for any errors identified from the above checkes. *)
+
+      List.iter 
+        (fun v -> E.error "Function %s fails to store formal variable %s" f.svar.vname v.vname) 
+        bad_formal_storage;
+
+      List.iter 
+        (fun v -> E.error "Function %s fails to fill formal variable %s" f.svar.vname v.vname) 
+        bad_formal_allocation;
+
+      if bad_return_allocation then
+        E.error "Function %s fails to return allocated memory" f.svar.vname;
+
+      DoChildren
+
+
+        
+  (** {3 Statment Visitor} *)
   method vstmt (s:stmt) =
+
+    (** The statement visitor simply updates a global reference to track the
+      * current statement.  This information is importent to analysis done by
+      * the underlying instruction level visitor. *)
     currentStmt := s;
     DoChildren
 
+      
+      
+  (** {3 Instruction Visitor} *)
   method vinst (i:instr) =
  
-    let alloced = U.getOwn i in
-    let freed = U.get_released i in
+    (** Identify all expressions that this instruction improperly claims or
+    * releases.  This is accomplished by: *)
     
-      (* Match this instruction with any of: alloc, free, combo, or neither *)
-      match ((List.length alloced > 0), (List.length freed > 0)) with
-          
-          (* Neither -> move on to next instruction *)  
-          (false, false) -> 
-            DoChildren
-
-        (* Alloc -> insure that data is 'taken' exactly once on each path
-         * between here and a return, or between here and a new overriding
-         * alloc site.  Debug output listing alloc site and validity (with
-         * proof). *)  
-        | (true, false) ->
-            begin
-              match (allocDataTreatment alloced !currentStmt (Some i)) with
-                  Store ->
-                    DoChildren
-                | _ -> 
-                    ignore (E.warn 
-                              "Alloced data from instruction %a\nis not stored\n" 
-                              d_instr i);
-                    DoChildren
-            end
-
-
-        (* Free -> insure that data is treated as 'dead' on each path between
-         * here and a return, or between here and a new overriding alloc site.
-         * Debug output listing free site and validity (with proof). *)  
-        (* TODO: Looping specfic warning output is missing due to the limits of
-         * the is_dead interface *)
-        | (false, true) ->
-            
-            List.iter 
-              (fun e ->
-
-                 if !dbg_free_exp then
-                   ignore (printf 
-                             "FREE EXP: Statement %a frees: %a\n" 
-                             d_stmt s d_exp e);
-                 
-                 if not (is_dead e s) then
-                   ignore (E.warn 
-                             "Potential access to dead data freed in instruction %a\n"
-                             d_instr i);
-              )
-              freed;
-
-            DoChildren
-
-        (* Combo -> flag an error since CIL should prohibit this *)  
-        | (true, true) ->
-            ignore (E.bug "Instruction may not both free and alloc");
-            DoChildren
-
-
-end
-
-class ptrArithVisitor = object
-  inherit nopCilVisitor
-
-  method vexpr (e : exp) : exp visitAction =
-    let find_pointer_arithmetic e = 
-      match e with
-          BinOp (_, e1, _, _) when (isPointerType (typeOf e1) || isArrayType (typeOf e1)) -> 
-            if !dbg_ptr_arith then
-              ignore (printf "Dropping offset into pointer in expression %a\n" d_exp e);
-            e1
-        | _ -> 
-            e
-    
+    (** - Ensure that any expression that must be claimed as a result of this
+      * instruction is claimed before the end of the current function. *)
+    let bad_claims = 
+      List.filter
+        (fun e -> not (IS.is_stored_instr 
+                         e 
+                         !currentStmt 
+                         i 
+                         !currentFunc 
+                         (!local_stores @ !global_stores)))
+        (MU.get_claim i)
     in
-      ChangeDoChildrenPost ((find_pointer_arithmetic e), (fun x -> x))
+
+    (** - Ensure that any expression that is released by this instruction is
+      * treated as dead until the end of the current function. *)
+    let bad_releases = 
+      List.filter
+        (fun e -> ID.is_dead e !currentStmt)
+        (MU.get_released i)
+    in
+
+      (** - Alert the user to any violations. *)
+
+      List.iter
+        (fun e -> E.error "Expression %a is not properly claimed after instruction %a\n" 
+                    d_exp e d_instr i)
+        bad_claims;
+
+      List.iter
+        (fun e -> E.error "Expression %a is not treated as dead after instruction %a\n"
+                    d_exp e d_instr i)
+        bad_releases;
+
+      DoChildren
+      
 end
 
 
+(** {1 Utility and Driver Functions} *)
+
+(** {2 File Output} *)
+
+(** Utility function used to open a file for writing the transformed program
+  * that Lighthouse then analyzes.  This transformed program should be
+  * functionally equivalent to the original. *)
 let openFile (what: string) (takeit: out_channel -> unit) (fl: string) = 
   if !E.verboseFlag then
     ignore (Printf.printf "Setting %s to %s\n" what fl);
@@ -342,140 +251,131 @@ let openFile (what: string) (takeit: out_channel -> unit) (fl: string) =
      raise (Arg.Bad ("Cannot open " ^ what ^ " file " ^ fl)))
 ;;
 
+
+(** Reference to the channel that will be used to output the transformed code to
+  * file. *)
 let outChannel : out_channel option ref = ref None;;
 
+
+(** {2 Command Line Options} *)
+
+(** Descrimption of the command line interface to Lighthouse. *)
 let argDescr = [
 
-      (* Debugging for free *)
-      
-      ("--mem_dbg_free_exp", Arg.Unit (fun _ -> dbg_free_exp := true),
-       "Print freed expressions");
-     
-      ("--mem_dbg_free_df", Arg.Unit (fun _ -> DF.dbg_free_df := true),
-       "Dataflow specific debugging for the freed data flow");
-     
-      ("--mem_dbg_free_dead_s", Arg.Unit (fun _ -> DF.dbg_free_dead_s := true),
-       "List if a non-instruction statemnt treats data as dead");
-     
-      ("--mem_dbg_free_dead_i", Arg.Unit (fun _ -> DF.dbg_free_dead_i := true),
-       "List if an instruction treats data as dead");
-     
-      ("--mem_dbg_free_combine", Arg.Unit (fun _ -> DF.dbg_free_combine := true),
-       "Print all joins exectued in data flow examining freed data");
-     
-      (* Debugging for alloc *)
+  (* Configuration options *)
 
-      ("--mem_dbg_alloc_exp", Arg.Unit (fun _ -> dbg_alloc_exp := true),
-       "Print alloced expressions");
-    
-      ("--mem_dbg_alloc_stores", Arg.Unit (fun _ -> dbg_alloc_stores := true),
-       "Print all stores located in code");
-      
-      ("--mem_dbg_alloc_df", Arg.Unit (fun _ -> OF.dbg_alloc_df := true),
-       "Dataflow specific debuging for the alloc data flow");
-      
-      ("--mem_dbg_alloc_store_i", Arg.Unit (fun _ -> OF.dbg_alloc_store_i := true),
-       "List if an instruction stores data in a store");
-     
-      ("--mem_dbg_alloc_store_s", Arg.Unit (fun _ -> OF.dbg_alloc_store_s := true),
-       "List statement level debuging info abotu stores");
-     
-      ("--mem_dbg_alloc_combine", Arg.Unit (fun _ -> OF.dbg_alloc_combine := true),
-       "Print all joins exectued in data flow examining alloced data");
-     
-      (* Debugging for alias analysis *)
+  ("--enable_loop", Arg.Unit (fun _ -> ID.enable_loop := true),
+   "Enable listing of data freed in loops");
 
-      ("--mem_dbg_may_alias", Arg.Unit (fun _ -> U.dbg_may_alias := true),
-       "List all may alias queries and the results");
-     
-      ("--mem_dbg_equiv_i", Arg.Unit (fun _ -> IE.dbg_equiv_i := true),
-       "Show equiv dataflow processing each instruction");
+  ("--keepunused", Arg.Unit (fun _ -> Rmtmps.keepUnused := true),
+   "Do not remove the unused variables and types");
 
-      ("--mem_dbg_equiv_combine", Arg.Unit (fun _ -> IE.dbg_equiv_combine := true),
-       "Show equiv dataflow joins");
+  ("--out", Arg.String (openFile "output" (fun oc -> outChannel := Some oc)),
+   "Name of the output CIL file");
 
-      ("--mem_dbg_equiv_stmt_summary", Arg.Unit (fun _ -> IE.dbg_equiv_stmt_summary := true),
-       "Dump summary of equivalence sets during dataflow");
+  (* Debugging for IsDead *)
 
-      ("--mem_dbg_equiv_df", Arg.Unit (fun _ -> IE.dbg_equiv_df := true),
-       "Internal dataflow debug");
+  ("--mem_dbg_free_exp", Arg.Unit (fun _ -> dbg_free_exp := true),
+   "Print freed expressions");
 
-      (* Degbugging for the fill analysis *)
-      
-      ("--mem_dbg_fill_combine", Arg.Unit (fun _ -> FF.dbg_fill_combine := true),
-       "List joins in fill dataflow");
-     
-      ("--mem_dbg_fill_i", Arg.Unit (fun _ -> FF.dbg_fill_i := true),
-       "Show handling of instructions in the fill flow");
-     
-      ("--mem_dbg_fill_s", Arg.Unit (fun _ -> FF.dbg_fill_s := true),
-       "Show handling of statements in the fill flow");
-     
-      (* Degbugging for the return analysis *)
-      
-      ("--mem_dbg_return_combine", Arg.Unit (fun _ -> RF.dbg_return_combine := true),
-       "List joins in return dataflow");
-     
-      ("--mem_dbg_return_i", Arg.Unit (fun _ -> RF.dbg_return_i := true),
-       "Show handling of instructions in the return flow");
-     
-      ("--mem_dbg_return_s", Arg.Unit (fun _ -> RF.dbg_return_s := true),
-       "Show handling of statements in the return flow");
-     
-      (* Other random options *)
-      
-      ("--mem_dbg_ptr_arith", Arg.Unit (fun _ -> dbg_ptr_arith := true),
-       "Note when pointer arithmatic is DE_STROY_ED!!!  Ka boom.");
-     
-      ("--enable_loop", Arg.Unit (fun _ -> DF.enable_loop := true),
-       "Enable listing of data freed in loops.");
-    
-      ("--keepunused", Arg.Unit (fun _ -> Rmtmps.keepUnused := true),
-                "do not remove the unused variables and types");
+  ("--dbg_is_dead_i", Arg.Unit (fun _ -> ID.dbg_is_dead_i := true),
+   "Instruction level debugging of the IsDead dataflow");
 
-      ("--out", Arg.String (openFile "output" (fun oc -> outChannel := Some oc)),
-             "the name of the output CIL file");
-    
-    ];;
+  ("--dbg_is_dead_s", Arg.Unit (fun _ -> ID.dbg_is_dead_s := true),
+   "Statement level debugging of the IsDead dataflow");
+
+  ("--dbg_is_dead_c", Arg.Unit (fun _ -> ID.dbg_is_dead_c := true),
+   "Join debugging of the IsDead dataflow");
+
+  (* Debugging for IsStore *)
+
+  ("--mem_dbg_alloc_exp", Arg.Unit (fun _ -> dbg_alloc_exp := true),
+   "Print alloced expressions");
+
+  ("--dbg_is_store_i", Arg.Unit (fun _ -> IS.dbg_is_store_i := true),
+   "Instruction level debugging of the IsStore dataflow");
+
+  ("--dbg_is_store_s", Arg.Unit (fun _ -> IS.dbg_is_store_s := true),
+   "Statement level debugging of the IsStore dataflow");
+
+  ("--dbg_is_store_c", Arg.Unit (fun _ -> IS.dbg_is_store_s := true),
+   "Join debugging of the IsStore dataflow");
+
+  ("-dbg_is_stored_g", Arg.Unit (fun _ -> IS.dbg_is_store_g := true),
+   "Guard level debugging of the IsStored dataflow");
+
+  (* Debugging for alias analysis MayAliasWrapper and IsEquivalent *)
+
+  ("--dbg_may_alias", Arg.Unit (fun _ -> MA.dbg_may_alias := true),
+   "Enable more verbose output from the may alias analysis");
+
+  ("--dbg_is_equiv_i", Arg.Unit (fun _ -> IE.dbg_is_equiv_i := true),
+   "Instruction level debugging of the IsEquivalent dataflow");
+
+  ("--dbg_is_equiv_c", Arg.Unit (fun _ -> IE.dbg_is_equiv_c := true),
+   "Join debugging of the IsEquivalent dataflow");
+
+  ("--dbg_is_equiv_stmt_summary", Arg.Unit (fun _ -> IE.dbg_is_equiv_stmt_summary := true),
+   "Dump summary of incoming statement equivalency sets generated by IsEquivalent dataflow");
+
+  ("--dbg_is_equiv_get_aliases", Arg.Unit (fun _ -> IE.dbg_is_equiv_get_aliases := true),
+   "Dump the result of calls to get_aliases within the IsEquivalent dataflow");
   
-    
-let doFile fn = 
-   
-  let f = Frontc.parse fn () in  
+  ("--dbg_is_equiv_get_equiv_set", Arg.Unit (fun _ -> IE.dbg_is_equiv_get_equiv_set := true),
+   "Dump the result of calles to get_equiv_set within the Isequivalent dataflow");
 
-    (* Execute other modules in the correct order *) 
-    ignore (Simplemem.feature.fd_doit f);
-    ignore (Simplify.feature.fd_doit f);
-    ignore (Oneret.feature.fd_doit f);
-    ignore (MakeOneCFG.feature.fd_doit f);
-    ignore (Ptranal.feature.fd_doit f);
-    ignore (AddAnnotations.feature.fd_doit f);
+  (* Degbugging for CallerAllocates *)
 
-    (* Generate a table to note persistent stores *)
-    (* TODO: this assumes that the store is a global *)
-    global_stores := 
-    foldGlobals 
-      f
-      (fun s g -> match g with
-           GVarDecl (v, l)
-         | GVar (v, _, l) ->
-             if (!dbg_alloc_stores) then 
-               ignore (printf "ALLOC STORES: Store var: %s\n" v.vname);
-             (Lval (var v))::s
-       | GFun (fd, l) -> s
-       | _ -> s
-      ) 
-      [];
+  ("--dbg_caller_allocate_i", Arg.Unit (fun _ -> CA.dbg_caller_allocates_i := true),
+   "Insturtion level debugging of the CallerAlocates dataflow");
 
-    let mVisitor = new memoryVisitor in
-      visitCilFileSameGlobals mVisitor f;
+  ("--dbg_caller_allocate_s", Arg.Unit (fun _ -> CA.dbg_caller_allocates_s := true),
+   "Statement level debugging of the CallerAlocates dataflow");
 
-      (match !outChannel with
-           None -> ()
-         | Some c -> Stats.time "printCIL" 
-                       (dumpFile (!printerForMaincil) c f.fileName) f);
+  ("--dbg_caller_allocate_c", Arg.Unit (fun _ -> CA.dbg_caller_allocates_c := true),
+   "Join debugging of the CallerAlocates dataflow");
+
+];;
+
+
+(** {2 Process a File} *)
+
+(** This is the core driver for Lighthouse.  It explicitly calls the
+  * transformations required for Lighthouse to analyzie the file, and then
+  * visits the transformed file looking for violations of the basic resource
+  * model. *)
+let doFile (file_name: string) : unit = 
+
+  cil_file := Frontc.parse file_name ();
+
+  (* Execute other modules in the correct order *) 
+  ignore (Simplemem.feature.fd_doit !cil_file);
+  ignore (Simplify.feature.fd_doit !cil_file);
+  ignore (Oneret.feature.fd_doit !cil_file);
+  ignore (MakeOneCFG.make_one_cfg !cil_file);
+  ignore (Ptranal.feature.fd_doit !cil_file);
+  ignore (AddAnnotations.feature.fd_doit !cil_file);
+
+  (* Generate a table to note persistent stores *)
+  global_stores := get_global_vars !cil_file;
+
+  (* If requested dump the transformed code to file. *)
+  (match !outChannel with
+       None -> ()
+     | Some c -> Stats.time "printCIL" 
+                   (dumpFile (!printerForMaincil) c !cil_file.fileName) !cil_file);
+
+  (* Visit! *)
+  visitCilFileSameGlobals (new memoryVisitor) !cil_file;
+
+  ()
 ;;
 
+
+(** {2 Read Command Line} *)
+
+(** Read and process the command line, and then run Lighthouse on the requested
+  * file. *)
 let mainFunction () =
 
   let usageMsg = "Usage: memory [options] source-file" in
@@ -504,7 +404,7 @@ let mainFunction () =
 ;;
     
     
-
+(* Do stuff *)
 mainFunction ();;
       
 

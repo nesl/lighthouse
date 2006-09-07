@@ -8,9 +8,9 @@ module IE = IsEquivalent
 module E = Errormsg
 
 (* Runtime debugging flags. *)
-let dbg_caller_allocates_lval_combine = ref false;;
-let dbg_caller_allocates_lval_i = ref false;;
-let dbg_caller_allocates_lval_s = ref false;;
+let dbg_caller_allocates_c = ref false;;
+let dbg_caller_allocates_i = ref false;;
+let dbg_caller_allocates_s = ref false;;
 
 (* Dataflow specific debugging. *)
 let dbg_fill_df = ref false;;
@@ -40,7 +40,7 @@ module DFF = struct
   (********************)
 
   let debug_combine (state: t) (transition: t option): unit =
-    if !dbg_caller_allocates_lval_combine then (
+    if !dbg_caller_allocates_c then (
       ignore (printf "CallerAllocatesLval.DFF.combinePredecessors: ");
       match transition with
           Some _ -> ignore (printf "Join updates to:\n%a\n" pretty state);
@@ -52,7 +52,7 @@ module DFF = struct
 
 
   let debug_instr (i: instr) (state: t) : unit = 
-    if !dbg_caller_allocates_lval_i then (
+    if !dbg_caller_allocates_i then (
       ignore (printf 
                 "CallerAllocatesLval.DFF.doInstr: Instruction %a results in state:\n" 
                 d_instr i);
@@ -135,7 +135,7 @@ module DFF = struct
 
   (* Can a statement take control of data? *)
   let doStmt (s: stmt) (state: t) = 
-    if !dbg_caller_allocates_lval_s then 
+    if !dbg_caller_allocates_s then 
       ignore (printf "CallerAllocatesLval.Dff.doStmt: Examining statement %d %a\n" 
                 s.sid d_stmt s);
     DF.SDefault
@@ -182,7 +182,7 @@ let get_return_statements (f: fundec) : stmt list =
 ;;
 
 
-let lval_is_allocated (v: varinfo) (f: fundec) = 
+let var_is_allocated (v: varinfo) (f: fundec) = 
 
   run_dataflow f;
 

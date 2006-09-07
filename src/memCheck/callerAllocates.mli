@@ -8,21 +8,21 @@
 
 (** {b Debugging} *)
 
-(** Enable debugging of merges within the dataflow *)
-val dbg_caller_allocates_lval_combine : bool ref;;
-
 (** Enable instruction level debugging of the dataflow *)
-val dbg_caller_allocates_lval_i : bool ref;;
+val dbg_caller_allocates_i : bool ref;;
 
 (** Enable statement level debugging of the dataflow *)
-val dbg_caller_allocates_lval_s : bool ref;;
+val dbg_caller_allocates_s : bool ref;;
+
+(** Enable debugging of merges within the dataflow *)
+val dbg_caller_allocates_c : bool ref;;
 
 
 (** {b Query Interface} *)
 
 (* Check to see that function [f] is allocating data into the formal
   * variable described by [v]. *)
-val lval_is_allocated: Cil.varinfo -> Cil.fundec -> bool;;
+val var_is_allocated: Cil.varinfo -> Cil.fundec -> bool;;
 
 
 (* Check to see that function [f] is allocating data into the expression

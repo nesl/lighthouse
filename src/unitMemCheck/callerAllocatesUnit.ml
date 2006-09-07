@@ -6,12 +6,12 @@ open Cil;;
 module MU = MemUtil;;
 module CAL = CallerAllocates;;
 
-CAL.dbg_caller_allocates_lval_combine := false;;
-CAL.dbg_caller_allocates_lval_i := false;;
-CAL.dbg_caller_allocates_lval_s := false;;
-IsEquivalent.dbg_equiv_get_equiv_set := false;;
-IsEquivalent.dbg_equiv_stmt_summary := false;;
-IsEquivalent.dbg_equiv_get_aliases := false;;
+CAL.dbg_caller_allocates_c := false;;
+CAL.dbg_caller_allocates_i := false;;
+CAL.dbg_caller_allocates_s := false;;
+IsEquivalent.dbg_is_equiv_get_equiv_set := false;;
+IsEquivalent.dbg_is_equiv_stmt_summary := false;;
+IsEquivalent.dbg_is_equiv_get_aliases := false;;
 
 
 (* Set up a file for running tests *)
@@ -83,7 +83,7 @@ class testVisitorLval = object (self)
         List.filter (fun v -> hasAttribute "sos_claim" v.vattr) vl
       in
         
-        List.for_all (fun v -> CAL.lval_is_allocated v f) allocated
+        List.for_all (fun v -> CAL.var_is_allocated v f) allocated
     in
            
     
@@ -219,7 +219,7 @@ class testVisitorBadAllocate = object (self)
         List.filter (fun v -> hasAttribute "sos_claim" v.vattr) vl
       in
         
-        List.for_all (fun v -> CAL.lval_is_allocated v f) allocated
+        List.for_all (fun v -> CAL.var_is_allocated v f) allocated
     in
            
     

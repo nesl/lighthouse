@@ -19,7 +19,7 @@ val dbg_is_dead_s : bool ref
 val dbg_is_dead_i : bool ref
 
 (** Enablei verbose output for debugging of joint points *) 
-val dbg_is_dead_combine : bool ref
+val dbg_is_dead_c : bool ref
 
 
 (** {b Analysis Configuration} Options to configure the analysis *)
