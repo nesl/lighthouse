@@ -1,5 +1,6 @@
 # General define of the base Makefile
 OCAMLMAKEFILE = OCamlMakefile
+export OCAMLFLAGS="-g"
 
 ####
 # Global build options

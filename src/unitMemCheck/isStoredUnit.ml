@@ -34,11 +34,14 @@ type test_data_type = {
   pa : exp ref;
   pb : exp ref;
   pc : exp ref;
-  fd : exp ref;
+  pd : exp ref;
+  fa : exp ref;
+  f  : exp ref;
   sa : fundec ref;
   sb : fundec ref;
   sc : fundec ref;
-  fa : fundec ref;
+  sd : fundec ref;
+  ba : fundec ref;
   main : fundec ref;
   stmt_one : stmt ref;
 };;
@@ -48,11 +51,14 @@ let test_data = {
   pa = ref zero;
   pb = ref zero;
   pc = ref zero;
-  fd = ref zero;
+  pd = ref zero;
+  fa = ref zero;
+  f  = ref zero;
   sa = ref dummyFunDec;
   sb = ref dummyFunDec;
   sc = ref dummyFunDec;
-  fa = ref dummyFunDec;
+  sd = ref dummyFunDec;
+  ba = ref dummyFunDec;
   main = ref dummyFunDec;
   stmt_one = ref dummyStmt;
 };;
@@ -75,8 +81,14 @@ class testVisitor = object
       | "pc" ->
           test_data.pc := Lval (var v);
           SkipChildren
-      | "fd" ->
-          test_data.fd := Lval (var v);
+      | "pd" ->
+          test_data.pd := Lval (var v);
+          SkipChildren
+      | "fa" ->
+          test_data.fa := Lval (var v);
+          SkipChildren
+      | "f" ->
+          test_data.f := Lval (var v);
           SkipChildren
       | _ -> SkipChildren
 
@@ -91,8 +103,11 @@ class testVisitor = object
     | _ when (f.svar.vname = "store_c") ->
           test_data.sc := f;
           DoChildren
-    | _ when (f.svar.vname = "fail_a") ->
-          test_data.fa := f;
+    | _ when (f.svar.vname = "store_d") ->
+          test_data.sd := f;
+          DoChildren
+    | _ when (f.svar.vname = "bad_store_a") ->
+          test_data.ba := f;
           DoChildren
     | _ when (f.svar.vname = "main") ->
           test_data.main := f;
@@ -148,7 +163,7 @@ let stores (f:fundec) : exp list =
   let local_stores = 
     List.map 
       (fun v -> (Lval (var v)))
-      (List.filter (fun v -> hasAttribute "sos_store" v.vattr) f.slocals)
+      (List.filter (fun v -> hasAttribute "sos_store" v.vattr) (f.slocals @ f.sformals))
   in
 
     local_stores @ global_stores
@@ -191,16 +206,29 @@ let test_store_c =
 ;;
 
 
-let test_fail_a = 
+let test_store_d = 
   let test = 
-    IE.generate_equiv !(test_data.fa) cilFile;
+    IE.generate_equiv !(test_data.sd) cilFile;
+ 
+    List.for_all
+      (fun e -> IS.is_stored_func e !(test_data.sd) (stores !(test_data.sd)))
+      (get_released_exps !(test_data.sd))
+  in
+    
+    TestCase(fun _ -> assert_bool "store_d" test) 
+;;
+
+
+let test_bad_store_a = 
+  let test = 
+    IE.generate_equiv !(test_data.ba) cilFile;
     not (
       List.for_all
-        (fun e -> IS.is_stored_func e !(test_data.fa) (stores !(test_data.fa)))
-        (get_released_exps !(test_data.fa))
+        (fun e -> IS.is_stored_func e !(test_data.ba) (stores !(test_data.ba)))
+        (get_released_exps !(test_data.ba))
     )
   in
-    TestCase(fun _ -> assert_bool "fail_a" test) 
+    TestCase(fun _ -> assert_bool "bad_store_a" test) 
 ;;
 
 
@@ -245,19 +273,49 @@ let test_pc =
 ;;
 
 
-let test_fd = 
+let test_pd = 
+  let test = 
+    IE.generate_equiv !(test_data.main) cilFile;
+    IS.is_stored_instr 
+      !(test_data.pd)
+      !(test_data.stmt_one) 
+      dummyInstr      
+      !(test_data.main) 
+      (stores !(test_data.main))
+  in
+    TestCase(fun _ -> assert_bool "pd" test) 
+;;
+
+
+let test_fa = 
   let test =
     not ( 
       IE.generate_equiv !(test_data.main) cilFile;
       IS.is_stored_instr 
-        !(test_data.fd)
+        !(test_data.fa)
         !(test_data.stmt_one) 
         dummyInstr      
         !(test_data.main) 
         (stores !(test_data.main))
     )
   in
-    TestCase(fun _ -> assert_bool "fd" test) 
+    TestCase(fun _ -> assert_bool "fa" test) 
+;;
+
+
+let test_f = 
+  let test =
+    not ( 
+      IE.generate_equiv !(test_data.main) cilFile;
+      IS.is_stored_instr 
+        !(test_data.f)
+        !(test_data.stmt_one) 
+        dummyInstr      
+        !(test_data.main) 
+        (stores !(test_data.main))
+    )
+  in
+    TestCase(fun _ -> assert_bool "f" test) 
 ;;
 
 
@@ -270,11 +328,13 @@ let suite_is_stored =
                TestLabel ("IsStored: ", test_store_a);
                TestLabel ("IsStored: ", test_store_b);
                TestLabel ("IsStored: ", test_store_c);
-               TestLabel ("IsStored: ", test_fail_a);
+               TestLabel ("IsStored: ", test_store_d);
+               TestLabel ("IsStored: ", test_bad_store_a);
                TestLabel ("IsStored: ", test_pa);
                TestLabel ("IsStored: ", test_pb);
                TestLabel ("IsStored: ", test_pc);
-               TestLabel ("IsStored: ", test_fd);
+               TestLabel ("IsStored: ", test_fa);
+               TestLabel ("IsStored: ", test_f);
              ]
   )
 ;;
