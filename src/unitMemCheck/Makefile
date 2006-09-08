@@ -61,7 +61,7 @@ export PROJ_may
 
 define PROJ_cal
   SOURCES = ../memCheck/makeOneCFG.ml ../memCheck/addAnnotations.ml ../memCheck/memUtil.ml ../memCheck/isEquivalent.ml ../memCheck/callerAllocates.ml cilDriver.ml callerAllocatesUnit.ml
-  RESULT = callerAllocatesLvalUnit
+  RESULT = callerAllocatesUnit
 endef
 export PROJ_cal
 

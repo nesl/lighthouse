@@ -132,9 +132,9 @@ void make_graph_formal(int size, graph_t *new_graph __attribute__((sos_claim))) 
 }
 
 void free_graph(struct graph * g __attribute__((sos_release))) {
-    free((void *) (g->points));
-    free((void *) (g->edges));
-    free((void *) g);
+    ker_free((void *) (g->points));
+    ker_free((void *) (g->edges));
+    ker_free((void *) g);
 }
 
 
@@ -149,7 +149,7 @@ void* __attribute__((sos_claim)) bad_allocate_a(int size) {
 void* __attribute__((sos_claim)) bad_allocate_b(int size) {
     void *ptr;
     ptr = malloc(size);
-    free(ptr);
+    ker_free(ptr);
     return ptr;
 }
 
