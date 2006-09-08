@@ -78,9 +78,24 @@ let get_global_vars (f: file): exp list =
 let get_local_stores (f: fundec): exp list = 
   List.map 
     (fun v -> (Lval (var v)))
-    (List.filter (fun v -> hasAttribute "sos_store" v.vattr) (f.slocals @ f.sformals))
+    (List.filter 
+       (fun v -> 
+          (hasAttribute "sos_store" v.vattr) 
+           || (hasAttribute "sos_claim" v.vattr)
+       ) 
+       (f.slocals @ f.sformals))
 ;;
         
+
+(** {2 White List} 
+  *
+  * Simple mechanism to white list a few "bottem" functions.
+  *)
+let white_list (v:varinfo) : bool =
+  let skip_functions = ["ker_malloc"; "ker_free"] in
+    List.exists (fun skip -> v.vname = skip) skip_functions
+;;
+    
 
 
 (** {1 Lighthouse Visitor} 
@@ -150,14 +165,14 @@ class memoryVisitor = object inherit nopCilVisitor
     let bad_formal_allocation = 
       List.filter  
         (fun v -> not (CA.var_is_allocated v f))
-        (List.filter (fun v -> hasAttribute "sos_release" v.vattr) f.sformals)
+        (List.filter (fun v -> hasAttribute "sos_claim" v.vattr) f.sformals)
     in
 
     (** - If the return value has the "sos_claim" attribute set, ensure that this
       * function is allocating data to return to the caller. *)
     let (return_type, _, _, _) = splitFunctionType f.svar.vtype in
     let bad_return_allocation = 
-      if (hasAttribute "sos_release" (typeAttrs return_type)) then 
+      if (hasAttribute "sos_claim" (typeAttrs return_type)) then 
         not (CA.return_is_allocated f)
       else 
         false
@@ -167,14 +182,18 @@ class memoryVisitor = object inherit nopCilVisitor
       (** - Print error messages for any errors identified from the above checkes. *)
 
       List.iter 
-        (fun v -> E.error "Function %s fails to store formal variable %s" f.svar.vname v.vname) 
+        (fun v -> 
+           if not (white_list f.svar) then
+             E.error "Function %s fails to store formal variable %s" f.svar.vname v.vname) 
         bad_formal_storage;
 
       List.iter 
-        (fun v -> E.error "Function %s fails to fill formal variable %s" f.svar.vname v.vname) 
+        (fun v -> 
+           if not (white_list f.svar) then
+             E.error "Function %s fails to fill formal variable %s" f.svar.vname v.vname) 
         bad_formal_allocation;
 
-      if bad_return_allocation then
+      if (bad_return_allocation && not (white_list f.svar)) then
         E.error "Function %s fails to return allocated memory" f.svar.vname;
 
       DoChildren
@@ -215,7 +234,7 @@ class memoryVisitor = object inherit nopCilVisitor
       * treated as dead until the end of the current function. *)
     let bad_releases = 
       List.filter
-        (fun e -> ID.is_dead e !currentStmt)
+        (fun e -> not (ID.is_dead e !currentStmt))
         (MU.get_released i)
     in
 
@@ -227,7 +246,7 @@ class memoryVisitor = object inherit nopCilVisitor
         bad_claims;
 
       List.iter
-        (fun e -> E.error "Expression %a is not treated as dead after instruction %a\n"
+        (fun e -> E.error "Expression %a is not treated as dead after instruction %a"
                     d_exp e d_instr i)
         bad_releases;
 
