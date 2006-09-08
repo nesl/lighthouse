@@ -61,15 +61,19 @@ let instr_stores (i: instr) (sid: int) : instr_status =
   in
   
   let is_released (i: instr) (id: int) : bool = 
-    List.exists
-      (fun release -> IE.is_equiv release !target id)
-      (U.get_released i)
+    (List.length (U.get_released i) > 0) &&
+    (List.exists
+       (fun release -> IE.is_equiv release !target id)
+       (U.get_released i)
+    )
   in
     
   let is_overwritten (i: instr) (id: int) : bool = 
-    List.exists
-      (fun release -> IE.is_equiv release !target id)
-      (U.get_claim i)
+    (List.length (U.get_claim i) > 0) &&
+    (List.exists
+       (fun release -> IE.is_equiv release !target id)
+       (U.get_claim i)
+    )
   in
 
     if !dbg_is_store_i then (
@@ -435,17 +439,20 @@ let is_stored_instr
              
   IH.clear DFO.stmtStartData;
 
-  begin match i with
+  let start_state = match i with
       Set (lv, _, _) 
     | Call (Some lv, _, _, _) when (
         List.exists (fun store -> IE.is_equiv (Lval lv) store s.sid) !stores
-      ) -> IH.add DFO.stmtStartData s.sid Taken;
-    | _ -> IH.add DFO.stmtStartData s.sid MustTake;
-  end;
+      ) -> Taken
+    | _ -> MustTake
+  in
 
-  Track.compute [s];
+    List.iter 
+      (fun s -> IH.add DFO.stmtStartData s.sid start_state) 
+      s.succs;
+    Track.compute s.succs;
      
-  is_stored f  
+    is_stored f  
 ;;
   
 
