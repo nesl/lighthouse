@@ -23,6 +23,11 @@ let dbg_is_equiv_df = ref false;;
 (* Reference to the current statment *)
 let currentStmt = ref (mkEmptyStmt ());;
 
+(* List of functions that can allocated and free data *)
+let alloc_funcs = ["malloc"; "ker_malloc"];;
+let free_funcs = ["free"; "ker_free"];; 
+let heap_counter = ref 0;;
+  
 (* Equivalency information will be stored as sets of expressions *)
 module Equiv =
 struct
@@ -440,8 +445,17 @@ module DFM = struct
                 DF.Done state
         end
 
-      | Call (None, _, formals, _) ->
+      | Call (None, e, formals, _) ->
           let state = List.fold_left (fun s e -> kill e s) state formals in
+          let state = match e with
+              Lval (Var v, NoOffset) when (List.mem v.vname alloc_funcs) ->
+                let heap = 
+                  makeVarinfo false ("__heap_" ^ (string_of_int !heap_counter)) voidPtrType
+                in
+                  heap_counter := !heap_counter + 5;
+                  ListSet.add_singleton (Lval (var heap)) state
+            | _ -> state 
+          in
             if (!dbg_is_equiv_i) then (
               ignore (printf "isEquiv: doInstr: %a\n" d_instr i);
               print_equiv_table state;
@@ -449,11 +463,18 @@ module DFM = struct
             );
             DF.Done state
 
-      | Call (Some lv, _, formals, _) ->
- 
-          let state = kill (Lval lv) state in
+      | Call (Some lv, e, formals, _) ->
           let state = List.fold_left (fun s e -> kill e s) state formals in
-          let state = ListSet.add_singleton (Lval lv) state in
+          let state = kill (Lval lv) state in
+          let state = match e with
+              Lval (Var v, NoOffset) when (List.mem v.vname alloc_funcs) ->
+                let heap = 
+                  makeVarinfo false ("__heap_" ^ (string_of_int !heap_counter)) voidPtrType
+                in
+                  heap_counter := !heap_counter + 5;
+                  ListSet.add_pair (Lval lv) (Lval (var heap)) state
+            | _ -> ListSet.add_singleton (Lval lv) state
+          in
             dbg (Lval lv) (Lval lv) state;
             DF.Done state
 
