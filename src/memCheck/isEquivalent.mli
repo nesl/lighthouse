@@ -61,5 +61,7 @@ val get_equiv_set : Cil.exp -> int -> Cil.exp list;;
 (** Print the equivalency sets at the end of the given statement ID *)
 val print_equiv_sets : int -> unit;;
 
+(** Get  the equivalency sets at the end of the given statement ID *)
+val  get_equiv_sets : int -> Cil.exp list list;;
 
                                       

@@ -24,8 +24,8 @@ let dbg_is_equiv_df = ref false;;
 let currentStmt = ref (mkEmptyStmt ());;
 
 (* List of functions that can allocated and free data *)
-let alloc_funcs = ["malloc"; "ker_malloc"];;
-let free_funcs = ["free"; "ker_free"];; 
+let alloc_funcs = ref ["malloc"];;
+let free_funcs = ref ["free"];; 
 let heap_counter = ref 0;;
   
 (* Equivalency information will be stored as sets of expressions *)
@@ -448,7 +448,7 @@ module DFM = struct
       | Call (None, e, formals, _) ->
           let state = List.fold_left (fun s e -> kill e s) state formals in
           let state = match e with
-              Lval (Var v, NoOffset) when (List.mem v.vname alloc_funcs) ->
+              Lval (Var v, NoOffset) when (List.mem v.vname !alloc_funcs) ->
                 let heap = 
                   makeVarinfo false ("__heap_" ^ (string_of_int !heap_counter)) voidPtrType
                 in
@@ -467,7 +467,7 @@ module DFM = struct
           let state = List.fold_left (fun s e -> kill e s) state formals in
           let state = kill (Lval lv) state in
           let state = match e with
-              Lval (Var v, NoOffset) when (List.mem v.vname alloc_funcs) ->
+              Lval (Var v, NoOffset) when (List.mem v.vname !alloc_funcs) ->
                 let heap = 
                   makeVarinfo false ("__heap_" ^ (string_of_int !heap_counter)) voidPtrType
                 in
@@ -533,9 +533,26 @@ let generate_equiv (f:fundec) (cilFile:file): unit =
       (global_vars @ f.sformals @ f.slocals)
   in
 
-  IH.clear DFM.stmtStartData;
-  IH.add DFM.stmtStartData (List.hd f.sbody.bstmts).sid start_state;
-  TrackF.compute [(List.hd f.sbody.bstmts)]
+    (* TODO: Note that this does not handle functions that allocated data into a
+     * formal variable. *)
+    (* TODO: Have not yet addressed the role of free functions *)
+    (* Generate set of functions that may allocated data *)
+    iterGlobals 
+      cilFile 
+      (fun g -> match g with
+           GFun (f, _) ->
+             let (return_type, formals_op, is_vararg, attributes) = 
+               splitFunctionType f.svar.vtype
+             in
+            
+             if (hasAttribute attr_name (typeAttrs return_type)) then
+               alloc_funcs := f.svar.vname :: !alloc_funcs
+      );
+
+    
+    IH.clear DFM.stmtStartData;
+    IH.add DFM.stmtStartData (List.hd f.sbody.bstmts).sid start_state;
+    TrackF.compute [(List.hd f.sbody.bstmts)]
 ;;
 
 
@@ -555,6 +572,15 @@ let print_equiv_sets (id:int) =
         print_equiv_table table
     | None ->
         ignore (printf "\n\nUnable to find state %d\n" id)
+;;
+
+
+(* Get the alias information gatherd for a particular statment ID *)                      
+let get_equiv_sets (id:int) : (exp list list) =
+  match (get_id_state DFM.stmtStartData id) with
+      Some table -> 
+        List.map (fun s -> EquivSet.elements s) table
+    | None -> []
 ;;
 
 
