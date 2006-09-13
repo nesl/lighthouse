@@ -599,20 +599,37 @@ let generate_equiv (f:fundec) (cilFile:file): unit =
       ) 
       []
   in
-
-  let start_state = 
-    List.fold_left
-      (fun start_state v -> ListSet.add_singleton (Lval (var v)) start_state)
-      []
-      (global_vars @ f.sformals @ f.slocals)
-  in
-
+    
     alloc_funcs := !alloc_funcs @ (U.get_alloc_funcs cilFile);
     free_funcs := !free_funcs @ (U.get_free_funcs cilFile);
 
-    IH.clear DFM.stmtStartData;
-    IH.add DFM.stmtStartData (List.hd f.sbody.bstmts).sid start_state;
-    TrackF.compute [(List.hd f.sbody.bstmts)]
+    let start_state = 
+      List.fold_left
+        (fun start_state v -> ListSet.add_singleton (Lval (var v)) start_state)
+        []
+        (global_vars @ f.slocals)
+    in
+
+    let start_state = 
+      List.fold_left
+        (fun start_state v -> 
+           if (hasAttribute "sos_release" v.vattr) then (
+             let heap = 
+               makeVarinfo false ("__heap_" ^ (string_of_int !heap_counter)) voidPtrType
+             in
+               heap_counter := !heap_counter + 5;
+               ListSet.add_pair (Lval (var v)) (Lval (var heap)) start_state
+           ) else (
+             ListSet.add_singleton (Lval (var v)) start_state
+           )
+        )
+        start_state
+        f.sformals
+    in
+
+      IH.clear DFM.stmtStartData;
+      IH.add DFM.stmtStartData (List.hd f.sbody.bstmts).sid start_state;
+      TrackF.compute [(List.hd f.sbody.bstmts)]
 ;;
 
 

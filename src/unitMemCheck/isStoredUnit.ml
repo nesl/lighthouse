@@ -7,12 +7,8 @@ module IE = IsEquivalent;;
 module IS = IsStored;;
 
 
-IS.dbg_is_store_i := false;;
-IS.dbg_is_store_s := false;;
-IS.dbg_is_store_g := false;;
-IS.dbg_is_store_c := false;;
+IS.dbg_is_store := false;;
 
-  
 (* Set up a file for running tests *)
 let inputFile = "isStoredUnit.c";;
 let cilFile = makeCilFile inputFile;;
@@ -29,297 +25,108 @@ let global_stores =
     []
 ;;
 
-(* Describe what we are interested in examining within CIL *)
+
+let stores (f:fundec) : exp list = 
+  let local_stores = 
+    List.map 
+      (fun v -> (Lval (var v)))
+      (List.filter (fun v -> hasAttribute "sos_store" v.vattr) (f.slocals @ f.sformals))
+  in
+    local_stores @ global_stores
+;;
+
+
 type test_data_type = {
-  pa : exp ref;
-  pb : exp ref;
-  pc : exp ref;
-  pd : exp ref;
-  fa : exp ref;
-  f  : exp ref;
-  sa : fundec ref;
-  sb : fundec ref;
-  sc : fundec ref;
-  sd : fundec ref;
-  ba : fundec ref;
-  main : fundec ref;
-  stmt_one : stmt ref;
+  store_a : bool ref;
+  store_b : bool ref;
+  store_c : bool ref;
+  store_d : bool ref;
+  bad_store_a : bool ref;
+  no_release : bool ref;
+  main : bool ref;
 };;
 
 
 let test_data = {
-  pa = ref zero;
-  pb = ref zero;
-  pc = ref zero;
-  pd = ref zero;
-  fa = ref zero;
-  f  = ref zero;
-  sa = ref dummyFunDec;
-  sb = ref dummyFunDec;
-  sc = ref dummyFunDec;
-  sd = ref dummyFunDec;
-  ba = ref dummyFunDec;
-  main = ref dummyFunDec;
-  stmt_one = ref dummyStmt;
+  store_a = ref false;
+  store_b = ref false;
+  store_c = ref false;
+  store_d = ref false;
+  bad_store_a = ref false;
+  no_release = ref false;
+  main = ref false;
 };;
-
 
 
 (* Create a visitor to examine clones *)
 class testVisitor = object
   inherit nopCilVisitor
   
-  (* Snarf the variables of interest *)
-  method vvdec (v:varinfo) =
-    match v.vname with
-      | "pa" ->
-          test_data.pa := Lval (var v);
-          SkipChildren
-      | "pb" ->
-          test_data.pb := Lval (var v);
-          SkipChildren
-      | "pc" ->
-          test_data.pc := Lval (var v);
-          SkipChildren
-      | "pd" ->
-          test_data.pd := Lval (var v);
-          SkipChildren
-      | "fa" ->
-          test_data.fa := Lval (var v);
-          SkipChildren
-      | "f" ->
-          test_data.f := Lval (var v);
-          SkipChildren
-      | _ -> SkipChildren
+  method vfunc (f:fundec) =
 
-  
-  method vfunc (f:fundec) = match f with
-      _ when (f.svar.vname = "store_a") ->
-          test_data.sa := f;
-          DoChildren
-    | _ when (f.svar.vname = "store_b") ->
-          test_data.sb := f;
-          DoChildren
-    | _ when (f.svar.vname = "store_c") ->
-          test_data.sc := f;
-          DoChildren
-    | _ when (f.svar.vname = "store_d") ->
-          test_data.sd := f;
-          DoChildren
-    | _ when (f.svar.vname = "bad_store_a") ->
-          test_data.ba := f;
-          DoChildren
-    | _ when (f.svar.vname = "main") ->
-          test_data.main := f;
-          DoChildren
-    | _ -> DoChildren
+    let safely_stores (f:fundec) : bool =
+      IE.generate_equiv f cilFile;
+      (List.length (IS.not_stored_exps f (stores f))) = 0
+    in
 
-
-  method vstmt (s:stmt) =
-    List.iter 
-      (fun l -> match l with 
-           Label (name, _, _) when name = "ONE" -> 
-             test_data.stmt_one := s
-         | Label (name, _, _) -> ignore (printf "Failed for label name: %s\n" name)
-         | _ -> ignore (printf "Skipping statement %a\n" d_stmt s)
-      )
-      s.labels;
-    SkipChildren
+    
+      match f with
+          _ when (f.svar.vname = "store_a") ->
+            test_data.store_a := safely_stores f;
+            DoChildren
+        | _ when (f.svar.vname = "store_b") ->
+            test_data.store_b := safely_stores f;
+            DoChildren
+        | _ when (f.svar.vname = "store_c") ->
+            test_data.store_c := safely_stores f;
+            DoChildren
+        | _ when (f.svar.vname = "store_d") ->
+            test_data.store_d := safely_stores f;
+            DoChildren
+        | _ when (f.svar.vname = "bad_store_a") ->
+            test_data.bad_store_a := safely_stores f;
+            DoChildren
+        | _ when (f.svar.vname = "no_release") ->
+            test_data.no_release := safely_stores f;
+            DoChildren
+        | _ when (f.svar.vname = "main") ->
+            test_data.main := safely_stores f;
+            DoChildren
+        | _ -> DoChildren
 
 end
 
 
-(* Generate  data for the tests *)
 let tv = new testVisitor;;
 visitCilFileSameGlobals tv cilFile;;
 
-
-let get_released_exps (f:fundec) : exp list =
-
-  let attr_name = "sos_release" in
-
-  let (_, formals_op, _, _) = splitFunctionType f.svar.vtype in
-
-  let released_formal_exps = match formals_op with
-      Some attr_list ->
-        List.fold_left2 
-          (fun has_attribute (_, formal_type, formal_attrs) formal -> 
-             if (hasAttribute attr_name formal_attrs) then
-               (Lval (var formal))::has_attribute
-             else has_attribute
-          )
-          []
-          attr_list
-          f.sformals
-    | None -> []
-  in
-
-    released_formal_exps
-;;
-
-
-let stores (f:fundec) : exp list = 
-
-  let local_stores = 
-    List.map 
-      (fun v -> (Lval (var v)))
-      (List.filter (fun v -> hasAttribute "sos_store" v.vattr) (f.slocals @ f.sformals))
-  in
-
-    local_stores @ global_stores
-;;
-
-
-(* Tests!!! *)
 let test_store_a = 
-  let test = 
-    IE.generate_equiv !(test_data.sa) cilFile;
-    List.for_all
-      (fun e -> IS.is_stored_func e !(test_data.sa) (stores !(test_data.sa)))
-      (get_released_exps !(test_data.sa))
-  in
-    TestCase(fun _ -> assert_bool "store_a" test) 
-;;
-
+  TestCase(fun _ -> assert_bool "store_a" !(test_data.store_a))
+;; 
 
 let test_store_b = 
-  let test = 
-    IE.generate_equiv !(test_data.sb) cilFile;
-    List.for_all
-      (fun e -> IS.is_stored_func e !(test_data.sb) (stores !(test_data.sb)))
-      (get_released_exps !(test_data.sb))
-  in
-    TestCase(fun _ -> assert_bool "store_b" test) 
-;;
-
+  TestCase(fun _ -> assert_bool "store_b" !(test_data.store_b))
+;; 
 
 let test_store_c = 
-  let test = 
-    IE.generate_equiv !(test_data.sc) cilFile;
- 
-    List.for_all
-      (fun e -> IS.is_stored_func e !(test_data.sc) (stores !(test_data.sc)))
-      (get_released_exps !(test_data.sc))
-  in
-    
-    TestCase(fun _ -> assert_bool "store_c" test) 
-;;
-
+  TestCase(fun _ -> assert_bool "store_c" !(test_data.store_c))
+;; 
 
 let test_store_d = 
-  let test = 
-    IE.generate_equiv !(test_data.sd) cilFile;
- 
-    List.for_all
-      (fun e -> IS.is_stored_func e !(test_data.sd) (stores !(test_data.sd)))
-      (get_released_exps !(test_data.sd))
-  in
-    
-    TestCase(fun _ -> assert_bool "store_d" test) 
-;;
-
+  TestCase(fun _ -> assert_bool "store_d" !(test_data.store_d))
+;; 
 
 let test_bad_store_a = 
-  let test = 
-    IE.generate_equiv !(test_data.ba) cilFile;
-    not (
-      List.for_all
-        (fun e -> IS.is_stored_func e !(test_data.ba) (stores !(test_data.ba)))
-        (get_released_exps !(test_data.ba))
-    )
-  in
-    TestCase(fun _ -> assert_bool "bad_store_a" test) 
-;;
+  TestCase(fun _ -> assert_bool "bad_store_a" (not !(test_data.bad_store_a)))
+;; 
 
+let test_no_release = 
+  TestCase(fun _ -> assert_bool "no_release" !(test_data.no_release))
+;; 
 
-let test_pa = 
-  let test = 
-    IE.generate_equiv !(test_data.main) cilFile;
-    IS.is_stored_instr 
-      !(test_data.pa)
-      !(test_data.stmt_one) 
-      dummyInstr      
-      !(test_data.main) 
-      (stores !(test_data.main))
-  in
-    TestCase(fun _ -> assert_bool "pa" test) 
-;;
-
-let test_pb = 
-  let test = 
-    IE.generate_equiv !(test_data.main) cilFile;
-    IS.is_stored_instr 
-      !(test_data.pb)
-      !(test_data.stmt_one) 
-      dummyInstr      
-      !(test_data.main) 
-      (stores !(test_data.main))
-  in
-    TestCase(fun _ -> assert_bool "pb" test) 
-;;
-
-
-let test_pc = 
-  let test = 
-    IE.generate_equiv !(test_data.main) cilFile;
-    IS.is_stored_instr 
-      !(test_data.pc)
-      !(test_data.stmt_one) 
-      dummyInstr      
-      !(test_data.main) 
-      (stores !(test_data.main))
-  in
-    TestCase(fun _ -> assert_bool "pc" test) 
-;;
-
-
-let test_pd = 
-  let test = 
-    IE.generate_equiv !(test_data.main) cilFile;
-    IS.is_stored_instr 
-      !(test_data.pd)
-      !(test_data.stmt_one) 
-      dummyInstr      
-      !(test_data.main) 
-      (stores !(test_data.main))
-  in
-    TestCase(fun _ -> assert_bool "pd" test) 
-;;
-
-
-let test_fa = 
-  let test =
-    not ( 
-      IE.generate_equiv !(test_data.main) cilFile;
-      IS.is_stored_instr 
-        !(test_data.fa)
-        !(test_data.stmt_one) 
-        dummyInstr      
-        !(test_data.main) 
-        (stores !(test_data.main))
-    )
-  in
-    TestCase(fun _ -> assert_bool "fa" test) 
-;;
-
-
-let test_f = 
-  let test =
-    not ( 
-      IE.generate_equiv !(test_data.main) cilFile;
-      IS.is_stored_instr 
-        !(test_data.f)
-        !(test_data.stmt_one) 
-        dummyInstr      
-        !(test_data.main) 
-        (stores !(test_data.main))
-    )
-  in
-    TestCase(fun _ -> assert_bool "f" test) 
-;;
-
-
-
+let test_main = 
+  TestCase(fun _ -> assert_bool "main" (not !(test_data.main)))
+;; 
 
 (* Run all the tests *)
 let suite_is_stored = 
@@ -330,16 +137,12 @@ let suite_is_stored =
                TestLabel ("IsStored: ", test_store_c);
                TestLabel ("IsStored: ", test_store_d);
                TestLabel ("IsStored: ", test_bad_store_a);
-               TestLabel ("IsStored: ", test_pa);
-               TestLabel ("IsStored: ", test_pb);
-               TestLabel ("IsStored: ", test_pc);
-               TestLabel ("IsStored: ", test_fa);
-               TestLabel ("IsStored: ", test_f);
+               TestLabel ("IsStored: ", test_no_release);
+               TestLabel ("IsStored: ", test_main);
              ]
   )
 ;;
 
-
-
 let main = run_test_tt suite_is_stored;;
+
 
