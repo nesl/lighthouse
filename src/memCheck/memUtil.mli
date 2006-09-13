@@ -16,3 +16,7 @@ val get_claim: Cil.instr -> Cil.exp list;;
 
 val get_released: Cil.instr -> Cil.exp list;;
 
+val get_alloc_funcs: Cil.file -> (string * int) list;;
+
+val get_free_funcs: Cil.file -> (string * int) list;;
+

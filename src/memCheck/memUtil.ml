@@ -150,3 +150,49 @@ let get_released (i:instr): exp list =
 ;;
 
 
+(* Return a list of functions name and formal number (zero for return value)
+ * pairs for return / foramls that have the attr_name attribute set. *)
+let get_attribute_funcs (attr_name: string) (f: file) : (string * int) list =
+
+  foldGlobals 
+    f 
+    (fun allocs g -> match g with
+         GFun (f, _) ->
+           let (return_type, formals_op, is_vararg, attributes) = 
+             splitFunctionType f.svar.vtype
+           in
+
+           let rec alloc_formals formals (counter: int) : (string * int) list= 
+             match formals with
+                 [] -> []
+               | (_, _, attrs)::tl when (hasAttribute attr_name attrs) ->
+                   (f.svar.vname, counter)::(alloc_formals tl (counter + 1))
+               | hd::tl -> alloc_formals tl (counter + 1)
+           in
+
+           let formals = match formals_op with
+             | Some f -> f 
+             | None -> []
+           in
+
+             if (hasAttribute attr_name (typeAttrs return_type)) then 
+               (f.svar.vname, 0) :: (alloc_formals formals 1) @ allocs
+             else 
+               (alloc_formals formals 1) @ (allocs)
+       | _ -> allocs
+    )
+    []
+;;
+
+
+let get_alloc_funcs (f: file) : (string * int) list = 
+  get_attribute_funcs "sos_claim" f
+;;
+
+    
+let get_free_funcs (f: file) : (string * int) list = 
+  get_attribute_funcs "sos_release" f
+;;
+
+    
+

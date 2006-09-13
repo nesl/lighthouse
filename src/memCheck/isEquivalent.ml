@@ -24,8 +24,9 @@ let dbg_is_equiv_df = ref false;;
 let currentStmt = ref (mkEmptyStmt ());;
 
 (* List of functions that can allocated and free data *)
-let alloc_funcs = ref ["malloc"];;
-let free_funcs = ref ["free"];; 
+let alloc_funcs = ref [("malloc", 0)];;
+let free_funcs = ref [("free", 1)];; 
+
 let heap_counter = ref 0;;
   
 (* Equivalency information will be stored as sets of expressions *)
@@ -445,39 +446,112 @@ module DFM = struct
                 DF.Done state
         end
 
-      | Call (None, e, formals, _) ->
-          let state = List.fold_left (fun s e -> kill e s) state formals in
+      | Call (rop, e, formals, _) ->
+          (* Note: The order of these modifcations to the state is significant
+           *)
+          
+          (* First remove references to freed heap data *)
+          let (free_names, free_nums) = List.split !free_funcs in
           let state = match e with
-              Lval (Var v, NoOffset) when (List.mem v.vname !alloc_funcs) ->
-                let heap = 
-                  makeVarinfo false ("__heap_" ^ (string_of_int !heap_counter)) voidPtrType
-                in
-                  heap_counter := !heap_counter + 5;
-                  ListSet.add_singleton (Lval (var heap)) state
+              Lval (Var v, NoOffset) ->
+                List.fold_left2 
+                  (fun state free_name free_num ->
+                     if (v.vname = free_name) then (
+                       if free_num = 0 then (
+                         E.s (E.error "isEquivalent: doInstr: Cannot free a return value\n")
+                       ) else (
+                         
+                         let e = List.nth formals (free_num - 1) in
+                         
+                         let direct = 
+                           try (EquivSet.elements (List.find (fun eq -> EquivSet.mem e eq) state))
+                           with Not_found -> []
+                         in
+
+                         let indirect = (getEquiv e state)
+                         in
+                         
+                         let sort_and_uniq (el:exp list) : exp list =
+                           let rec uniq el = match el with
+                               [] -> []
+                             | hd::[] -> [hd]
+                             | hd::next::rest ->
+                                 if (Util.equals hd next) then
+                                   uniq (hd::rest)
+                                 else
+                                   hd::(uniq (next::rest))
+                           in
+                             uniq (List.sort compare el)
+                         in
+                           
+                         let equivs = sort_and_uniq (indirect @ direct) in
+
+                           List.fold_left
+                             (fun state e -> match (stripCasts e) with
+                                  Lval (Var v, NoOffset) when 
+                                    (Str.string_match (Str.regexp "__heap") v.vname 0) ->
+                                    kill e state
+                                | _ -> state
+                             )
+                             state
+                             equivs
+                       )
+                     ) else (state)
+                  )
+                  state
+                  free_names
+                  free_nums
+                  
             | _ -> state 
           in
+          
+          (* Then kill all formals and the (optional) return lval *)
+          let state = List.fold_left (fun s e -> kill e s) state formals in
+          let state = match rop with
+              Some lv -> kill (Lval lv) state
+            | None -> state
+          in
+
+          (* Finally, add in freshly created heap data *)
+          let (alloc_names, alloc_nums) = List.split !alloc_funcs in
+          let state = match e with
+              Lval (Var v, NoOffset) ->
+                List.fold_left2 
+                  (fun state alloc_name alloc_num ->
+                     if (v.vname = alloc_name) then (
+                       let heap = 
+                         makeVarinfo 
+                           false 
+                           ("__heap_" ^ (string_of_int !heap_counter)) 
+                           voidPtrType
+                       in
+                         heap_counter := !heap_counter + 5;
+                         if alloc_num = 0 then (
+                           match rop with
+                               None -> 
+                                 ListSet.add_singleton (Lval (var heap)) state
+                             | Some lv ->  
+                                 ListSet.add_pair (Lval lv) (Lval (var heap)) state
+                         ) else (
+                           ListSet.add_pair 
+                             (List.nth formals (alloc_num - 1)) (Lval (var heap)) state
+                         )
+                     ) else (state)
+                  )
+                  state
+                  alloc_names
+                  alloc_nums
+                  
+            | _ -> state 
+          in
+          
             if (!dbg_is_equiv_i) then (
               ignore (printf "isEquiv: doInstr: %a\n" d_instr i);
               print_equiv_table state;
               flush stdout;
             );
             DF.Done state
-
-      | Call (Some lv, e, formals, _) ->
-          let state = List.fold_left (fun s e -> kill e s) state formals in
-          let state = kill (Lval lv) state in
-          let state = match e with
-              Lval (Var v, NoOffset) when (List.mem v.vname !alloc_funcs) ->
-                let heap = 
-                  makeVarinfo false ("__heap_" ^ (string_of_int !heap_counter)) voidPtrType
-                in
-                  heap_counter := !heap_counter + 5;
-                  ListSet.add_pair (Lval lv) (Lval (var heap)) state
-            | _ -> ListSet.add_singleton (Lval lv) state
-          in
-            dbg (Lval lv) (Lval lv) state;
-            DF.Done state
-
+          
       | _ -> 
           E.warn "IsEquivalent.DFM.doInstr: Ignoring instruction %a" d_instr i;
           DF.Done state
@@ -533,23 +607,9 @@ let generate_equiv (f:fundec) (cilFile:file): unit =
       (global_vars @ f.sformals @ f.slocals)
   in
 
-    (* TODO: Note that this does not handle functions that allocated data into a
-     * formal variable. *)
-    (* TODO: Have not yet addressed the role of free functions *)
-    (* Generate set of functions that may allocated data *)
-    iterGlobals 
-      cilFile 
-      (fun g -> match g with
-           GFun (f, _) ->
-             let (return_type, formals_op, is_vararg, attributes) = 
-               splitFunctionType f.svar.vtype
-             in
-            
-             if (hasAttribute attr_name (typeAttrs return_type)) then
-               alloc_funcs := f.svar.vname :: !alloc_funcs
-      );
+    alloc_funcs := !alloc_funcs @ (U.get_alloc_funcs cilFile);
+    free_funcs := !free_funcs @ (U.get_free_funcs cilFile);
 
-    
     IH.clear DFM.stmtStartData;
     IH.add DFM.stmtStartData (List.hd f.sbody.bstmts).sid start_state;
     TrackF.compute [(List.hd f.sbody.bstmts)]
