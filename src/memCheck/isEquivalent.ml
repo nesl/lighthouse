@@ -519,13 +519,15 @@ module DFM = struct
                 List.fold_left2 
                   (fun state alloc_name alloc_num ->
                      if (v.vname = alloc_name) then (
-                       let heap = 
-                         makeVarinfo 
-                           false 
-                           ("__heap_" ^ (string_of_int !heap_counter)) 
-                           voidPtrType
-                       in
+
+                       (* Make the heap expression *)
+                       let base_name = "__heap_" ^ (string_of_int !heap_counter) in
+                       let extended_name = 
+                         base_name ^ "_line_" ^ (string_of_int !currentLoc.line) in
+                       let heap = makeVarinfo false extended_name voidPtrType in
                          heap_counter := !heap_counter + 5;
+                         
+                         (* Update state *)
                          if alloc_num = 0 then (
                            match rop with
                                None -> 
@@ -599,6 +601,9 @@ let generate_equiv (f:fundec) (cilFile:file): unit =
       ) 
       []
   in
+
+    alloc_funcs := [("malloc", 0)];
+    free_funcs := [("free", 1)];
     
     alloc_funcs := !alloc_funcs @ (U.get_alloc_funcs cilFile);
     free_funcs := !free_funcs @ (U.get_free_funcs cilFile);

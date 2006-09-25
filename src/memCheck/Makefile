@@ -1,4 +1,5 @@
 OCAMLMAKEFILE = OCamlMakefile
+export OCAMLFLAGS="-g"
 
 SOURCES	= memUtil.ml isEquivalent.ml mayAliasWrapper.ml addAnnotations.ml callerAllocates.ml isStored.ml isDead.ml makeOneCFG.ml memory.ml
 RESULT	= memory

@@ -198,15 +198,17 @@ let var_is_allocated (v: varinfo) (f: fundec) =
 ;;
 
 
-let return_is_allocated (f: fundec) = 
+let return_is_allocated (f: fundec) : bool = 
     
   run_dataflow f;  
 
   List.for_all 
-    (fun s -> match s.skind with
+    (fun s -> 
+       match s.skind with
          Return (Some return, _) ->
              List.exists
-               (fun e -> IE.is_equiv return e s.sid)
+               (fun e -> 
+                  IE.is_equiv return e s.sid)
                (IH.find DFF.stmtStartData s.sid)
        | _ -> false 
     )

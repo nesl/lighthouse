@@ -152,12 +152,10 @@ class memoryVisitor = object inherit nopCilVisitor
     (* - Generate the local stores for this function *)
     local_stores := get_local_stores f;
 
-    (** - Ensure that each formal with the "sos_release" attribute set is stored or
-      * relead by this function, since it is being released by the caller. *)
-    let bad_formal_storage = 
-      List.filter
-        (fun v -> not (IS.is_stored_func (Lval (var v)) f (!local_stores @ !global_stores)))
-        (List.filter (fun v -> hasAttribute "sos_release" v.vattr) f.sformals)
+    (** - Ensure that the function properly stores any data that it allocates.
+      *)
+    let bad_storage = 
+      IS.not_stored_exps f (!local_stores @ !global_stores)
     in
 
     (** - Ensure that each formal with the "sos_claim" attribute set is allocated
@@ -182,10 +180,10 @@ class memoryVisitor = object inherit nopCilVisitor
       (** - Print error messages for any errors identified from the above checkes. *)
 
       List.iter 
-        (fun v -> 
+        (fun e -> 
            if not (white_list f.svar) then
-             E.error "Function %s fails to store formal variable %s" f.svar.vname v.vname) 
-        bad_formal_storage;
+             E.error "Function %s fails to store expression %a" f.svar.vname d_exp e) 
+        bad_storage;
 
       List.iter 
         (fun v -> 
@@ -214,22 +212,9 @@ class memoryVisitor = object inherit nopCilVisitor
   (** {3 Instruction Visitor} *)
   method vinst (i:instr) =
  
-    (** Identify all expressions that this instruction improperly claims or
-    * releases.  This is accomplished by: *)
+    (** Identify all expressions that this instruction improperly releases.
+    * This is accomplished by: *)
     
-    (** - Ensure that any expression that must be claimed as a result of this
-      * instruction is claimed before the end of the current function. *)
-    let bad_claims = 
-      List.filter
-        (fun e -> not (IS.is_stored_instr 
-                         e 
-                         !currentStmt 
-                         i 
-                         !currentFunc 
-                         (!local_stores @ !global_stores)))
-        (MU.get_claim i)
-    in
-
     (** - Ensure that any expression that is released by this instruction is
       * treated as dead until the end of the current function. *)
     let bad_releases = 
@@ -239,11 +224,6 @@ class memoryVisitor = object inherit nopCilVisitor
     in
 
       (** - Alert the user to any violations. *)
-
-      List.iter
-        (fun e -> E.error "Expression %a is not properly claimed after instruction %a\n" 
-                    d_exp e d_instr i)
-        bad_claims;
 
       List.iter
         (fun e -> E.error "Expression %a is not treated as dead after instruction %a"
@@ -311,17 +291,8 @@ let argDescr = [
   ("--mem_dbg_alloc_exp", Arg.Unit (fun _ -> dbg_alloc_exp := true),
    "Print alloced expressions");
 
-  ("--dbg_is_store_i", Arg.Unit (fun _ -> IS.dbg_is_store_i := true),
-   "Instruction level debugging of the IsStore dataflow");
-
-  ("--dbg_is_store_s", Arg.Unit (fun _ -> IS.dbg_is_store_s := true),
-   "Statement level debugging of the IsStore dataflow");
-
-  ("--dbg_is_store_c", Arg.Unit (fun _ -> IS.dbg_is_store_s := true),
-   "Join debugging of the IsStore dataflow");
-
-  ("-dbg_is_stored_g", Arg.Unit (fun _ -> IS.dbg_is_store_g := true),
-   "Guard level debugging of the IsStored dataflow");
+  ("--dbg_is_store", Arg.Unit (fun _ -> IS.dbg_is_store := true),
+   "Enable debugging of the IsStore analysis");
 
   (* Debugging for alias analysis MayAliasWrapper and IsEquivalent *)
 

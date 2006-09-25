@@ -28,11 +28,25 @@ let set_claim_on_return (f: fundec) : bool =
 (* Check to see if all dynamic memory created in function f is stored *)
 let not_stored_exps (f: fundec) (stores: exp list) : exp list =
 
-  (* Return true if expression list "is equivalent" to a store *)
+  (* Return true if expression list "is equivalent" to a store or stored in
+   * another heap variable *)
+  (* TODO:  What about circular data structures? Ie.
+   *   a->next = b;
+   *   b->next = c;
+   *   c->next = a;
+   *)
   let contains_one_store (equiv_set: exp list) (sid: int) : bool =
-    List.exists
-      (fun e -> List.exists (fun store -> IE.is_equiv e store sid) stores)
-      equiv_set
+    
+    let direct_store = 
+      List.exists
+        (fun e -> List.exists (fun store -> IE.is_equiv e store sid) stores)
+        equiv_set
+    in
+      
+    let indirect_store =
+      false
+    in
+      direct_store || indirect_store
   in
 
 
@@ -58,13 +72,29 @@ let not_stored_exps (f: fundec) (stores: exp list) : exp list =
            (fun bad_stores el -> 
               let heaps = get_heaps el in
 
+                (* If there are no heap expressions, then all is safe *)
                 if (List.length heaps < 1) then
                   bad_stores
+                
+                (* If two heap expressions must be equivalent, then something is
+                 * wrong *)
                 else if (List.length heaps > 1) then
                   heaps @ bad_stores
+
+                (* Otherwise, check that the heap expression is either stored or
+                * returned by the function*)
                 else (
-                  if contains_one_store el s.sid then bad_stores
-                  else (heaps @ bad_stores)
+                  match s.skind with 
+                      Return (Some return, _) ->
+                        if contains_one_store el s.sid then 
+                          bad_stores
+                        else if ((set_claim_on_return f) && 
+                                 (IE.is_equiv return (List.nth heaps 0) s.sid)) then
+                          bad_stores
+                        else (heaps @ bad_stores)
+                    | _ ->
+                        if contains_one_store el s.sid then bad_stores
+                        else (heaps @ bad_stores)
                 )
            )
            bad_stores
