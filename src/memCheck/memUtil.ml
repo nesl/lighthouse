@@ -196,3 +196,18 @@ let get_free_funcs (f: file) : (string * int) list =
 
     
 
+(* Take a list as input.  Return a "sorted" version of the list with only uniq
+ * members *)
+let sort_and_uniq (l:'a list) : 'a list =
+  let rec uniq l = match l with
+      [] -> []
+    | hd::[] -> [hd]
+    | hd::next::rest ->
+        if ((compare hd next) = 0) then
+          uniq (hd::rest)
+        else
+          hd::(uniq (next::rest))
+  in
+    uniq (List.sort compare l)
+;;
+

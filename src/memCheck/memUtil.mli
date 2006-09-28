@@ -20,3 +20,4 @@ val get_alloc_funcs: Cil.file -> (string * int) list;;
 
 val get_free_funcs: Cil.file -> (string * int) list;;
 
+val sort_and_uniq: 'a list -> 'a list;;
