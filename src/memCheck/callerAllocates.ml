@@ -64,19 +64,7 @@ module DFF = struct
 
 
   let union_lists (el1:exp list) (el2:exp list) : exp list =
-
-    let el = (el1 @ el2) in
-
-    let rec uniq el = match el with
-        [] -> []
-      | hd::[] -> [hd]
-      | hd::next::rest ->
-          if (Util.equals hd next) then
-            uniq (hd::rest)
-          else
-            hd::(uniq (next::rest))
-    in
-      uniq (List.sort compare el)
+    U.sort_and_uniq (el1 @ el2)
   ;;
 
 

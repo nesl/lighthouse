@@ -1,9 +1,10 @@
 open Cil
 open Pretty
 
-module IE = IsEquivalent
-module E = Errormsg
-
+module IE = IsEquivalent;;
+module E = Errormsg;;
+module U = MemUtil;;
+             
 let dbg_is_store = ref false;;
              
 
@@ -35,7 +36,15 @@ let not_stored_exps (f: fundec) (stores: exp list) : exp list =
    *   b->next = c;
    *   c->next = a;
    *)
-  let contains_one_store (equiv_set: exp list) (sid: int) : bool =
+  let rec contains_one_store (equiv_set: exp list) (sid: int) (return : exp option) : bool =
+    
+   (* 
+    ignore (printf "*** Examining equiv set for a store:\n");
+    List.iter
+      (fun e -> ignore (printf "    %a\n" d_exp e))
+      equiv_set;
+    flush stdout;
+   *) 
     
     let direct_store = 
       List.exists
@@ -43,10 +52,50 @@ let not_stored_exps (f: fundec) (stores: exp list) : exp list =
         equiv_set
     in
       
-    let indirect_store =
-      false
+    let is_heap_field (e: exp) : bool =
+      match (stripCasts e) with 
+          Lval (Var v, Field _) 
+        | Lval (Var v, Index _) ->
+            let b = 
+              ignore (printf "Traversing %a\n" d_exp (Lval (var v)));
+              contains_one_store (IE.get_equiv_set (Lval (var v)) sid) sid return
+            in
+              if b then (
+                ignore (printf "Indirect store via Var %a\n" d_exp e);
+                flush stdout;
+              );
+              b
+        | Lval (Mem e, _) -> 
+            let b = 
+              ignore (printf "Traversing %a\n" d_exp e);
+              contains_one_store (IE.get_equiv_set e sid) sid return
+            in
+              if b then (
+                ignore (printf "Indirect store via Mem %a\n" d_exp e);
+                flush stdout;
+              );
+              b
+        | _ -> false
     in
-      direct_store || indirect_store
+
+    let return =
+      let b = match return with
+          Some r ->
+            (set_claim_on_return f) && 
+            (List.exists (fun e -> IE.is_equiv r e sid) equiv_set)
+        | None ->
+            false
+      in 
+        if b then (
+          ignore (printf "Store via return\n");
+        );
+        b
+    in
+    
+    let indirect_store = List.exists is_heap_field equiv_set 
+    in
+    
+      direct_store || return || indirect_store
   in
 
 
@@ -84,16 +133,17 @@ let not_stored_exps (f: fundec) (stores: exp list) : exp list =
                 (* Otherwise, check that the heap expression is either stored or
                 * returned by the function*)
                 else (
+                  (*
+                  ignore (printf "\n\nLooking at heap data %a\n" d_exp (List.nth heaps 0));
+                  flush stdout;
+                   *)
                   match s.skind with 
                       Return (Some return, _) ->
-                        if contains_one_store el s.sid then 
-                          bad_stores
-                        else if ((set_claim_on_return f) && 
-                                 (IE.is_equiv return (List.nth heaps 0) s.sid)) then
+                        if contains_one_store el s.sid (Some return) then 
                           bad_stores
                         else (heaps @ bad_stores)
                     | _ ->
-                        if contains_one_store el s.sid then bad_stores
+                        if contains_one_store el s.sid None then bad_stores
                         else (heaps @ bad_stores)
                 )
            )
@@ -104,17 +154,7 @@ let not_stored_exps (f: fundec) (stores: exp list) : exp list =
       (get_return_statements f)
   in
     
-  let rec uniq el = match el with
-      [] -> []
-    | hd::[] -> [hd]
-    | hd::next::rest ->
-        if (Util.equals hd next) then
-          uniq (hd::rest)
-        else
-          hd::(uniq (next::rest))
-  in
-
-  let bad_stores = uniq (List.sort compare bad_stores) in
+  let bad_stores = U.sort_and_uniq bad_stores in
 
     
     if !dbg_is_store then (

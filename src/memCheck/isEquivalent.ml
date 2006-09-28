@@ -28,7 +28,7 @@ let alloc_funcs = ref [("malloc", 0)];;
 let free_funcs = ref [("free", 1)];; 
 
 let heap_counter = ref 0;;
-  
+
 (* Equivalency information will be stored as sets of expressions *)
 module Equiv =
 struct
@@ -93,8 +93,13 @@ module ListSet = struct
   (* Remove element or super element from any sets that it occupies. *)
   let remove (e : exp) (eqsl: EquivSet.t list) : (EquivSet.t list) =
     List.fold_left
-      (fun result eq -> 
-         (EquivSet.filter (fun e2 -> not (U.is_subexpression_of e e2)) eq)::result)
+      (fun result eq ->
+         let new_set = EquivSet.filter (fun e2 -> not (U.is_subexpression_of e e2)) eq in
+           if EquivSet.is_empty new_set then 
+             result
+           else
+             new_set::result
+      )
       [] eqsl
   ;;
 
@@ -108,7 +113,7 @@ module ListSet = struct
           None -> (EquivSet.singleton e)::eqsl
         | Some _ -> E.s (E.error "isEquivalent: ListSet.add_pair: Invalid list set state\n")
   ;;
-  
+
   (* Add the pair of elements to the set that contains e1 or the set that
    * contains e2.  Note that if both e1 and e2 are contained in a set then this
    * is a mistake. *)
@@ -206,8 +211,11 @@ module DFM = struct
                  if ((ListSet.e_mem e merged_list) || 
                      (ListSet.e_mem e tmp_merged_list)) then 
                    tmp_merged_list
-                 else 
-                   (ListSet.intersection e eq new_state)::tmp_merged_list
+                 else (
+                   let new_set = ListSet.intersection e eq new_state in
+                     if EquivSet.is_empty new_set then tmp_merged_list
+                     else new_set::tmp_merged_list
+                 )
               ) eq []
            ) @ merged_list
         )
@@ -219,7 +227,7 @@ module DFM = struct
         print_equiv_table state;
         flush stdout;
       );
-      
+
       if (ListSet.subset state old) && (ListSet.subset old state) then None
       else (Some state)
   ;;
@@ -243,19 +251,19 @@ module DFM = struct
    * - Sort and uniquify the union of these calls and call this l_1
    * - Continue this procedure until l_n = l_(n-1)
    *
-   * Note that in contrast to this is an ALIAS of an expression e:
+   * Note that an ALIAS of an expression e:
    * - Find the equiv set of &e
    * - Dereference each of these
    *)
   let getEquiv (e:exp) (state:t) : exp list = 
-    
+
     if !dbg_is_equiv_get_aliases then (
       ignore (printf 
                 "IsEquivalent.DFM.getEquiv: Alias search looking at expression %a\n" 
                 d_exp e);
       flush stdout;
     );
-    
+
     let rec get_aliases_helper (e:exp) =  
       match (stripCasts e) with
           Lval lv ->
@@ -280,6 +288,17 @@ module DFM = struct
             );
             []
 
+        | BinOp (PlusPI, _, _, _)
+        | BinOp (IndexPI, _, _, _)
+        | BinOp (MinusPI, _, _, _) 
+        | BinOp (PlusA, _, _, _)
+        | BinOp (MinusA, _, _, _) ->
+            if !verbose then (
+              E.warn "IsEquivalent.DFM.getEquiv:";
+              E.warn "  Using entire pointer arith expression %a." d_exp e;
+            );
+            [e]
+
 
         | _ ->
             if !verbose then (
@@ -291,20 +310,6 @@ module DFM = struct
     in
 
 
-    let sort_and_uniq (el:exp list) : exp list =
-      let rec uniq el = match el with
-          [] -> []
-        | hd::[] -> [hd]
-        | hd::next::rest ->
-            if (Util.equals hd next) then
-              uniq (hd::rest)
-            else
-              hd::(uniq (next::rest))
-      in
-      uniq (List.sort compare el)
-    in
-
-  
     let get_all_aliases (el:exp list) : exp list = 
 
       let direct = 
@@ -318,17 +323,17 @@ module DFM = struct
 
       let indirect = 
         (List.fold_left
-           (fun el e -> (sort_and_uniq (get_aliases_helper e) @ el))
+           (fun el e -> (U.sort_and_uniq (get_aliases_helper e) @ el))
            [] el
         )
       in
 
-        sort_and_uniq (direct @ indirect)
+        U.sort_and_uniq (direct @ indirect)
     in
-      
+
     let l0 = ref [] in
     let l1 = ref [] in
- 
+
       l0 := get_all_aliases [e];
       l1 := get_all_aliases !l0;
 
@@ -341,7 +346,7 @@ module DFM = struct
         l0 := !l1;
         l1 := (get_all_aliases !l0);
       done;
-  
+
       if !dbg_is_equiv_get_aliases then (
         ignore (printf "Aliases of expression %a:\n" d_exp e);
         List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) !l0;
@@ -349,12 +354,12 @@ module DFM = struct
       );
       !l0
   ;;
-  
-  
+
+
   (* Go go data flow!
    *)
   let doInstr (i: instr) (state: t): t DF.action =
-   
+
     (* Debugging  helper function *)
     let dbg e1 e2 t =
       if (!dbg_is_equiv_i) then (
@@ -379,16 +384,16 @@ module DFM = struct
       let address_of (e:exp) : exp option =
         match (stripCasts e) with
             Lval lv -> Some (mkAddrOf lv)
-        | _ when isIntegralType (typeOf e) -> None
-        | _ -> 
-            E.warn 
-              "IsEquivalent.DFM.doInstr: Unable to make address of non-lval expression %a." 
-              d_exp e;
-            None
+          | _ when isIntegralType (typeOf e) -> None
+          | _ -> 
+              E.warn 
+                "IsEquivalent.DFM.doInstr: Unable to make address of non-lval expression %a." 
+                d_exp e;
+              None
       in
 
 
-      let aliases =
+      let aliases_of (e:exp) : exp list =
         List.map  
           (fun e -> Lval (mkMem ~addr:e ~off:NoOffset)) 
           (match (address_of e) with
@@ -397,183 +402,256 @@ module DFM = struct
           )
       in
 
-        (* Print the aliases *) 
+
+      let rec children_of (parent: exp) : exp list = 
+        List.fold_left
+          (fun (children: exp list) eq -> 
+             List.fold_left
+               (fun (children: exp list) e -> match e with
+                    Lval (Var v, Field (_, _))
+                  | Lval (Var v, Index (_, _)) ->
+                      (Lval (var v)) :: children
+
+                  | Lval (Mem e, Field (_, _))
+                  | Lval (Mem e, Index (_, _))
+                  | BinOp (PlusPI, e, _, _)
+                  | BinOp (IndexPI, e, _, _)
+                  | BinOp (MinusPI, e, _, _) ->
+                      e :: (children_of e) @ children
+
+                  | BinOp (PlusA, e, c, _)
+                  | BinOp (MinusA, e, c, _) when (isConstant c) ->
+                      e :: (children_of e) @ children
+
+                  | BinOp (PlusA, c, e, _)
+                  | BinOp (MinusA, c, e, _) when (isConstant c) ->
+                      e :: (children_of e) @ children
+
+                  | _ -> children
+               )
+               children
+               (EquivSet.elements eq)
+          )
+          []
+          state
+      in
+
+      let aliases = aliases_of e in
+
+      let kill_set = List.fold_left (fun ks e -> e :: (children_of e) @ ks) [] aliases in
+
+      let kill_set = U.sort_and_uniq kill_set in
+
+        (* Print the aliases and children *) 
         if (!dbg_is_equiv_i) then (
-          ignore (printf "isEquiv: doInstr: Found aliases of expression %a:\n" d_exp e);
+          ignore (printf "isEquiv: doInstr: Found killset for expression %a:\n" d_exp e);
           List.iter
             (fun e -> ignore (printf "  %a\n" d_exp e))
-            aliases;
+            kill_set;
           flush stdout;
         );
-       
+
         let state = 
-          List.fold_left (fun state e -> ListSet.remove e state) state aliases 
+          List.fold_left (fun state e -> ListSet.remove e state) state kill_set
         in
           ListSet.remove e state
     in
-    
-    match i with
 
-        Set (lv, e, _) when (Util.equals e nullPtr) ->
-          let state = kill (Lval lv) state in
-          let state = ListSet.add_pair (Lval lv) (nullPtr) state in
-            dbg (Lval lv) nullPtr state;
-            DF.Done state
+      match i with
 
-      | Set (lv, e, _) when (isConstant e) || (match isInteger e with None -> false | _ -> true) ->
-          let state = kill (Lval lv) state in
-          let state = ListSet.add_singleton (Lval lv) state in
-            dbg (Lval lv) (Lval lv) state;
-            DF.Done state
+          Set (lv, e, _) when (Util.equals e nullPtr) ->
+            let state = kill (Lval lv) state in
+            let state = ListSet.add_pair (Lval lv) (nullPtr) state in
+              dbg (Lval lv) nullPtr state;
+              DF.Done state
 
-      | Set (lv, e, _) -> begin match (stripCasts e) with
-            Lval lv2
-          | AddrOf lv2
-          | StartOf lv2 ->
-              let state = kill (Lval lv) state in
-              let state = ListSet.add_pair (Lval lv) (stripCasts e) state in
-                dbg (Lval lv) (stripCasts e) state;
-                DF.Done state
+        | Set (lv, e, _) when (isConstant e) || (match isInteger e with None -> false | _ -> true) ->
+            let state = kill (Lval lv) state in
+            let state = ListSet.add_singleton (Lval lv) state in
+              dbg (Lval lv) (Lval lv) state;
+              DF.Done state
 
-          | _ -> 
-              let state = kill (Lval lv) state in
+        | Set (lv, e, _) -> begin match (stripCasts e) with
+              Lval lv2
+            | AddrOf lv2
+            | StartOf lv2 ->
+                let state = kill (Lval lv) state in
+                let state = ListSet.add_pair (Lval lv) (stripCasts e) state in
+                  dbg (Lval lv) (stripCasts e) state;
+                  DF.Done state
+
+            | BinOp (PlusPI, e, _, _)
+            | BinOp (IndexPI, e, _, _)
+            | BinOp (MinusPI, e, _, _) ->
                 if !verbose then (
                   E.warn "IsEquivalent.DFM.doInstr:";
-                  E.warn "  Do not understand RHS of instrurtion %a." d_instr i;
-                  E.warn  "  Skipping.";
-                  dbg (Lval lv) (Lval lv) state;
+                  E.warn "  Not killing base expression in BinOp %a.." d_exp e;
+                  E.warn "  Adding new pair to analysis.";
                 );
-                DF.Done state
-        end
+                let state = kill e state in
+                let state = ListSet.add_pair (Lval lv) (stripCasts e) state in
+                  dbg (Lval lv) (stripCasts e) state;
+                  DF.Done state
 
-      | Call (rop, e, formals, _) ->
-          (* Note: The order of these modifcations to the state is significant
-           *)
-          
-          (* First remove references to freed heap data *)
-          let (free_names, free_nums) = List.split !free_funcs in
-          let state = match e with
-              Lval (Var v, NoOffset) ->
-                List.fold_left2 
-                  (fun state free_name free_num ->
-                     if (v.vname = free_name) then (
-                       if free_num = 0 then (
-                         E.s (E.error "isEquivalent: doInstr: Cannot free a return value\n")
-                       ) else (
-                         
-                         let e = List.nth formals (free_num - 1) in
-                         
-                         let direct = 
-                           try (EquivSet.elements (List.find (fun eq -> EquivSet.mem e eq) state))
-                           with Not_found -> []
-                         in
+            | BinOp (PlusA, e, c, _)
+            | BinOp (MinusA, e, c, _) when isConstant c ->
+                if !verbose then (
+                  E.warn "IsEquivalent.DFM.doInstr:";
+                  E.warn "  Not killing base expression in BinOp %a.." d_exp e;
+                  E.warn "  Adding new pair to analysis.";
+                );
+                let state = kill e state in
+                let state = ListSet.add_pair (Lval lv) (stripCasts e) state in
+                  dbg (Lval lv) (stripCasts e) state;
+                  DF.Done state
 
-                         let indirect = (getEquiv e state)
-                         in
-                         
-                         let sort_and_uniq (el:exp list) : exp list =
-                           let rec uniq el = match el with
-                               [] -> []
-                             | hd::[] -> [hd]
-                             | hd::next::rest ->
-                                 if (Util.equals hd next) then
-                                   uniq (hd::rest)
-                                 else
-                                   hd::(uniq (next::rest))
-                           in
-                             uniq (List.sort compare el)
-                         in
-                           
-                         let equivs = sort_and_uniq (indirect @ direct) in
 
-                           List.fold_left
-                             (fun state e -> match (stripCasts e) with
-                                  Lval (Var v, NoOffset) when 
-                                    (Str.string_match (Str.regexp "__heap") v.vname 0) ->
-                                    kill e state
-                                | _ -> state
-                             )
-                             state
-                             equivs
-                       )
-                     ) else (state)
-                  )
-                  state
-                  free_names
-                  free_nums
-                  
-            | _ -> state 
-          in
-          
-          (* Then kill all formals and the (optional) return lval *)
-          let state = List.fold_left (fun s e -> kill e s) state formals in
-          let state = match rop with
-              Some lv -> kill (Lval lv) state
-            | None -> state
-          in
+            | BinOp (PlusA, c, e, _)
+            | BinOp (MinusA, c, e, _) when isConstant c ->
+                if !verbose then (
+                  E.warn "IsEquivalent.DFM.doInstr:";
+                  E.warn "  Not killing base expression in BinOp %a.." d_exp e;
+                  E.warn "  Adding new pair to analysis.";
+                );
+                let state = kill e state in
+                let state = ListSet.add_pair (Lval lv) (stripCasts e) state in
+                  dbg (Lval lv) (stripCasts e) state;
+                  DF.Done state
 
-          (* Finally, add in freshly created heap data *)
-          let (alloc_names, alloc_nums) = List.split !alloc_funcs in
-          let state = match e with
-              Lval (Var v, NoOffset) ->
-                List.fold_left2 
-                  (fun state alloc_name alloc_num ->
-                     if (v.vname = alloc_name) then (
+            | _ -> 
+                let state = kill (Lval lv) state in
+                let state = ListSet.add_singleton (Lval lv) state in
+                  if !verbose then (
+                    E.warn "IsEquivalent.DFM.doInstr:";
+                    E.warn "  Do not understand RHS of instrurtion %a." d_instr i;
+                    E.warn  "  Skipping.";
+                    dbg (Lval lv) (Lval lv) state;
+                  );
+                  DF.Done state
+          end
 
-                       (* Make the heap expression *)
-                       let base_name = "__heap_" ^ (string_of_int !heap_counter) in
-                       let extended_name = 
-                         base_name ^ "_line_" ^ (string_of_int !currentLoc.line) in
-                       let heap = makeVarinfo false extended_name voidPtrType in
-                         heap_counter := !heap_counter + 5;
-                         
-                         (* Update state *)
-                         if alloc_num = 0 then (
-                           match rop with
-                               None -> 
-                                 ListSet.add_singleton (Lval (var heap)) state
-                             | Some lv ->  
-                                 ListSet.add_pair (Lval lv) (Lval (var heap)) state
+        | Call (rop, e, formals, _) ->
+            (* Note: The order of these modifcations to the state is significant
+             *)
+
+            (* First remove references to freed heap data *)
+            let (free_names, free_nums) = List.split !free_funcs in
+            let state = match e with
+                Lval (Var v, NoOffset) ->
+                  List.fold_left2 
+                    (fun state free_name free_num ->
+                       if (v.vname = free_name) then (
+                         if free_num = 0 then (
+                           E.s (E.error "isEquivalent: doInstr: Cannot free a return value\n")
                          ) else (
-                           ListSet.add_pair 
-                             (List.nth formals (alloc_num - 1)) (Lval (var heap)) state
+
+                           let e = List.nth formals (free_num - 1) in
+
+                           let direct = 
+                             try (EquivSet.elements (List.find (fun eq -> EquivSet.mem e eq) state))
+                             with Not_found -> []
+                           in
+
+                           let indirect = (getEquiv e state)
+                           in
+
+                           let equivs = U.sort_and_uniq (indirect @ direct) in
+
+                             List.fold_left
+                               (fun state e -> match (stripCasts e) with
+                                    Lval (Var v, NoOffset) when 
+                                      (Str.string_match (Str.regexp "__heap") v.vname 0) ->
+                                      kill e state
+                                  | _ -> state
+                               )
+                               state
+                               equivs
                          )
-                     ) else (state)
-                  )
-                  state
-                  alloc_names
-                  alloc_nums
-                  
-            | _ -> state 
-          in
-          
-            if (!dbg_is_equiv_i) then (
-              ignore (printf "isEquiv: doInstr: %a\n" d_instr i);
-              print_equiv_table state;
-              flush stdout;
-            );
+                       ) else (state)
+                    )
+                    state
+                    free_names
+                    free_nums
+
+              | _ -> state 
+            in
+
+            (* Then kill all formals and the (optional) return lval *)
+            let state = 
+              ignore (printf "*** Dealing with formal %a" d_exp e);
+              List.fold_left 
+                (fun s e -> ListSet.add_singleton e (kill e s)) 
+                state 
+                formals 
+            in
+
+            let state = match rop with
+                Some lv -> ListSet.add_singleton (Lval lv) (kill (Lval lv) state)
+              | None -> state
+            in
+
+            (* Finally, add in freshly created heap data *)
+            let (alloc_names, alloc_nums) = List.split !alloc_funcs in
+            let state = match e with
+                Lval (Var v, NoOffset) ->
+                  List.fold_left2 
+                    (fun state alloc_name alloc_num ->
+                       if (v.vname = alloc_name) then (
+
+                         (* Make the heap expression *)
+                         let base_name = "__heap_" ^ (string_of_int !heap_counter) in
+                         let extended_name = 
+                           base_name ^ "_line_" ^ (string_of_int !currentLoc.line) in
+                         let heap = makeVarinfo false extended_name voidPtrType in
+                           heap_counter := !heap_counter + 5;
+
+                           (* Update state *)
+                           if alloc_num = 0 then (
+                             match rop with
+                                 None -> 
+                                   ListSet.add_singleton (Lval (var heap)) state
+                               | Some lv ->  
+                                   ListSet.add_pair (Lval lv) (Lval (var heap)) state
+                           ) else (
+                             ListSet.add_pair 
+                               (List.nth formals (alloc_num - 1)) (Lval (var heap)) state
+                           )
+                       ) else (state)
+                    )
+                    state
+                    alloc_names
+                    alloc_nums
+
+              | _ -> state 
+            in
+
+              if (!dbg_is_equiv_i) then (
+                ignore (printf "isEquiv: doInstr: %a\n" d_instr i);
+                print_equiv_table state;
+                flush stdout;
+              );
+              DF.Done state
+
+        | _ -> 
+            E.warn "IsEquivalent.DFM.doInstr: Ignoring instruction %a" d_instr i;
             DF.Done state
-          
-      | _ -> 
-          E.warn "IsEquivalent.DFM.doInstr: Ignoring instruction %a" d_instr i;
-          DF.Done state
   ;;
 
-  
+
   let doGuard _ _ = DF.GDefault;;
 
 
   (* Statements should not effect alias information *) 
   let doStmt (s: stmt) (state: t) = 
-    
+
     currentStmt := s;
-    
+
     if (!dbg_is_equiv_stmt_summary) then (
       ignore (printf "isEquiv: doInstr: Entering statement %d with state\n" s.sid); 
-      print_equiv_table state;
+      print_equiv_table (U.sort_and_uniq state);
       flush stdout
     );
-      DF.SDefault
+    DF.SDefault
   ;;
 
 
@@ -604,7 +682,7 @@ let generate_equiv (f:fundec) (cilFile:file): unit =
 
     alloc_funcs := [("malloc", 0)];
     free_funcs := [("free", 1)];
-    
+
     alloc_funcs := !alloc_funcs @ (U.get_alloc_funcs cilFile);
     free_funcs := !free_funcs @ (U.get_free_funcs cilFile);
 
@@ -670,7 +748,7 @@ let get_equiv_sets (id:int) : (exp list list) =
 let get_equiv_set (e:exp) (id:int) : (exp list) =
 
   let e = stripCasts e in
-  
+
     match (get_id_state DFM.stmtStartData id) with
         Some table -> (
           let direct = 
@@ -690,23 +768,11 @@ let get_equiv_set (e:exp) (id:int) : (exp list) =
               flush stdout;
             );
 
-            let sort_and_uniq (el:exp list) : exp list =
-              let rec uniq el = match el with
-                  [] -> []
-                | hd::[] -> [hd]
-                | hd::next::rest ->
-                    if (Util.equals hd next) then
-                      uniq (hd::rest)
-                    else
-                      hd::(uniq (next::rest))
-              in
-                uniq (List.sort compare el)
-            in
-              sort_and_uniq (indirect @ direct)
+            U.sort_and_uniq (indirect @ direct)
 
         )
       | None -> 
-        []
+          []
 ;;
 
 
