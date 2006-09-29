@@ -621,8 +621,10 @@ module DFM = struct
               );
               DF.Done state
 
-        | _ -> 
-            E.warn "IsEquivalent.DFM.doInstr: Ignoring instruction %a" d_instr i;
+        | _ ->
+            if !verbose then (
+              E.warn "IsEquivalent.DFM.doInstr: Ignoring instruction %a" d_instr i;
+            );
             DF.Done state
   ;;
 

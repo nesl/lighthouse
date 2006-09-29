@@ -3,7 +3,7 @@ open Pretty
 
 module E = Errormsg
              
-
+let verbose = ref false;;
 
 (* Check to see if sub is a subexpression of e *)
 let rec is_subexpression_of (sub:exp) (e:exp) : bool =
@@ -81,8 +81,10 @@ let get_fun_exps_with_attribute (i:instr) (attr_name:string): exp list =
     (* Catch for functions (such as function pointers) that we are unable to
      * handle. *)
     | Call (_, _, _, _) ->
-        ignore (E.warn "MemUtil.get_gun_exps_with_attribute:"); 
-        ignore (E.warn "Unable to understand function call %a.  Skipping.\n" d_instr i);
+        if !verbose then (
+          ignore (E.warn "MemUtil.get_fun_exps_with_attribute:"); 
+          ignore (E.warn "Unable to understand function call %a.  Skipping.\n" d_instr i);
+        );
         []
        
     | _ -> []
