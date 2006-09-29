@@ -1,0 +1,3 @@
+Warning: Alloced data from instruction #line 125 "loader.c"
+    mod_op = (sos_module_op_t *) ker_msg_take_data(msg);
+is not stored

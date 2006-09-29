@@ -1,0 +1,27 @@
+graph bottle {
+
+    nodeA[label = "Sensor A"];
+    nodeB[label = "Sensor B"];
+    nodeC[label = "Sensor C"];
+    nodeD[label = "Sensor D"];
+    nodeE[label = "Sensor E"];
+    nodeF[label = "Sensor F"];
+    nodeG[label = "Sensor G"];
+    nodeH[label = "Sensor H"];
+    sink[label = "Sink"];
+
+    nodeA -- sink [len=1, ];
+    nodeB -- sink [len=3, ];
+    nodeB -- nodeA [len=2,];
+    nodeC -- nodeA [len=2,];
+    nodeD -- nodeA [len=5,];
+    nodeD -- nodeC [len=2,]; 
+    nodeE -- nodeB [len=2,]; 
+    nodeE -- nodeF [len=2,];
+    nodeF -- nodeB [len=2,]; 
+    nodeG -- nodeC [len=3,];
+    nodeG -- nodeH [len=2,];
+    nodeH -- nodeC [len=2,];
+
+}
+

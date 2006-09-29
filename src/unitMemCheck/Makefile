@@ -6,8 +6,8 @@ export OCAMLFLAGS="-g"
 # Global build options
 ####
 export LIBS = unix str cil oUnit
-export INCDIRS = /home/rshea/mote/cil-1.3.5/obj/x86_LINUX +oUnit
-#export INCDIRS = /home/rshea/research/cil-1.3.5/obj/x86_LINUX +oUnit
+#export INCDIRS = /home/rshea/mote/cil-1.3.5/obj/x86_LINUX +oUnit
+export INCDIRS = /home/rshea/research/cil-1.3.5/obj/x86_LINUX +oUnit
 
 
 ####

@@ -1,0 +1,15 @@
+﻿gcc -D_GNUCC -E -DCIL=1 memLeak00.c -o ./memLeak00.i
+/home/rshea/mote/cil-1.3.4/obj/x86_LINUX/cilly.asm.exe --out ./memLeak00.cil.c
+--domemory ./memLeak00.i
+
+make check
+
+Warning: Alloced data from instruction #line 7 "memLeak00.c"
+p = (int *)malloc(__cil_tmp2);
+is not stored
+
+gcc -D_GNUCC -E ./memLeak00.cil.c -o ./memLeak00.cil.i
+gcc -D_GNUCC -c -o ./memLeak00.o ./memLeak00.cil.i
+./memLeak00.cil.c:1: warning: `__sos_claim__' attribute directive ignored
+gcc -D_GNUCC -o a.out ./memLeak00.o
+

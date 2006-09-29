@@ -1,0 +1,23 @@
+digraph dataFlow {
+
+    node0 [label = "void *p;"];
+    node1 [label = "p = sys_malloc(4);"];
+    node2 [label = "if(p == NULL)"];
+    node3a [label = "return -ENOMEM;"]
+    node3b [label = "*p = 42;"];
+    node4 [label = "if(sys_id() == SINK_ID)"];
+    node5b [label = "state = p;"];
+    node5a [label = "sys_post(..., p, SOS_MSG_RELEASE);"];
+    node6 [label = "return MOLTUAE;"]
+    
+    node0 -> node1;
+    node1 -> node2;
+    node2 -> node3a [label = "TRUE"];
+    node2 -> node3b [label = "FALSE"];
+    node3b -> node4;
+    node4 -> node5a [label = "TRUE"];
+    node4 -> node5b [label = "FALSE"];
+    node5a -> node6;
+    node5b -> node6;
+}
+

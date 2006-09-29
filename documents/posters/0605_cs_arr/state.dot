@@ -1,0 +1,13 @@
+digraph state {
+
+    nodeA[label = "State A:\nEnter module\nAllocate Memory\nReturn",peripheries=2];
+    nodeB[label = "State B:\nEnter module\nAccess Memory\nReturn"];
+    nodeC[label = "State C:\nEnter module\nFree Memory\rReturn"];
+
+    nodeA -> nodeB;
+    nodeA -> nodeC;
+    nodeB -> nodeB;
+    nodeB -> nodeC;
+    nodeC -> nodeA;
+}
+

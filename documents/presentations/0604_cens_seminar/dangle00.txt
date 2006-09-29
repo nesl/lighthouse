@@ -1,0 +1,18 @@
+﻿gcc -D_GNUCC -E -DCIL=1 dangle00.c -o ./dangle00.i
+/home/rshea/mote/cil-1.3.4/obj/x86_LINUX/cilly.asm.exe --out ./dangle00.cil.c
+--domemory ./dangle00.i
+
+make check
+
+Warning: Var in #line 12 "dangle00.c"
+q = (*p);
+should be treated as dead
+
+Warning: Potential access to dead data freed in instruction #line 10
+free(__cil_tmp4);
+
+gcc -D_GNUCC -E ./dangle00.cil.c -o ./dangle00.cil.i
+gcc -D_GNUCC -c -o ./dangle00.o ./dangle00.cil.i
+./dangle00.cil.c:1: warning: `__sos_claim__' attribute directive ignored
+./dangle00.cil.c:2: warning: `__sos_release__' attribute directive ignored
+gcc -D_GNUCC -o a.out ./dangle00.o

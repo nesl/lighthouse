@@ -1,0 +1,128 @@
+﻿static void sys_free     (       void *       ptr     )       [inline, static]
+    
+
+Free memory
+
+Parameters:
+        ptr     Pointer to the data that should be freed
+
+Definition at line 675 of file sys_module.h.
+
+00676 {
+00677         return ker_free(ptr);
+00678 }
+
+static void * sys_malloc    (   uint16_t    size     )      [inline, static]
+    
+
+Allocate memory
+
+Parameters:
+        size    Number of bytes to allocate
+
+Returns:
+    Pointer to memory or NULL if allocation fails
+
+It is a good habit to check for the NULL pointer after attempting to allocate
+memory. An easy way to do this is:
+
+ void *p;
+ p = sys_malloc(8);
+ if (p == NULL) {
+     // Pointer is null so clean up and then exit
+     ...
+     return -ENOMEM;
+ }
+ // Pointer is valid
+ ...
+
+Remember to either store, free, or SOS_RELEASE any dynamically allocated
+memory. Memory leaks on motes sink boats! Or is that ships...
+
+Definition at line 665 of file sys_module.h.
+
+00666 {
+00667         return ker_malloc(size, ker_get_current_pid());
+00668 }
+
+
+static void * sys_msg_take_data     (       Message *        msg     )
+[inline, static]
+    
+
+Claim the data payload of a message
+
+Parameters:
+        msg     Pointer to message structure carrying data to claim
+
+Returns:
+    Pointer to memory or NULL if allocation fails
+
+This function allows you to claim the data in an in coming message. This is
+often called from the message handler function of a module. Module writers can
+treat this function in a manner very similar to the sys_malloc() function.
+
+
+If a module does not call this function, the msg->data field may be released
+by the kernel or another module after the current function ends. This can make
+for very difficult to track bugs.
+
+
+The lower level behavior of this function is based upon if the SOS_MSG_RELEASE
+flag was set by the call to post(), or one if its variations, that generated
+the message.
+
+    * If SOS_MSG_RELEASE was set then this function takes control of the data
+    * released into the data payload of the message
+
+    * If SOS_MSG_RELEASE was NOT set then this function attempts to allocate a
+    * new buffer of the same size and create a deep copy of the data payload
+
+Definition at line 680 of file sys_module.h.
+
+00681 {
+00682         return ker_msg_take_data(ker_get_current_pid(), msg);
+00683 }
+
+static int8_t sys_post(..., uint8_t size, void *data, uint16_t flag)
+
+    
+
+Post a message with payload to a module within the node.
+
+Parameters:
+        did     ID of the destination module
+        sid     ID of the source module
+        type    Unique message identifier. Kernel message types are defined in
+message_types.h
+        arg     Size of the payload (in bytes) that is being dispatched as a
+part of the message
+        *larg   Pointer to the payload buffer that is dispatched in the
+message.
+        flag    Control scheduler priority, memory management properties of
+payload. Check message_types.h
+
+Returns:
+    SOS_OK on success, -ENOMEM on failure
+
+Warning:
+    MESSAGE PAYLOAD SHOULD NEVER BE ALLOCATED FROM THE STACK.
+
+Note:
+    Important information about message flags
+
+    * SOS_MSG_RELEASE flag should be set if the source module wishes to
+    * transfer ownership of the message payload to the destination module.
+
+    * SOS_MSG_RELIABLE flag is set if the source module wishes to receive
+    * notification regarding the success/failure of message delivery to the
+    * destination module. The notification message has the type
+    * MSG_PKT_SENDDONE and its payload contains the original message. The flag
+    * field of the notification message has the value SOS_MSG_SEND_FAIL if the
+    * message was not successfully delivered. The flag field is set to 0 upon
+    * successful delivery.
+
+    * SOS_MSG_HIGH_PRIORITY flag is set to insert the message in a high
+    * priority queue. The high priority queue is serviced before the low
+    * priority queue.
+

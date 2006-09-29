@@ -1,0 +1,107 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath,amssymb,latexsym}
+
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%
+\def\Next{\hspace{4pt}\raise 3pt \hbox{\circle{7}} \hspace{4pt} }
+\newcommand{\dia}{{\raisebox{-0.2ex}{$\Diamond$}}}
+\newcommand{\PastDiamond}                                     % past diamond
+     {\mbox{\rm\makebox[0em][l]{$\dia$}\makebox[0.8em]{--}\hspace{0.05em}}}
+
+\def\create{{\mathsf{create}}}
+
+\def\alloc{{\mathsf{alloc}}}
+\def\access{{\mathsf{access}}}
+\def\delete{{\mathsf{delete}}}
+
+\def\acquire{{\mathtt{acq}}}
+\def\release{{\mathtt{rel}}}
+
+\def\alias{{\mathsf{alias}}}
+\def\mayalias{{\mathsf{mayAlias}}}
+\def\mustalias{{\mathsf{mustAlias}}}
+%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Analysis Specification and Implementation}
+\label{sec:alg}
+
+\centering
+\begin{tabular}{| c | l |}
+
+    \hline 
+
+    \textbf{LTL Operator} & \textbf{Description} \\
+
+    \hline
+
+    $\Box f$ & holds at state $s$ if the formula $f$ holds on $s$ \\
+             & and each subsequent state in the path \\
+
+    \hline
+
+    $\Diamond f$ & holds at state $s$ if the formula $f$ holds on $s$ \\
+                 & or some subsequent state in the path \\
+
+    \hline
+
+    $\Next f$ & holds at state $s$ if the formula $f$ holds on \\
+              & the successor state of $s$ along the path \\
+
+    \hline 
+\end{tabular}
+
+\vspace{1in}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\smallskip
+\noindent
+{\bf No Leaks.} The first property formalizes the absence of resource
+leaks by enforcing that along every program execution path, every allocation
+$\mathrm{alloc}\ x$ is necessarily followed by either
+a free or a store of a handle
+that refers to the same resource as $x$:
+\[
+\Box \left( (\mathrm{alloc}\ x) \rightarrow
+	\Diamond \left( (\mathrm{free}\ y 
+                              \vee
+                        \mathrm{store}\ y) \wedge \alias(x,y) 
+                 \right) \right)
+\]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\smallskip\noindent
+{\bf No Dangling Pointers.} The second
+property states that once a resource has
+been freed, it is never accessed again:
+\[
+\Box ( \mathrm{free}\ x \rightarrow \Next (\Box (\lnot (\access(y) \wedge \alias(x,y))))) 
+\]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\smallskip\noindent
+{\bf Allocation Before Use.}
+The final property requires that any access to a handle is preceded by 
+an allocation or retrieval from the store:
+\[
+\Box (\access(x) \rightarrow \PastDiamond (\alias(x,y) \wedge 
+	\left[ \mathrm{alloc}\ y \vee \mathrm{get}\ y \right] ) )
+\]
+The $\PastDiamond$ operator is analogous to $\Diamond$ but quantifies
+over all {\em predecessor} states in the execution path from the given
+state, rather than successor states.
+
+\end{document}
+
