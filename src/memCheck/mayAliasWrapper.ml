@@ -28,7 +28,7 @@ let may_alias_wrapper e target =
                     "MAY ALIAS: Expression %a not found in alias analysis check against %a\n" 
                     d_exp e d_exp target);
         false
-    | _ -> E.s (E.error "Strange error alias check\n"); false
+    | _ -> E.s (E.error "Strange error alias check\n")
 ;;
 
 

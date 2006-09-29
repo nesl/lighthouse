@@ -38,13 +38,13 @@ let not_stored_exps (f: fundec) (stores: exp list) : exp list =
    *)
   let rec contains_one_store (equiv_set: exp list) (sid: int) (return : exp option) : bool =
     
-   (* 
-    ignore (printf "*** Examining equiv set for a store:\n");
-    List.iter
-      (fun e -> ignore (printf "    %a\n" d_exp e))
-      equiv_set;
-    flush stdout;
-   *) 
+    if !dbg_is_store then (
+      ignore (printf "*** Examining equiv set for a store:\n");
+      List.iter
+        (fun e -> ignore (printf "    %a\n" d_exp e))
+        equiv_set;
+      flush stdout;
+    );
     
     let direct_store = 
       List.exists
@@ -59,6 +59,19 @@ let not_stored_exps (f: fundec) (stores: exp list) : exp list =
             contains_one_store (IE.get_equiv_set (Lval (var v)) sid) sid return
         | Lval (Mem e, _) -> 
             contains_one_store (IE.get_equiv_set e sid) sid return
+
+        | BinOp (IndexPI, e, _, _)
+        | BinOp (MinusPI, e, _, _) ->
+            contains_one_store (IE.get_equiv_set e sid) sid return
+
+        | BinOp (PlusA, e, c, _)
+        | BinOp (MinusA, e, c, _) when (isConstant c) ->
+            contains_one_store (IE.get_equiv_set e sid) sid return
+
+        | BinOp (PlusA, c, e, _)
+        | BinOp (MinusA, c, e, _) when (isConstant c) ->
+            contains_one_store (IE.get_equiv_set e sid) sid return
+
         | _ -> false
     in
 
@@ -112,10 +125,13 @@ let not_stored_exps (f: fundec) (stores: exp list) : exp list =
                 (* Otherwise, check that the heap expression is either stored or
                 * returned by the function*)
                 else (
-                  (*
-                  ignore (printf "\n\nLooking at heap data %a\n" d_exp (List.nth heaps 0));
-                  flush stdout;
-                   *)
+                  
+                  if !dbg_is_store then (
+                    ignore (printf "\n\nLooking at heap data %a\n" 
+                              d_exp (List.nth heaps 0));
+                    flush stdout;
+                  );
+                  
                   match s.skind with 
                       Return (Some return, _) ->
                         if contains_one_store el s.sid (Some return) then 

@@ -376,8 +376,6 @@ let mainFunction () =
     fileNames := fname :: (!fileNames) 
   in
   
-  let outName = ref "" in
-    
     Arg.parse argDescr recordFile usageMsg;
     
     Cil.initCIL ();

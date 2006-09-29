@@ -404,36 +404,27 @@ module DFM = struct
 
 
       let rec children_of (parent: exp) : exp list = 
-        List.fold_left
-          (fun (children: exp list) eq -> 
-             List.fold_left
-               (fun (children: exp list) e -> match e with
-                    Lval (Var v, Field (_, _))
-                  | Lval (Var v, Index (_, _)) ->
-                      (Lval (var v)) :: children
+        match parent with            
+            Lval (Var v, Field (_, _))
+          | Lval (Var v, Index (_, _)) ->
+              [Lval (var v)]
 
-                  | Lval (Mem e, Field (_, _))
-                  | Lval (Mem e, Index (_, _))
-                  | BinOp (PlusPI, e, _, _)
-                  | BinOp (IndexPI, e, _, _)
-                  | BinOp (MinusPI, e, _, _) ->
-                      e :: (children_of e) @ children
+          | Lval (Mem e, Field (_, _))
+          | Lval (Mem e, Index (_, _))
+          | BinOp (PlusPI, e, _, _)
+          | BinOp (IndexPI, e, _, _)
+          | BinOp (MinusPI, e, _, _) ->
+              e :: (children_of e)
 
-                  | BinOp (PlusA, e, c, _)
-                  | BinOp (MinusA, e, c, _) when (isConstant c) ->
-                      e :: (children_of e) @ children
+          | BinOp (PlusA, e, c, _)
+          | BinOp (MinusA, e, c, _) when (isConstant c) ->
+              e :: (children_of e)
 
-                  | BinOp (PlusA, c, e, _)
-                  | BinOp (MinusA, c, e, _) when (isConstant c) ->
-                      e :: (children_of e) @ children
+          | BinOp (PlusA, c, e, _)
+          | BinOp (MinusA, c, e, _) when (isConstant c) ->
+              e :: (children_of e)
 
-                  | _ -> children
-               )
-               children
-               (EquivSet.elements eq)
-          )
-          []
-          state
+          | _ -> []
       in
 
       let aliases = aliases_of e in
