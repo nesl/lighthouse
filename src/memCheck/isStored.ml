@@ -56,40 +56,19 @@ let not_stored_exps (f: fundec) (stores: exp list) : exp list =
       match (stripCasts e) with 
           Lval (Var v, Field _) 
         | Lval (Var v, Index _) ->
-            let b = 
-              ignore (printf "Traversing %a\n" d_exp (Lval (var v)));
-              contains_one_store (IE.get_equiv_set (Lval (var v)) sid) sid return
-            in
-              if b then (
-                ignore (printf "Indirect store via Var %a\n" d_exp e);
-                flush stdout;
-              );
-              b
+            contains_one_store (IE.get_equiv_set (Lval (var v)) sid) sid return
         | Lval (Mem e, _) -> 
-            let b = 
-              ignore (printf "Traversing %a\n" d_exp e);
-              contains_one_store (IE.get_equiv_set e sid) sid return
-            in
-              if b then (
-                ignore (printf "Indirect store via Mem %a\n" d_exp e);
-                flush stdout;
-              );
-              b
+            contains_one_store (IE.get_equiv_set e sid) sid return
         | _ -> false
     in
 
     let return =
-      let b = match return with
+      match return with
           Some r ->
             (set_claim_on_return f) && 
             (List.exists (fun e -> IE.is_equiv r e sid) equiv_set)
         | None ->
             false
-      in 
-        if b then (
-          ignore (printf "Store via return\n");
-        );
-        b
     in
     
     let indirect_store = List.exists is_heap_field equiv_set 

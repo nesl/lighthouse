@@ -93,7 +93,13 @@ let is_dead_exp (e:exp) : bool =
       (fun e -> not (IE.is_equiv e IE.nullPtr !currentStmt.sid)) 
       sub_exps 
   in
-
+    
+    (*
+    ignore (printf "Checking to see if expression %a treats %a as dead:\n" 
+              d_exp e d_exp !target);
+    List.iter (fun e -> ignore (printf "  subexpression: %a\n" d_exp e)) non_null;
+    flush stdout;
+     *)
     List.exists (fun e -> MA.may_alias_wrapper e !target) non_null
 ;;
 
@@ -111,12 +117,13 @@ let safe_instruction (i:instr) : status =
   
     (* If an instruction touches a dead expression than it is unsafe *)
     if (!dbg_is_dead_i) then (
-      ignore (printf "IsDead.safe_instruction: Instruction %a" d_instr i); 
+      ignore (printf "IsDead.safe_instruction: Instruction %a\n" d_instr i); 
       if unsafe then (
         ignore (printf "dereferences dead expression %a\n" d_exp !target)
       ) else (
         ignore (printf "is safe with respect to expression %a\n" d_exp !target)
-      )
+      );
+      flush stdout;
     );
 
     if (unsafe && (!freeLineNum >= (get_instrLoc i).line)) then 

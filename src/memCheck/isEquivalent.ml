@@ -471,64 +471,63 @@ module DFM = struct
               dbg (Lval lv) (Lval lv) state;
               DF.Done state
 
-        | Set (lv, e, _) -> begin match (stripCasts e) with
-              Lval lv2
-            | AddrOf lv2
-            | StartOf lv2 ->
-                let state = kill (Lval lv) state in
-                let state = ListSet.add_pair (Lval lv) (stripCasts e) state in
-                  dbg (Lval lv) (stripCasts e) state;
-                  DF.Done state
+        | Set (lv, e, _) -> 
+            
+            let state = kill (Lval lv) state in
+            
+              begin match (stripCasts e) with
+                  Lval lv2
+                | AddrOf lv2
+                | StartOf lv2 ->
+                    let state = ListSet.add_pair (Lval lv) (stripCasts e) state in
+                      dbg (Lval lv) (stripCasts e) state;
+                      DF.Done state
 
-            | BinOp (PlusPI, e, _, _)
-            | BinOp (IndexPI, e, _, _)
-            | BinOp (MinusPI, e, _, _) ->
-                if !verbose then (
-                  E.warn "IsEquivalent.DFM.doInstr:";
-                  E.warn "  Not killing base expression in BinOp %a.." d_exp e;
-                  E.warn "  Adding new pair to analysis.";
-                );
-                let state = kill e state in
-                let state = ListSet.add_pair (Lval lv) (stripCasts e) state in
-                  dbg (Lval lv) (stripCasts e) state;
-                  DF.Done state
+                | BinOp (PlusPI, e1, _, _)
+                | BinOp (IndexPI, e1, _, _)
+                | BinOp (MinusPI, e1, _, _) ->
+                    if !verbose then (
+                      E.warn "IsEquivalent.DFM.doInstr:";
+                      E.warn "  Not killing base expression in BinOp %a.." d_exp e;
+                      E.warn "  Adding new pair to analysis.";
+                    );
+                    let state = ListSet.add_pair (Lval lv) (stripCasts e) state in
+                      dbg (Lval lv) (stripCasts e) state;
+                      DF.Done state
 
-            | BinOp (PlusA, e, c, _)
-            | BinOp (MinusA, e, c, _) when isConstant c ->
-                if !verbose then (
-                  E.warn "IsEquivalent.DFM.doInstr:";
-                  E.warn "  Not killing base expression in BinOp %a.." d_exp e;
-                  E.warn "  Adding new pair to analysis.";
-                );
-                let state = kill e state in
-                let state = ListSet.add_pair (Lval lv) (stripCasts e) state in
-                  dbg (Lval lv) (stripCasts e) state;
-                  DF.Done state
+                | BinOp (PlusA, e1, c, _)
+                | BinOp (MinusA, e1, c, _) when isConstant c ->
+                    if !verbose then (
+                      E.warn "IsEquivalent.DFM.doInstr:";
+                      E.warn "  Not killing base expression in BinOp %a.." d_exp e;
+                      E.warn "  Adding new pair to analysis.";
+                    );
+                    let state = ListSet.add_pair (Lval lv) (stripCasts e) state in
+                      dbg (Lval lv) (stripCasts e) state;
+                      DF.Done state
 
 
-            | BinOp (PlusA, c, e, _)
-            | BinOp (MinusA, c, e, _) when isConstant c ->
-                if !verbose then (
-                  E.warn "IsEquivalent.DFM.doInstr:";
-                  E.warn "  Not killing base expression in BinOp %a.." d_exp e;
-                  E.warn "  Adding new pair to analysis.";
-                );
-                let state = kill e state in
-                let state = ListSet.add_pair (Lval lv) (stripCasts e) state in
-                  dbg (Lval lv) (stripCasts e) state;
-                  DF.Done state
+                | BinOp (PlusA, c, e1, _)
+                | BinOp (MinusA, c, e1, _) when isConstant c ->
+                    if !verbose then (
+                      E.warn "IsEquivalent.DFM.doInstr:";
+                      E.warn "  Not killing base expression in BinOp %a.." d_exp e;
+                      E.warn "  Adding new pair to analysis.";
+                    );
+                    let state = ListSet.add_pair (Lval lv) (stripCasts e) state in
+                      dbg (Lval lv) (stripCasts e) state;
+                      DF.Done state
 
-            | _ -> 
-                let state = kill (Lval lv) state in
-                let state = ListSet.add_singleton (Lval lv) state in
-                  if !verbose then (
-                    E.warn "IsEquivalent.DFM.doInstr:";
-                    E.warn "  Do not understand RHS of instrurtion %a." d_instr i;
-                    E.warn  "  Skipping.";
-                    dbg (Lval lv) (Lval lv) state;
-                  );
-                  DF.Done state
-          end
+                | _ -> 
+                    let state = ListSet.add_singleton (Lval lv) state in
+                      if !verbose then (
+                        E.warn "IsEquivalent.DFM.doInstr:";
+                        E.warn "  Do not understand RHS of instrurtion %a." d_instr i;
+                        E.warn  "  Skipping.";
+                        dbg (Lval lv) (Lval lv) state;
+                      );
+                      DF.Done state
+              end
 
         | Call (rop, e, formals, _) ->
             (* Note: The order of these modifcations to the state is significant
@@ -578,7 +577,6 @@ module DFM = struct
 
             (* Then kill all formals and the (optional) return lval *)
             let state = 
-              ignore (printf "*** Dealing with formal %a" d_exp e);
               List.fold_left 
                 (fun s e -> ListSet.add_singleton e (kill e s)) 
                 state 
