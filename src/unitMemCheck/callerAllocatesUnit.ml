@@ -201,7 +201,8 @@ let test_return =
 
 
 
-(*
+(* TODO:
+ * 
  * Both of these functions test to see if the claims list is being properly 
  * updated within the CallerAllocates module.  At the time of writing, both of
  * these tests fail :-(  
@@ -260,8 +261,8 @@ let suite_equivClone =
              TestList [
                TestLabel ("callerAllocatesUnit.c test_lval:", test_lval);
                TestLabel ("callerAllocatesUnit.c test_return:", test_return);
-               TestLabel ("Upkeep", test_bad_allocate_a);
-               TestLabel ("Upkeep", test_bad_allocate_b);
+               TestLabel ("Upkeep 1", test_bad_allocate_a);
+               TestLabel ("Upkeep 2", test_bad_allocate_b);
              ]
   )
 ;;

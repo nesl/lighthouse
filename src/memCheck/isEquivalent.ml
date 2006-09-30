@@ -638,7 +638,8 @@ module DFM = struct
     currentStmt := s;
 
     if (!dbg_is_equiv_stmt_summary) then (
-      ignore (printf "isEquiv: doInstr: Entering statement %d with state\n" s.sid); 
+      ignore (printf "isEquiv: doInstr: Entering statement %d (%a) with state\n" 
+                s.sid d_loc (get_stmtLoc s.skind)); 
       print_equiv_table (U.sort_and_uniq state);
       flush stdout
     );

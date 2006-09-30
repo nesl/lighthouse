@@ -133,7 +133,7 @@ let get_released (i:instr): exp list =
           get_fun_exps_with_attribute i "sos_may_release"
         else []
 
-    | Call (_, Lval((Var vi), NoOffset), formal_list, _) ->
+    | Call (_, Lval((Var vi), NoOffset), formal_list, _) when (List.length formal_list) > 0 ->
         if check_release_flag (List.nth formal_list ((List.length formal_list) -1)) then
           get_fun_exps_with_attribute i "sos_may_release"
         else []
