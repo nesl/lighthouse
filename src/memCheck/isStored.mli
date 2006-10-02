@@ -11,12 +11,14 @@
 (** {b Debugging} Options to enable debugging of the isDead module. *)
 
 (** Enable verbouse debugging *)
-val dbg_is_store : bool ref;;
+val dbg_is_store_i : bool ref;;
+val dbg_is_store_s : bool ref;;
+val dbg_is_store_g : bool ref;;
+val dbg_is_store_c : bool ref;;
 
 
 (** {b IsStore Functional Interface} *)
 
-(** Return list of heap data that is not properly stored in the function *)
-val not_stored_exps : Cil.fundec -> Cil.exp list -> Cil.exp list;;
-
+val is_stored_func : Cil.exp -> Cil.fundec -> Cil.exp list -> bool
+val is_stored_instr : Cil.exp -> Cil.stmt -> Cil.instr -> Cil.fundec -> Cil.exp list -> bool
   

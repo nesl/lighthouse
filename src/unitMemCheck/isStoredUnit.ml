@@ -7,7 +7,10 @@ module IE = IsEquivalent;;
 module IS = IsStored;;
 
 
-IS.dbg_is_store := false;;
+IS.dbg_is_store_i := false;;
+IS.dbg_is_store_s := false;;
+IS.dbg_is_store_g := false;;
+IS.dbg_is_store_c := false;;
 
 (* Set up a file for running tests *)
 let inputFile = "isStoredUnit.c";;
@@ -64,9 +67,16 @@ class testVisitor = object
   
   method vfunc (f:fundec) =
 
+    IE.generate_equiv f cilFile;
+    
+    let bad_formal_store f = 
+      List.filter  
+        (fun v -> not (IS.is_stored_func (Lval (var v)) f (stores f)))
+        (List.filter (fun v -> hasAttribute "sos_release" v.vattr) f.sformals)
+    in
+    
     let safely_stores (f:fundec) : bool =
-      IE.generate_equiv f cilFile;
-      (List.length (IS.not_stored_exps f (stores f))) = 0
+      (List.length (bad_formal_store f)) = 0
     in
 
     
@@ -125,7 +135,7 @@ let test_no_release =
 ;; 
 
 let test_main = 
-  TestCase(fun _ -> assert_bool "main" (not !(test_data.main)))
+  TestCase(fun _ -> assert_bool "main" !(test_data.main))
 ;; 
 
 (* Run all the tests *)
