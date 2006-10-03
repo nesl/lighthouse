@@ -450,7 +450,7 @@ module DFM = struct
 
       match i with
 
-          Set (lv, e, _) when (Util.equals e nullPtr) ->
+          Set (lv, e, _) when (isZero e) ->
             let state = kill (Lval lv) state in
             let state = ListSet.add_pair (Lval lv) (nullPtr) state in
               dbg (Lval lv) nullPtr state;

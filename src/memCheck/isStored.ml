@@ -362,6 +362,10 @@ module DFO = struct
       let is_null = 
         (IE.is_equiv e1 IE.nullPtr id) || (IE.is_equiv e2 IE.nullPtr id)
       in
+        if !dbg_is_store_g then (
+          ignore (printf "Checking (target, NULL) on %a and %a: (%b, %b)\n"
+                    d_exp e1 d_exp e2 is_target is_null);
+        );
         is_target && is_null
     in
       
