@@ -26,7 +26,7 @@ let stores: exp list ref = ref [];;
  * - Data flow states
  * - Effects of instructions on data flow
  *)
-type status = MustTake | Taken | Error | Null;;
+type status = MustTake | Taken | Error | Null | ReturnTaken;;
 type instr_status = IStore | INoEffect | IOverWrite;;
 
 (* Runtime debugging flags. *)
@@ -52,9 +52,9 @@ let is_field_of (e: exp) (targets: exp list) (sid: int) : bool =
     in
 
       if !verbose then (
-        ignore (printf "Comparing:\n");
+        ignore (printf "Seeing if any of (via %a) in statement %d:\n" d_exp e sid);
         List.iter (fun e -> ignore (printf "    %a\n" d_exp e)) el;
-        ignore (printf " to:\n");
+        ignore (printf " are equivalent to a field of:\n");
         List.iter (fun e -> ignore (printf "    %a\n" d_exp e)) targets;
         ignore (printf "with result %b\n" direct)
       );
@@ -75,15 +75,13 @@ let is_field_of (e: exp) (targets: exp list) (sid: int) : bool =
                | BinOp (MinusPI, e, _, _) ->
                    is_field_of_helper (IE.get_equiv_set e sid)
 
-               | BinOp (PlusA, e, c, _)
-               | BinOp (MinusA, e, c, _) when (isConstant c) ->
-                   is_field_of_helper (IE.get_equiv_set e sid)
+               | BinOp (PlusA, e1, e2, _)
+               | BinOp (MinusA, e1, e2, _) ->
+                   is_field_of_helper (IE.get_equiv_set e1 sid) || 
+                   is_field_of_helper (IE.get_equiv_set e2 sid)
 
-               | BinOp (PlusA, c, e, _)
-               | BinOp (MinusA, c, e, _) when (isConstant c) ->
-                   is_field_of_helper (IE.get_equiv_set e sid)
-
-               | _ -> false
+               | _ -> 
+                   false
           )
           el
       )
@@ -113,7 +111,25 @@ let instr_stores (i: instr) (sid: int) : instr_status =
        (U.get_released i)
     )
   in
-    
+  
+  (* TODO: Should this be looking for field membership? *) 
+  let is_heap (e: exp) (id: int) : bool =
+    List.exists
+      (fun e -> match e with
+
+           Lval (Var v, NoOffset) ->
+             (* Used to cover IsEquivalent transformation *)
+             (Str.string_match (Str.regexp "__heap") v.vname 0)
+
+         | Lval (Mem (Lval (Var v, NoOffset)), NoOffset) ->
+             (* Used to cover SimpleMem transformation *)
+             (Str.string_match (Str.regexp "mem_") v.vname 0)
+
+         | _ -> false
+      )
+      (IE.get_equiv_set e id)
+  in
+                         
 
     
   let is_overwritten (i: instr) (id: int) : bool = 
@@ -124,7 +140,7 @@ let instr_stores (i: instr) (sid: int) : instr_status =
     )
   in
 
-    if !dbg_is_store_i then (
+    if !verbose then (
       ignore (printf "IsStored.instr_stores trying to store \"%a\":\n" d_exp !target);
       ignore (printf "...is_released: %b\n" (is_released i sid));
       ignore (printf "...is_overwritten: %b\n" (is_overwritten i sid));
@@ -157,10 +173,26 @@ let instr_stores (i: instr) (sid: int) : instr_status =
       | Call (_, _, _, _) when (is_overwritten i sid)
         -> IOverWrite
      
-      | Set (lv, e, _) when (
-          (is_field_of (Lval lv) !stores sid) && 
-          (is_field_of !target [e] sid) 
-        ) -> IStore
+      | Set (lv, e, _) ->
+
+          if (
+            (is_field_of (Lval lv) !stores sid) && 
+            (is_field_of !target [e] sid) 
+          ) then (
+            IStore
+          )
+         
+                  (* 
+          else if (
+            (is_heap (Lval lv) sid) && 
+            (is_field_of !target [e] sid) 
+          ) then (
+            ignore (printf "SUCCESS!!!\n");
+            IStore
+          )
+                   *)
+          
+          else (INoEffect)
 
       | Call (_, _, _, _) when (is_released i sid) 
         -> IStore
@@ -192,6 +224,7 @@ module DFO = struct
         | Taken -> "Taken"
         | Null -> "Null"
         | Error -> "Error"
+        | ReturnTaken -> "ReturnTaken"
     )
   ;;
 
@@ -203,7 +236,7 @@ module DFO = struct
   let debug_combine (s: stmt) (transition: t option) (old_state: t): unit =
     if !dbg_is_store_c then (
       ignore (printf "IsStored.DFO.combinePredecessors: ");
-      ignore (printf "Join at statement %a" d_stmt s);
+      ignore (printf "Join at statement (%a):\n%a\n" d_loc (get_stmtLoc s.skind) d_stmt s);
       match transition with
           Some new_state -> ignore (printf "Transitions from %a to %a\n" 
                                   pretty old_state pretty new_state);
@@ -228,7 +261,8 @@ module DFO = struct
   
   let debug_guard (e: exp) (transition: t DF.guardaction) : unit =
     if !dbg_is_store_g then (
-      ignore (printf "IsStored.DFO.doGuard: Expression %a" d_exp e);
+      ignore (printf "IsStored.DFO.doGuard: Expression %a guarding statement %d\n" 
+                d_exp e !current_stmt_id);
       match transition with
           DF.GUse new_state -> ignore (printf " propogates %a\n" pretty new_state);
         | DF.GDefault -> ignore (printf " has no special effect\n");
@@ -240,8 +274,8 @@ module DFO = struct
     
   let debug_stmt (s: stmt) (transition: t DF.stmtaction) : unit =
     if (!dbg_is_store_s) then (
-      ignore (printf "IsStored.DFO.doStmt: Examining statement %d:\n%a\nwith effect:" 
-                s.sid d_stmt s);
+      ignore (printf "IsStored.DFO.doStmt: Examining statement %d (%a):\n%a\nwith effect:" 
+                s.sid d_loc (get_stmtLoc s.skind) d_stmt s);
       match transition with 
           DF.SUse new_state -> ignore (printf " propogates %a\n" pretty new_state);
         | DF.SDefault -> ignore (printf " has no special effect\n");
@@ -263,10 +297,20 @@ module DFO = struct
    * - Error dominating all
    * - Taken dominating Null
    * - MustTake dominating Null
+   * - ReturnTaken is special case for return statements that can have "take"
+   * data more than once without causing an error
    * - Everything else causes an error
    *)
   let combinePredecessors (s: stmt) ~(old: status) (new_state: status) = 
 
+    if !dbg_is_store_c then (
+      ignore (printf "IsStored.DFO.combinePredecessors: Entering statement %d (%a) with states:\n"
+                s.sid d_loc (get_stmtLoc s.skind)
+      );
+      ignore (printf "old: %a, new: %a\n" pretty old pretty new_state);
+      flush stdout;
+    );
+  
     let transition = match (new_state, old) with
       | (Null, Null) 
       | (Taken, Taken)
@@ -278,6 +322,16 @@ module DFO = struct
       
       | (Taken, Null) -> Some Taken
       | (Null, Taken) -> None
+
+      | (MustTake, ReturnTaken) ->
+          Some MustTake
+
+      | (Null, ReturnTaken)
+      | (Taken, ReturnTaken) ->
+          None
+
+      | (ReturnTaken, _) ->
+          E.s (E.bug "IsStored.combinePredecessors: Hmm... Didn't think that would happen :-(\n")
 
       | _ -> Some Error
     in
@@ -313,6 +367,9 @@ module DFO = struct
       | (Null, IStore) -> 
           DF.Done Taken
       
+      | (ReturnTaken, _) ->
+          E.s (E.bug "IsStored.doInstr: Hmm... Didn't think that would happen :-(\n")
+
     in
 
       debug_instr i transition state;
@@ -329,9 +386,9 @@ module DFO = struct
         Return (Some e, _) when (
           (is_field_of !target [e] s.sid) && !claim_on_return
         ) ->
-
-          if (state = MustTake || state = Null) then (
-            IH.replace stmtStartData s.sid Taken;
+          
+          if (state = MustTake || state = Null || state = ReturnTaken) then (
+            IH.replace stmtStartData s.sid ReturnTaken;
             DF.SDone
           ) else (
             IH.replace stmtStartData s.sid Error;
@@ -466,7 +523,7 @@ let is_stored (f: fundec) : bool =
   List.for_all 
     (fun s -> 
        try match (IH.find DFO.stmtStartData s.sid) with
-           Taken | Null -> true
+           Taken | Null | ReturnTaken -> true
          | MustTake | Error -> false
        with Not_found -> false)
     (get_return_statements f)

@@ -745,7 +745,7 @@ let get_equiv_set (e:exp) (id:int) : (exp list) =
         Some table -> (
           let direct = 
             try (EquivSet.elements (List.find (fun eq -> EquivSet.mem e eq) table))
-            with Not_found -> []
+            with Not_found -> [e]
           in
 
           let indirect = (DFM.getEquiv e table)
@@ -757,6 +757,7 @@ let get_equiv_set (e:exp) (id:int) : (exp list) =
               List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) direct;
               ignore (printf "Inirect to %a:\n" d_exp e);
               List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) indirect;
+              ignore (printf "DONE INTERNAL\n");
               flush stdout;
             );
 
@@ -764,22 +765,46 @@ let get_equiv_set (e:exp) (id:int) : (exp list) =
 
         )
       | None -> 
-          []
+          [e]
 ;;
 
 
 (* Retrun true if expression e1 must alias expression e2 *)
 (* TODO: The stripping of type casts is going to require a bit more thought *)
 let is_equiv (e1:exp) (e2:exp) (id:int) : (bool) =
+
   let e1 = 
     if (isZero e1) then e1
     else stripCasts e1 
   in
+
   let e2 = 
     if (isZero e2) then e2
     else stripCasts e2 
   in
-    List.mem e2 (get_equiv_set e1 id)
+    
+  let unify_type (e: exp) : exp = match e with   
+      StartOf lv -> 
+        let e_new = Lval (mkMem (mkAddrOf lv) NoOffset) in
+          e_new
+    | _ -> e
+  in
+
+  let results = List.map unify_type (get_equiv_set e1 id) in
+  let query = unify_type e2 in
+    
+   (*
+    List.iter 
+      (fun e -> 
+           ignore (printf "%a to %a (%a, %a) with %b\n" 
+                     d_exp query d_exp e d_type 
+                     (typeOf query) d_type (typeOf e) 
+                     (query = e));
+      )
+      results;
+    *)  
+    
+    List.mem query results
 ;;
 
 
