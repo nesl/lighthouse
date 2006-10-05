@@ -92,7 +92,7 @@ let get_local_stores (f: fundec): exp list =
   * Simple mechanism to white list a few "bottem" functions.
   *)
 let white_list (v:varinfo) : bool =
-  let skip_functions = ["ker_malloc"; "ker_free"] in
+  let skip_functions = ["ker_malloc"; "ker_free"; "ker_change_own"] in
     List.exists (fun skip -> v.vname = skip) skip_functions
 ;;
     
@@ -375,7 +375,6 @@ let doFile (file_name: string) : unit =
   (* Execute other modules in the correct order *) 
   ignore (Simplemem.feature.fd_doit !cil_file);
   ignore (Simplify.feature.fd_doit !cil_file);
-  ignore (Oneret.feature.fd_doit !cil_file);
   ignore (MakeOneCFG.make_one_cfg !cil_file);
   ignore (Ptranal.feature.fd_doit !cil_file);
   ignore (AddAnnotations.feature.fd_doit !cil_file);
