@@ -560,7 +560,8 @@ let is_stored_instr
   let start_state = match i with
       Set (lv, _, _) 
     | Call (Some lv, _, _, _) when (
-        List.exists (fun store -> IE.is_equiv (Lval lv) store s.sid) !stores
+        (is_field_of (Lval lv) !stores s.sid) 
+        (* List.exists (fun store -> IE.is_equiv (Lval lv) store s.sid) !stores *)
       ) -> Taken
     | _ -> MustTake
   in
