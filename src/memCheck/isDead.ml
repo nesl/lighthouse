@@ -90,16 +90,13 @@ let is_dead_exp (e:exp) : bool =
   (* TODO: What CIL translation is causing the need for this NULL check? *)
   let non_null = 
     List.filter 
-      (fun e -> not (IE.is_equiv e IE.nullPtr !currentStmt.sid)) 
+      (fun e -> 
+         (not (IE.is_equiv e IE.nullPtr !currentStmt.sid)) && 
+         (not (isZero e))
+      ) 
       sub_exps 
   in
     
-    (*
-    ignore (printf "Checking to see if expression %a treats %a as dead:\n" 
-              d_exp e d_exp !target);
-    List.iter (fun e -> ignore (printf "  subexpression: %a\n" d_exp e)) non_null;
-    flush stdout;
-     *)
     List.exists (fun e -> MA.may_alias_wrapper e !target) non_null
 ;;
 
@@ -158,12 +155,13 @@ let safe_statement (s:stmt) : status =
                                    
     (* If an statement touches a dead expression than it is unsafe *)
     if (!dbg_is_dead_s) then (
-      ignore (printf "IsDead.safe_statement: Statement %a" d_stmt s); 
+      ignore (printf "IsDead.safe_statement: Statement %a\n" d_stmt s); 
       if unsafe then (
         ignore (printf "dereferences dead expression %a\n" d_exp !target)
       ) else (
         ignore (printf "is safe with respect to expression %a\n" d_exp !target)
-      )
+      );
+      flush stdout;
     );
 
     if (unsafe && (!freeLineNum >= (get_stmtLoc s.skind).line)) then 
