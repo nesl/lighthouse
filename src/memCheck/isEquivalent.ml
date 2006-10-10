@@ -111,7 +111,11 @@ module ListSet = struct
     in
       match eq_op with
           None -> (EquivSet.singleton e)::eqsl
-        | Some _ -> E.s (E.error "isEquivalent: ListSet.add_pair: Invalid list set state\n")
+        | Some _ -> 
+            ignore (printf "Expression %a is already in table:\n" d_exp e);
+            print_equiv_table eqsl;
+            flush stdout;
+            E.s (E.error "isEquivalent: ListSet.add_pair: Invalid list set state\n")
   ;;
 
   (* Add the pair of elements to the set that contains e1 or the set that
@@ -171,7 +175,7 @@ module DFM = struct
   let copy (state: t) = state;;
   let pretty () (state: t) = dprintf "{%s}" (
     ignore (print_equiv_table state);
-    "Cheating...\n"
+    ""
   );;
 
 
@@ -661,12 +665,19 @@ module TrackF = DF.ForwardsDataFlow(DFM)
  *)
 let generate_equiv (f:fundec) (cilFile:file): unit =
 
+  (* TODO: I am guessing that the crashes from sched.c and sos_info.c are coming
+   * from here. *)
   let global_vars = 
     foldGlobals 
       cilFile
       (fun s g -> match g with
-           GVarDecl (v, l) | GVar (v, _, l) -> v::s
-         | GFun (fd, l) -> s
+         | GFun (fd, _) -> s
+         | GVar (v, _, _)
+         | GVarDecl (v, _) ->
+             (*
+             ignore (printf "Adding global %s\n" v.vname);
+              *)
+             v::s
          | _ -> s
       ) 
       []
@@ -792,17 +803,18 @@ let is_equiv (e1:exp) (e2:exp) (id:int) : (bool) =
 
   let results = List.map unify_type (get_equiv_set e1 id) in
   let query = unify_type e2 in
-    
-   (*
+  
+   (* 
     List.iter 
       (fun e -> 
            ignore (printf "%a to %a (%a, %a) with %b\n" 
-                     d_exp query d_exp e d_type 
-                     (typeOf query) d_type (typeOf e) 
+                     d_exp query d_exp e 
+                     d_type (typeOf query) d_type (typeOf e) 
                      (query = e));
+           flush stdout;
       )
       results;
-    *)  
+    *)
     
     List.mem query results
 ;;

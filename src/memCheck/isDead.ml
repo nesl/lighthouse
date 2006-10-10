@@ -48,7 +48,8 @@ let get_dereferenced_exps (i:instr) : exp list =
          *)
         begin 
           match e with
-              Lval (Mem e1, NoOffset) -> [e]
+              (* TODO: Is it okay to comment this out... *)
+              (* Lval (Mem e1, NoOffset) -> [e] *)
             | _ -> []
         end
     | Set ((Mem e, _), e2, _) -> [e; e2]
@@ -87,17 +88,34 @@ let is_dead_exp (e:exp) : bool =
 
   let sub_exps = sub_exps_of e in
 
-  (* TODO: What CIL translation is causing the need for this NULL check? *)
+  (* Many programmers write code of the form:
+   *   ...
+   *   free(ptr);
+   *   ptr = NULL;
+   *   ...
+   * We want to allow this explicit NULLing of freed data.  So do not flag an
+   * error if the target expression is being set to NULL.
+   *)
   let non_null = 
     List.filter 
       (fun e -> 
          (not (IE.is_equiv e IE.nullPtr !currentStmt.sid)) && 
-         (not (isZero e))
+         (not (isZero (stripCasts e)))
       ) 
       sub_exps 
   in
-    
-    List.exists (fun e -> MA.may_alias_wrapper e !target) non_null
+   
+    List.exists 
+      (fun e -> 
+         let b = 
+           MA.may_alias_wrapper e !target
+         in
+           ignore (printf "Checking to see if %a may alias dead data %a: %b\n"
+                     d_exp e d_exp !target b
+           );
+           flush stdout;
+           b
+    ) non_null
 ;;
 
 
