@@ -1,0 +1,490 @@
+\section{Analysis Specification and Implementation}
+\label{sec:alg}
+
+
+\subsection{Specification}
+
+We now formalize the logical
+specification of our ownership-based resource management protocol.
+For simplicity, we specify the protocol on an idealized imperative
+language that includes the fundamental operations for resource
+management.  The language's atomic statements are as follows, where
+{\tt x} and {\tt y} range over {\em resource handle names}:
+\[
+y := x\mid \mathrm{alloc}\ x \mid \mathrm{free} \ x \mid 
+  \mathrm{get}\ x \mid  \mathrm{store}\ x 
+%
+\]
+Programs are constructed by sequencing statements of the above form,
+and we assume the presence of standard control-flow constructs
+including conditionals and loops.
+
+Our language's statements
+abstractly capture resource-related program operations and
+have the following informal semantics.
+An assignment $y :=  x$ assigns the resource referenced by handle $x$ to the
+handle $y$.
+The operation $\mathrm{alloc}\ x$ allocates a new resource and returns a handle
+$x$ to the resource.
+The operation $\mathrm{free}\ x$ frees the resource
+referenced by the handle $x$.
+In addition, we assume the presence of a persistent store that holds a
+single resource.  The operation $\mathrm{store}\ x$ puts the resource
+referenced by handle $x$ into the store, and the operation
+$\mathrm{get}\ x$ assigns the resource contained in the persistent store
+to $x$.
+
+Given this core language, we formally specify rules for proper
+resource usage as 
+invariants on each dynamic program execution.  A natural formalism for
+these invariants is
+{\em linear temporal logic} (LTL)~\cite{Emerson90,MannaPnueli92vol1},
+which we briefly review.
+%% Technically, the specifications are in first order LTL, since
+%% they quantify over resource handles, but for a fixed program, these are constants. 
+An LTL formula is constructed from atomic predicates using boolean
+operations and the {\em temporal operators} $\Box$, $\Diamond$, 
+and $\Next$.
+An LTL formula is evaluated at a given execution state
+with respect to a fixed execution path through the program.
+The formula $\Box f$ holds at state $s$
+if the formula $f$ holds on $s$ and each subsequent state in
+the path.  
+The formula $\Diamond f$ 
+holds at state $s$ if the formula $f$ holds on $s$ or some
+subsequent state in the path.  
+The formula $\Next f$ holds at state
+$s$ if the formula $f$ holds on the successor state of $s$ along the
+path.
+
+
+For a handle $x$, we write $\access(x)$ for any operation that syntactically
+accesses the resource referenced by $x$, that is, one of $\mathrm{free}\ x$,
+$\mathrm{store}\ x$, or an assignment with $x$ on the right-hand side.
+We also introduce a relation $\alias(x,y)$ on pairs of handles:
+$\alias(x,y)$ holds at an execution state
+iff handles $x$ and $y$ refer to the same
+resource in that state. 
+%% The relation can be statically approximated as an overapproximation
+%% $\mayalias(x,y)$ that holds
+%% if $x$ may be aliased to $y$, and an underapproximation
+%% $\mustalias(x,y)$ that holds if $x$ is definitely
+%% aliased to $y$ \cite{???}.
+We now define two key correctness invariants for proper resource
+management. 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\smallskip
+\noindent
+{\bf No Leaks.} The first property formalizes the absence of resource
+leaks by enforcing that along every program execution path, every allocation
+$\mathrm{alloc}\ x$ is necessarily followed by either
+a free or a store of a handle
+that refers to the same resource as $x$:
+\[
+\Box \left( (\mathrm{alloc}\ x) \rightarrow
+	\Diamond \left( (\mathrm{free}\ y 
+                              \vee
+                        \mathrm{store}\ y) \wedge \alias(x,y) 
+                 \right) \right)
+\]
+%% In our tool, we use the static underapproximation $\mustalias$ for the alias
+%% relation. 
+%\begin{displaymath}
+%%
+%\forall \ x, \ t_{i} = \mathrm{malloc} \ x \ 
+%%
+%\Rightarrow \
+%%
+%\exists \ j > i \ 
+%%
+%\mathrm{st.} \
+%%
+%t_{j} = \mathrm{free} \ [\mathrm{must \ alias} \ x] \ 
+%%
+%\vee \ t_{j} = \mathrm{store} \ [\mathrm{must \ alias} \ x] 
+%\end{displaymath}
+%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\smallskip\noindent
+{\bf No Dangling Pointers.} The second
+property states that once a resource has
+been freed, it is never accessed again:
+%% Formally, upon an operation $\mathrm{free}\ x$, there should not be any 
+%% subsequent access to the resource that was freed:
+\[
+\Box ( \mathrm{free}\ x \rightarrow \Next (\Box (\lnot (\access(y) \wedge \alias(x,y))))) 
+\]
+%% In our tool, we approximate $\alias$ with the statically computed overapproximation
+%% $\mayalias$.
+
+%\begin{displaymath}
+%%
+%\forall i, \ t_{i} = \mathrm{free} \ x \ 
+%%
+%\Rightarrow \
+%%
+%\forall \ j > i, \ t_{j} \neq \mathrm{op} \ [\mathrm{may \ alias} \ x] 
+%%
+%\end{displaymath}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\smallskip
+%\noindent
+%{\bf Allocation Before Use.}
+%The final property requires that any access to a handle is preceded by 
+%an allocation or retrieval from the store:
+%\[
+% \Box (\access(x) \rightarrow \PastDiamond (\alias(x,y) \wedge 
+%	\left[ \mathrm{alloc}\ y \vee \mathrm{get}\ y \right] ) )
+%\]
+%% The $\PastDiamond$ operator is analogous to $\Diamond$ but quantifies
+%% over all {\em predecessor} states in the execution path from the given
+%% state, rather than successor states.
+%\begin{displaymath}
+%%
+%\forall \ i, \ t_{i} = \mathrm{op} \ x \ 
+%%
+%\Rightarrow \
+%%
+%\exists \ j \geq i \ 
+%%
+%\mathrm{st.} \
+%%
+%t_{j} = \mathrm{malloc} \ [\mathrm{must \ alias} \ x] \ 
+%%
+%\vee \ t_{j} = \mathrm{get}_{y} \ [\mathrm{must \ alias} \ x] 
+%\end{displaymath}
+%
+%This property is not verified by the checker.
+
+
+\subsection{Implementation}
+
+Our tool checks SOS programs at compile time for violations of the
+above two properties.
+The tool performs a
+static dataflow analysis for each property
+on a program's control-flow graph (CFG),
+which statically represents all possible execution paths.  The
+$\mathrm{alloc}$ and $\mathrm{free}$ operations are respectively
+represented by {\tt
+  ker\_malloc} and {\tt ker\_free}.  To identify a module's persistent
+state, we provide a new attribute {\tt sos\_state} for formal
+parameters.  For example, the {\tt state} argument to a module's event
+handler would be annotated with this attribute.
+
+%% The $\mathrm{get}$
+%% and $\mathrm{store}$ operations are respectively represented by accesses and
+%% updates to the contents of the {\tt state} argument to a module's
+%% event handler.  We also allow programmers to annotate formal
+%% parameters with an {\tt sos\_state} attribute, to indicate that it is
+%% part of the module's persistent state.  This is useful, for example,
+%% when a module's event handler passes the persistent
+%% state to a helper function, which happens relatively frequently.
+
+Our dataflow
+analyses are implemented in the CIL front end for C~\cite{CIL}, which
+parses C code into a simple intermediate format and provides a
+framework for performing analyses on the intermediate code.  Each
+analysis is {\em modular}, considering each module independently and
+analyzing the CFG for each procedure
+within the module in isolation.
+Care must be taken for our static checker to conservatively approximate the
+dynamic conditions that must be satisfied.  Two notable issues are the
+treatment of pointer aliasing and of procedure calls, which we discuss
+in turn.
+
+First, the invariants described above depend on dynamic alias
+information, which cannot be exactly computed at compile time.
+Instead, two standard approximations are {\em must-alias} analysis and
+{\em may-alias} analysis.
+A must-alias analysis underapproximates the
+dynamic alias relations:  if a must-alias analysis determines that $x$
+and $y$ alias at a particular program point, then
+$\alias(x,y)$ definitely holds at any run-time
+execution state corresponding to that program point.
+A may-alias analysis overapproximates the
+dynamic alias relations:  if a may-alias analysis determines that $x$
+and $y$ {\em cannot} alias at a particular program point, then
+$\alias(x,y)$ definitely does not hold at any run-time
+execution state corresponding to that program point.
+
+Our checker requires both kinds of static alias approximations.  In
+the first property described above, alias information is
+used to ensure that something definitely happens, namely that an
+allocated resource is eventually freed.  Therefore, in this case we
+approximate the true alias information with must-alias information.
+In the second property described above, alias information is used to
+ensure that something definitely does not happen, namely an access to
+a freed resource.  Therefore, in this case we approximate the true
+alias information with may-alias information.
+
+Our implementation currently uses a simple flow-sensitive 
+must-alias analysis.  For the may-alias analysis, we
+use a fast flow-insensitive alias analysis provided by the CIL
+framework.  Static alias analysis can be quite imprecise in the
+presence of complex pointer manipulations and pointer structures.  For
+example, CIL's may-alias analysis does not distinguish among the
+fields of a structure, instead considering them to always potentially
+alias one another.  However,
+our experimental results indicate that
+these limitations do not result in an inordinate number of false
+positives for the checker.
+This positive result is likely due to
+the stylized ways in which dynamic memory is
+manipulated in sensor-network applications, which our ownership model
+captures well.  
+
+Second, our simple core language used to specify the resource
+invariants does not contain procedure calls, which must be properly
+handled in our implementation.  As mentioned above, our analyses are
+{\em intraprocedural}, meaning that each procedure is checked in
+isolation.  To make such checking both correct and precise, we rely on
+the ownership attributes {\tt sos\_claim} and {\tt sos\_release}, as
+described in the previous section.
+
+Given such attributes, the proper
+handling of procedure calls becomes straightforward.  A procedure call
+statement 
+is treated logically by the checker
+as an assignment from actuals to formals, followed by an
+assignment from the return value of the call to the left-hand-side
+variable (if any).  A formal parameter annotated with the {\tt
+  sos\_claim} attribute is treated as an allocation site, just as is
+{\tt ker\_malloc}.  A formal parameter annotated with the {\tt
+  sos\_release} attribute is treated as a disposal site, just as is
+{\tt ker\_free}.
+
+The ability to perform checking modularly allows SOS application
+writers to obtain early feedback about the correctness of their
+resource management, without requiring access to the rest of the
+system.  This is particularly important in a system like SOS, in which
+modules can be linked and unlinked dynamically.  In such a setting,
+the ``rest'' of the system is a moving target, so it is not really
+possible to consider whole-program analysis.
+
+\subsection{Limitations}
+
+As we demonstrate in the next section,
+our checker is useful for detecting violations of the ownership
+protocol on real sensor-network code.
+However, the checker is not guaranteed to find all such violations.
+Said another way, the checker can be used for finding memory errors but not
+for guaranteeing the absence of all memory errors.  We discuss three
+limitations of the checker in this regard.
+
+First, the checker does not precisely handle all of the unsafe features of the
+C programming language.  For example, pointer arithmetic is not
+statically analyzed.  Instead, an expression of the form $p+i$, where
+$p$ is a pointer and $i$ is an integer, is simply treated as if it refers to
+the same block of memory as $p$.  If $p+i$ in fact overflows to
+another block of memory at run time, the checker's assumption can
+cause it to miss errors.
+These kinds of limitations are standard for C-based program analyses.
+
+Second, there is a design choice about how to treat messages that a
+handler does not explicitly acquire through {\tt
+  ker\_msg\_take\_data}.  Technically the ownership protocol 
+disallows these messages from being accessed at all, since the
+receiving module
+is not the owner.  However, enforcing this requirement can cause
+spurious errors for patterns of data sharing that are in fact safe,
+for example when a module temporarily ``borrows'' data from another
+module within a bounded scope.  Therefore, our checker does not
+currently enforce the requirement that a module only access memory
+that it owns, reducing the number of false positives but also
+potentially missing errors.  The checker still ensures that a message
+handler does not access memory that has earlier been freed or released.
+
+Finally, our modular checker does not
+consider the overall
+order in which messages will be received.
+However,
+there may be application-level protocols that determine how events
+are generated in the system, and these protocols can affect the
+correctness of ownership tracking.
+%
+For example, imagine a module that responds to three events:  $\create$
+causes the module to allocate a block $b$ and store
+it into the module's persistent store,
+$\access$ causes the module to access block $b$ via the  store,
+and $\delete$ causes the module to deallocate block $b$ via the 
+store.
+The module properly manages block $b$ as long as the temporal
+sequence of events follows the regular expression $\alloc$ $\access^*$
+$\delete$.  This ordering ensures that the system never accesses the
+block before it is allocated and always eventually deletes the block.
+
+Our tool currently only
+tracks data locally within each event handler.
+When performing this tracking, the tool assumes on entry
+that all data in the persistent store is owned by the module.  The
+tool similarly considers a resource to be properly
+released when it is placed in the persistent store.  These
+assumptions can miss errors, for example if an $\access$ event ever
+occurs before the $\alloc$ event.  However, our assumptions provide a
+practical point in the design space 
+that allows each event handler to be usefully checked
+for local violations of the ownership protocol.
+%
+It will be interesting to extend our system with additional interface
+annotations about application-level protocols in the future~\cite{AlurPOPL05,HJM05}.
+
+%% Our checker for correct memory management is based on a 
+%% flow-sensitive dataflow analysis.
+%% A CIL module called ``ownRelease'' is used to verify that data released by a
+%% module is properly treated as dead.
+%% %
+%% This module first scans the program for locations where a buffer is released.
+%% %
+%% When such an instruction is found, the module verifies that:
+%% %
+%% \begin{itemize}
+%% %
+%% \item No possible predecessor allows the released buffer to escape by storing
+%% a persistent alias to the buffer or releasing it to another module.  
+%% %
+%% Note that this should also check that no predecessor kills the buffer first.
+%% %
+%% \item No possible successor accesses the buffer in any way.
+%% %
+%% \end{itemize}
+
+
+%% This analysis depends on a ``may alias'' analysis of pointers in the checked
+%% module.
+%% %
+%% At this time it accomplishes this via the Ptranal module provided by CIL.
+
+
+%% The ``ownRelease'' module boot straps allocation by appending a dummy main
+%% function to modules that calls the default event handler implemented by the
+%% module.
+%% %
+%% This dummy main function uses a special calls to allocate memory for the
+%% module:
+%% %
+%% \begin{itemize}
+%% %
+%% \item \texttt{sos\_state\_malloc} is used to specify the creation of the state
+%% buffer
+%% %
+%% \item \texttt{ker\_data\_malloc} is used to specify the creation of the
+%% message data buffer
+%% %
+%% \item \texttt{ker\_malloc} is used to allocate the message header (that
+%% includes a reference to the data buffer)
+%% %
+%% \end{itemize}
+%% %
+%% The analysis uses \texttt{sos\_state\_malloc} rather than \texttt{ker\_malloc}
+%% so that the node state can be differentiated as being persistent (note that
+%% there is no other persistent data in SOS).
+%% %
+%% One limitation of the current analysis is the field insensitivity that leads
+%% to access to fields of structs triggering false positives (none found in SOS
+%% code base but one found in unit testing). 
+
+%% A CIL module needs to be written that verifies that when a module gains
+%% ownership of a buffer a persistent alias to the buffer is created, the buffer
+%% is released to another module, or the buffer is deallocated.
+
+
+%% A CIL module needs to be written that verifies that the attributes (or lack of
+%% attributes) assigned to formal parameters are not violated by function
+%% implementation.
+%% %
+%% From this module, a more advanced module should be written to automate the
+%% generation and annotation of functions within SOS.
+
+
+%% The end ownership module will check only a single module at a time.
+%% %
+%% This is made possible since entry and exit points from the module have well
+%% defined ownership semantics.
+%% %
+%% Functions in other modules and the kernel that are called by a checked module
+%% will be verified on demand.
+
+
+%% The ability to conditionally claim ownership of data may make this a bit more
+%% exciting.
+
+
+%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% \subsection{Interprocedural Analysis}
+
+%% We extend the basic dataflow algorithm to procedures using resource management
+%% annotations at function boundaries.
+%% Specifically, we annotate formal arguments and return parameters of functions
+%% to describe parameters the function allocates or frees. 
+%% With these annotations, the algorithm can substitute function calls by 
+%% allocation or free calls, and check each function in isolation.
+
+
+%% \begin{description}
+%% %%%%%%%%%%%%%%%%%%%%
+%% \item[release v]
+        
+%% Pre: v must be a reference to a memory location.
+
+%% Post: v must be treated as dead until end of function.  Thus, it may not
+%% appear in any other term T.  (This can be improved by allowing freed data to
+%% be reallocated.)
+
+    
+%% %%%%%%%%%%%%%%%%%%%%
+%% \item[claim v]
+
+%% Pre: v must be an "unused" or "available" variable.
+
+%% Post: v must be Stored or Freed exactly once on each path from claim point to
+%% end of function.  (This can be improved by allowing allocated data to be
+%% reallocated after it has been Freed / Stored).
+
+
+%% %%%%%%%%%%%%%%%%%%%%
+%% \item[borrow v]
+
+%% Pre: None.
+
+%% Post: No effect on v.
+
+%% \end{description}
+
+
+%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% \subsection{Callee}
+
+%% \begin{description}
+
+
+%% %%%%%%%%%%%%%%%%%%%%
+%% \item[release v]
+
+%% Pre: None.
+
+%% Post: Function must Store or Free v exactly once on each path to return.
+
+
+%% %%%%%%%%%%%%%%%%%%%%
+%% \item[claim v]
+
+%% Pre: None.
+
+%% Post: Function must have Released (or Malloced) data into v along each path to
+%% return.
+
+
+%% %%%%%%%%%%%%%%%%%%%%
+%% \item[borrow v]
+
+%% Pre: None.
+
+%% Post: Function may only Read / Set v.
+
+%% \end{description}
+
+

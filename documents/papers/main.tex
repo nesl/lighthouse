@@ -1,0 +1,141 @@
+\documentclass[10pt]{sigplanconf}
+
+\usepackage{amsmath,amssymb, latexsym}
+%\usepackage[noend]{algorithmic}
+%\usepackage{algorithm}
+\usepackage{program}
+%\usepackage{pstricks}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage{enumerate}
+\usepackage{hyperref}
+\def\url{}
+\usepackage{subfigure}
+\usepackage{epsfig}
+\usepackage{epic}
+\usepackage{eepic}
+
+
+% command to end a proof or definition:
+\def\qed{\rule{0.4em}{1.4ex}}
+
+% space at the beginning of an environment:
+\def\@envspa{\hspace{0.3em}}
+\def\@sa{\hspace{-0.2em}}
+\def\@sb{\hspace{0.5em}}
+\def\@sc{\hspace{-0.1em}}
+\def\sk{\smallskip}		% space before and after theorems
+
+\newtheorem{notation}{Notation}{\itshape}{}
+%\newtheorem{theoremstar}{Theorem}{\bfseries\upshape}{\itshape}
+%\newtheorem{@protheo}{Theorem}
+
+%\newenvironment{theorem}[1]{\begin{@protheo}{\rm \bf #1}\it}{\end{@protheo}}
+%\newenvironment{proposition}[1]{\begin{@protheo}{\rm \bf #1}\it}{\end{@protheo}}
+
+%\newtheorem{remark}{Remark}{\bfseries\upshape}{\rm}
+%\newtheorem{definition}{Definition}{\bfseries\upshape}{\itshape}
+% this is from the lazy_abstraction paper
+%\newtheorem{notation}{Notation}{\itshape}{}
+\newtheorem{theoremstar}{Theorem}{\bfseries\upshape}{\itshape}
+\newtheorem{@protheo}{Theorem}
+\newenvironment{theorem}[1]{\begin{@protheo}{\rm \bf #1}\it}{\end{@protheo}}
+\newtheorem{remark}{Remark}{\bfseries\upshape}{\rm}
+\newtheorem{definition}{Definition}{\bfseries\upshape}{\itshape}
+\newtheorem{proposition}{Proposition}{\bfseries\upshape}{\itshape}
+\newtheorem{lemma}{Lemma}{\bfseries\upshape}{\itshape}
+\newtheorem{corollary}{Corollary}{\bfseries\upshape}{\itshape}
+\newtheorem{invariant}{Invariant}
+
+
+
+\newcounter{ex}
+\stepcounter{ex}
+
+\newenvironment{example}{\vspace{0.05in} \noindent {\sc Example \arabic{ex}: }}{\stepcounter{ex} \hfill $\Box$ \vspace{0.05in} }
+%\theoremstyle{remark}
+%\newtheorem{@proex}{Example}
+%\newenvironment{example}[1]{\begin{@proex}{\rm \bf #1}}{\end{@proex                      }}
+%\newtheorem{example}{Example}
+
+\def\mynote#1{{\sf $\clubsuit$ #1$\clubsuit$}}
+
+% comment environment
+% comment.sty
+% 25-Oct-89
+% By Ed -- modified from verbatim in /usr/loca/lib/tex82/latex.tex
+
+% \begin{comment}
+% \end{comment}
+
+\makeatletter
+
+\begingroup \catcode `|=0 \catcode `[= 1
+\catcode`]=2 \catcode `\{=12 \catcode `\}=12
+\catcode`\\=12 |gdef|@xcomment#1\end{comment}[|end[comment]]
+|endgroup
+
+\def\@comment{\let\do\@makeother \dospecials\catcode`\^^M=10\def\par{}}
+
+\def\begincomment{\@comment\@xcomment}
+
+\makeatother
+
+\newenvironment{comment}{\begincomment}{}
+
+
+%%%%%%%%%%%%%%%% general macros
+
+\def\set#1{{\{ #1 \}}}
+
+%%%%%%%%%%%%%%%% paper specific macros
+\def\Next{\hspace{4pt}\raise 3pt \hbox{\circle{7}} \hspace{4pt} }
+\newcommand{\dia}{{\raisebox{-0.2ex}{$\Diamond$}}}
+\newcommand{\PastDiamond}                                     % past diamond
+     {\mbox{\rm\makebox[0em][l]{$\dia$}\makebox[0.8em]{--}\hspace{0.05em}}}
+
+\def\create{{\mathsf{create}}}
+
+\def\alloc{{\mathsf{alloc}}}
+\def\access{{\mathsf{access}}}
+\def\delete{{\mathsf{delete}}}
+
+\def\acquire{{\mathtt{acq}}}
+\def\release{{\mathtt{rel}}}
+
+\def\alias{{\mathsf{alias}}}
+\def\mayalias{{\mathsf{mayAlias}}}
+\def\mustalias{{\mathsf{mustAlias}}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\sloppy
+
+\begin{document}
+\title{Static Checking for Dynamic Resource Management \\ in Sensor
+  Network Systems}
+
+\authorinfo{Sensys Paper \#66}
+
+%% \authorinfo{The SOS Reliability Working Group :)}
+%% {UCLA}
+
+
+\maketitle
+
+\input{abstract}
+\input{introduction}
+\input{caseExample}
+\input{algorithm}
+\input{evaluation}
+\input{related}
+\input{conclusion}
+
+{\small 
+\bibliographystyle{plain}
+\bibliography{sw,sos,references}
+
+}
+
+\end{document}
+
+

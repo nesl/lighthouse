@@ -1,0 +1,228 @@
+\section{Introduction}
+\label{sec:intro}
+
+Networked embedded systems, or sensor networks, are finding ubiquitous application in densely
+sampling phenomena --- from structural properties of buildings to 
+wildlife behavior --- that were previously difficult or impossible to observe.
+Like embedded systems, sensor networks operate in resource and energy 
+constrained environments with minimal operating system support.
+However, unlike traditional ``dedicated'' embedded applications, sensor network
+applications are reprogrammable, and applications may change in the field. 
+For this reason, sensor network applications can benefit from
+operating system support for 
+general-purpose system abstractions.
+
+A useful class of system abstractions provides facilities
+to dynamically create, manage, and destroy system resources.
+Such abstractions can simplify application
+development and allow an application to naturally respond to
+the changing needs of its environment.  Several platforms for sensor networks
+provide a form of dynamic resource management.  For
+example, the SOS operating system~\cite{sos} supports dynamic
+allocation of memory, while MANTIS OS~\cite{abrach03mantis} supports both dynamic
+memory allocation and thread creation.  Frameworks built on top of sensor
+network systems also include components
+that make resources dynamically available to other parts of
+the system.  The buffer pool
+used in the VanGo framework~\cite{greenstein05vango} for TinyOS~\cite{TinyOS}
+is an example of this form of dynamic resource management.
+
+While the ability to dynamically manipulate resources increases the
+expressiveness of sensor network applications, this expressiveness can
+be a double-edged sword.  Improper management of resources can lead to
+subtle errors that can affect both the correctness and efficiency of
+applications.
+
+
+For example, consider the architecture of a simple
+sensor-network application,
+shown in Figure~\ref{fig:surge-dataflow}.
+Like many sensor-network applications, this application
+is arranged in a dataflow architecture:  raw sensed
+data captured at the sensors moves through various filters (via the
+{\tt surge} module) before being forwarded to a base station (via the
+{\tt tree routing} module).  
+In order to naturally and
+efficiently implement the message passing, data buffers
+are dynamically allocated as necessary and
+passed by reference rather than by copying.
+
+If incorrectly implemented, this style of data sharing can lead to serious errors.
+First, a module may access a (dangling) reference to data
+that has been passed on and possibly freed downstream. 
+%
+The low-end processor hardware used in current sensor nodes does not
+have a memory management unit.  Thus existing sensor node operating systems 
+for these platforms,
+like TinyOS~\cite{TinyOS} and SOS~\cite{sos}, do not support
+virtual memory, and a bad dereference can crash the system. 
+%
+Second, a module may get a data buffer from an upstream module
+but forget to either
+release it or to pass it on to the next stage for processing.
+Since expensive garbage-collection mechanisms are not available, such resource
+leaks will very soon exhaust available memory.
+
+A key insight in these kinds of systems is that data transfer between modules
+typically does not lead to sharing, but instead follows a
+producer-consumer pattern.  Therefore, sensor network
+programmers typically implement correct and efficient resource
+management using implicit {\em ownership-based} data access protocols.  In
+this style, every resource has exactly one {\em
+owner} module at any point.  The module that creates the resource
+(through some kernel call) assumes initial ownership.  Ownership
+of a resource is explicitly transferred through kernel calls that
+implement message passing.
+%% Dually, a module that receives a message
+%% can explicitly acquire ownership of the data.
+Each module has the
+right to access the resources that it owns, but also the
+responsibility to either free the resource or transfer ownership to
+another module.  A module may not manipulate resources that it does
+not own.  If all modules obey this protocol, then there can be neither
+accesses to dangling pointers nor resource leaks.
+%% Further, once ownership is transferred, the module cannot access the
+%% resource, e.g., by dereferencing the pointer to the resource.
+%% Together, the protocol guarantees that there are no accesses of
+%% dangling pointers, nor are there resource leaks.
+
+While especially important for the proper management of dynamic
+resources, this kind of ownership model is also useful for managing
+static resources.  
+For example, TinyOS lacks support for
+dynamic memory allocation, but statically allocated buffers are often
+transferred among components for efficiency reasons.
+TinyOS employs a split-phase approach to message
+passing~\cite{TinyOS}:
+a message
+pointer is passed via a call to {\tt Send.send}, and the sender
+receives the {\tt Send.sendDone} event when message transmission has
+completed.
+The calling component should not
+modify the message pointer in any way until receiving the {\tt sendDone}
+event.  Ownership is a natural protocol for guaranteeing this
+behavior:  the calling component transfers ownership of the pointer
+to the callee upon a {\tt
+  send} call and regains ownership upon the {\tt sendDone} event~\cite{ownershipthread}.
+
+
+Current sensor-network systems do not help
+programmers to ensure that ownership protocols are properly obeyed.
+In most systems, these protocols are completely implicit and can
+be expressed only informally through programming conventions and comments.
+The SOS operating system includes an explicit API for expressing
+ownership relationships.  However, programmers must take
+responsibility for ensuring that this API is properly used.
+Our experience has been that programmers often make
+mistakes in implementing ownership protocols, leading to critical
+and difficult-to-track errors.  %% These problems are exacerbated in the
+%% context of sensor networks, where the target customers (i.e., the
+%% application writers) are scientists who may lack systems
+%% programming expertise.
+
+In this paper, we present a tool for automated validation of dynamic
+resource management in sensor-network software.
+Programmers employ an explicit API along with
+lightweight program annotations to express ownership intentions for
+resources.
+Our tool checks each module {\em at compile time} for violations of
+the ownership protocol, providing early feedback
+to programmers about the potential for dynamic memory errors.  The
+tool employs a novel suite of dataflow analyses to check the key ownership
+invariants:  each resource has a unique owner; each resource is only
+manipulated by its owner; and each resource is either freed by its
+owner or transferred to another owner.  %% Together these invariants
+%% ensure proper management of resources at run time.
+With our tool, sensor-network programmers can make use of the
+expressiveness of dynamic resource management 
+while retaining confidence in the reliability of their applications.
+
+We have instantiated our approach as a tool for statically ensuring
+proper management of dynamic memory in the SOS operating
+system~\cite{sos}, which employs the C programming language.
+We focus on SOS memory management initially because of our experience
+with memory errors as users of SOS, which was our primary motivation.  
+However, the underlying dataflow analyses are generic, and
+our tool is parametrized
+by the API for resource creation, ownership transfer, and resource deletion.
+Therefore, we believe that our tool can be easily adapted
+both to statically track ownership for other kinds of resources and to
+handle C-based operating systems other than SOS.
+
+We evaluated our tool on the historic versions of all
+user modules in the SOS CVS repository, as well as on the SOS kernel.
+Overall, we ran the checker on about 46,000 lines of code.
+%% Analysis of the historic modules reveals that the
+%% tool is able to locate improper memory management in real
+%% sensor-network software.
+The tool identified
+88 suspect memory operations of which 16 were actual
+memory errors in the historic
+versions of the user modules, as well as 28 suspect memory operations of which 
+two were actual memory errors in the SOS kernel.  
+The latter finding is
+somewhat surprising, since the SOS kernel code is relatively mature
+and was written by systems programming experts.
+In summary, our experiments illustrate the practicality of our
+approach for providing early feedback about memory errors in
+real sensor-network software.
+
+The rest of the paper is structured as follows.
+Section~\ref{sec:example} illustrates the problems for dynamic
+resource management via a small example and informally describes our ownership
+protocol that resolves these problems.  Section~\ref{sec:alg} presents
+a precise description of this protocol and the way in which our tool
+enforces it.  Section~\ref{sec:eval} provides our experimental
+results, which illustrate the utility of our tool in practice.
+Section~\ref{sec:related} compares against related work, and
+Section~\ref{sec:conc} concludes.
+
+%% \smallskip
+%% \noindent
+%% {\bf Limitations.}
+%% %
+%% There are two main limitations of our tool.  First,
+%% the precision of the tool depends on the precision of an underlying
+%% {\em alias analysis}, which is used to statically
+%% reason about the relationships
+%% among pointers.
+%% Our tool currently uses an
+%% off-the-shelf alias analysis provided by CIL~\cite{CIL}, a front end
+%% for C.  While alias analysis can be notoriously imprecise in the
+%% presence of complex pointer manipulations and pointer structures, 
+%% our experimental results indicate that
+%% aliasing is not a major source of false positives in this class of 
+%% programs.  This positive result is likely due to
+%% the stylized ways in which message pointers are
+%% manipulated in sensor-network applications.  
+
+%% Second, %% our tool currently only tracks ownership properties 
+%% %% on each event handler in isolation, without considering the overall
+%% %% order in which events will be received.
+%% %% However,
+%% there may be application-level protocols that determine how events
+%% are generated in the system, and these protocols can affect the
+%% correctness of ownership tracking.
+%% %
+%% For example, imagine a module that responds to three events:  $\alloc$
+%% causes the module to allocate a block $b$ and store
+%% it into the module's persistent store,
+%% $\access$ causes the module to access block $b$ via the  store,
+%% and $\delete$ causes the module to deallocate block $b$ via the 
+%% store.
+%% The module properly manages block $b$ as long as the temporal
+%% sequence of events follows the regular expression $\alloc$ $\access^*$
+%% $\delete$.  This ordering ensures that the system never accesses the
+%% block before it is allocated and always eventually deletes the block.
+
+%% Our tool currently does not reason across event handlers, instead only
+%% tracking data locally within each event handler.
+%% When tracking ownership within a handler, the tool assumes on entry
+%% that all data in the persistent store is owned by the module.  This
+%% assumption can miss errors, for example if an $\access$ event ever
+%% occurs before the $\alloc$ event.  However, it is a practical
+%% design choice that allows each event handler to be usefully checked
+%% for local violations of the ownership protocol.
+%% %
+%% It will be interesting to extend our system with additional interface
+%% annotations about application-level protocols in the future~\cite{AlurPOPL05}.

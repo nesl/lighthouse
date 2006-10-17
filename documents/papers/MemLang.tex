@@ -1,0 +1,213 @@
+\documentclass{article}
+
+\begin{document}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Overview}
+
+This is a revised version of the properties that we want the checker to
+verify.  It is based on the discussion from our meeting on March 7, 2006.  As
+always, please update any problems that you see with this.  I am leaving the
+high level description of evaluating code at the end of this document.  While
+it is deprecated by the formal specification (and may contradict it in some
+locations), it also provides a nice description of what the CIL checkers were
+targeted towards.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Terms}
+
+\begin{eqnarray*}
+t & ::= & \mathrm{op} \ x \\
+%
+& & \\
+%
+\mathrm{op} & ::= & \mathrm{malloc} \ x \ | \\
+        & & \mathrm{free} \ x \ | \\ 
+        & & \mathrm{get}_{y} \ x \ | \\
+        & & \mathrm{store}_{y} \ x \\
+%
+& & \\
+%
+\mathrm{prog} & ::= & t_{1}; \ \ldots; \ t_{n}
+\end{eqnarray*}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Evaluation Rules}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{No Memory Leaks}
+
+\begin{displaymath}
+%
+\forall \ x, \ t_{i} = \mathrm{malloc} \ x \ 
+%
+\Rightarrow \
+%
+\exists \ j > i \ 
+%
+\mathrm{st.} \
+%
+t_{j} = \mathrm{free} \ [\mathrm{must \ alias} \ x] \ 
+%
+\vee \ t_{j} = \mathrm{store}_{y} \ [\mathrm{must \ alias} \ x] 
+\end{displaymath}
+
+This property is verified by the CIL data flow module \texttt{ownFlow.ml} called
+by \texttt{memory.ml}.  This data flow is called from every allocation point,
+and verifies that the resulting value is released or inserted into a store.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{No Dangling Pointers}
+
+\begin{displaymath}
+%
+\forall i, \ t_{i} = \mathrm{free} \ x \ 
+%
+\Rightarrow \
+%
+\forall \ j > i, \ t_{j} \neq \mathrm{op} \ [\mathrm{may \ alias} \ x] 
+%
+\end{displaymath}
+
+This property is verified by the CIL data flow module \texttt{deadFlow.ml}
+called by \texttt{memory.ml}.  This data flow is called from every release
+site, and verifies that the released expression is treated as ``dead'' from
+that point forward in the program.  Note that the expression may appear as an
+l-value.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Allocation Before Use}
+\label{ss_alloc_before}
+
+\begin{displaymath}
+%
+\forall \ i, \ t_{i} = \mathrm{op} \ x \ 
+%
+\Rightarrow \
+%
+\exists \ j \geq i \ 
+%
+\mathrm{st.} \
+%
+t_{j} = \mathrm{malloc} \ [\mathrm{must \ alias} \ x] \ 
+%
+\vee \ t_{j} = \mathrm{get}_{y} \ [\mathrm{must \ alias} \ x] 
+\end{displaymath}
+
+This property is not verified by the checker.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Function Calls and Attributes}
+
+The formal description described above assumes a single linear program.  SOS
+modules need not be linear and make use of function calls.  Modular checking
+can be accomplished by annotating function calls to describe the parameters
+the the function frees or allocates.  The checker assumes that these
+annotations are correct and treats annotated function calls as a collection of
+allocation and free sites.
+
+Further, the checker can verify that the annotations provided on a function
+are correct.  From the callees perspective, annotations can be thought of as a
+collection of allocation points immediately before the body of a function and
+of free points immediately after the body of a function.
+
+
+The framework for these attributes includes the use of the following CIL
+modules:
+
+\begin{description}
+%
+\item[\texttt{addAnnotations.ml}]  Inserts annotations into unannotated code.
+This keeps the SOS code base clean and provides a convenient way to manage the
+annotations.
+%
+\item[\texttt{fillFlow.ml}] Used to verify that formal parameters that must
+release data to the caller are allocated or ``filled'' by the function.  Note
+that this data flow may be leveraged to verify the property described
+in section~\ref{ss_alloc_before}.
+\end{description}
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Evaluation In Light of Attributes}
+
+The framework described above can be thought of in terms of pre and post
+conditions for callers and callees of functions.  This form may help provide
+an intuitive feeling for what the checker is doing.  Note that this section
+has been deprecated by the formal description provided above.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Caller}
+
+\begin{description}
+
+
+%%%%%%%%%%%%%%%%%%%%
+\item[release v]
+        
+Pre: v must be a reference to a memory location.
+
+Post: v must be treated as dead until end of function.  Thus, it may not
+appear in any other term T.  (This can be improved by allowing freed data to
+be reallocated.)
+
+    
+%%%%%%%%%%%%%%%%%%%%
+\item[claim v]
+
+Pre: v must be an "unused" or "available" variable.
+
+Post: v must be Stored or Freed exactly once on each path from claim point to
+end of function.  (This can be improved by allowing allocated data to be
+reallocated after it has been Freed / Stored).
+
+
+%%%%%%%%%%%%%%%%%%%%
+\item[borrow v]
+
+Pre: None.
+
+Post: No effect on v.
+
+\end{description}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Callee}
+
+\begin{description}
+
+
+%%%%%%%%%%%%%%%%%%%%
+\item[release v]
+
+Pre: None.
+
+Post: Function must Store or Free v exactly once on each path to return.
+
+
+%%%%%%%%%%%%%%%%%%%%
+\item[claim v]
+
+Pre: None.
+
+Post: Function must have Released (or Malloced) data into v along each path to
+return.
+
+
+%%%%%%%%%%%%%%%%%%%%
+\item[borrow v]
+
+Pre: None.
+
+Post: Function may only Read / Set v.
+
+\end{description}
+
+
+\end{document}
+

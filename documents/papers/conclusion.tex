@@ -1,0 +1,39 @@
+\section{Conclusion}
+\label{sec:conc}
+
+Systems programming APIs for networked embedded systems applications 
+are getting more expressive as the applications become more 
+sophisticated. 
+This necessitates a programming environment
+that supports program development by providing 
+automated compile-time checkers for proper API usage.
+Such verification support is particularly important in this domain.
+First, programmers are often domain experts who may not be systems
+programming experts. Second, the cost of fixing a bug in the field
+is high.
+Third, networked embedded systems come with somewhat limited debugging
+support, making it extremely difficult to reason about the cause for
+a failure in the field.
+
+This paper is our first step toward providing static analysis
+tools that capture common programming idioms in networked embedded systems.
+We have focused on dynamic resource management initially,
+since our experience with SOS suggests that improper memory management
+is a common source of hard-to-debug problems.
+We have demonstrated how our checker can effectively find memory errors
+even in code written by systems experts.
+Our memory checker is now provided as part of the SOS development
+environment; it is invoked automatically in the build process.
+
+In the future, we would like to augment the techniques in this paper with
+support for reasoning about
+application-level protocols \cite{AlurPOPL05,HJM05} as well as
+concurrency issues. 
+Ultimately, our goal is to provide a systems programming environment 
+where many common classes of bugs are automatically detected at
+compile time.
+We believe such early feedback will help increase the
+productivity of sensor-network
+programmers and the reliability of their software.
+
+

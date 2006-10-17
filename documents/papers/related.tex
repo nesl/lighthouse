@@ -1,0 +1,95 @@
+\section{Related Work}
+\label{sec:related}
+
+As mentioned earlier, the SOS operating system~\cite{sos} includes
+ownership annotations that are used to dynamically track memory
+ownership.  These annotations tell the kernel which module owns each
+block of dynamically allocated memory.  When a module is removed from
+the running system, the kernel automatically deallocates all the
+memory that the module owns.  However, ownership annotations in SOS
+are {\em trusted}.  For example, missing annotations can
+cause the kernel's information to become out of date.  Also, there are
+no checks that owners and nonowners meet their obligations.  For
+example, nothing prevents a module from allocating memory and
+neglecting to eventually free it.
+Our work grew out of a desire to prevent these kinds of
+errors from occurring in SOS applications.
+
+Other sensor network platforms have included support for static
+checking to prevent other classes of errors.  For example, the nesC~\cite{nesC}
+language for sensor networks employs
+a whole-program analysis to statically detect race conditions.
+As another example, the galsC~\cite{TinyGALS, galsC} language for
+embedded systems employs an analysis to ensure the type
+safety of connections between components.
+
+A complementary approach to improving the reliability of sensor
+network software is through new language abstractions.  For example,
+researchers have explored language support for component-based
+programming~\cite{TinyOS,nesC,galsC},
+region
+abstractions~\cite{conf/mobisys/WhitehouseSCB04,conf/nsdi/WelshM04},
+component composition~\cite{conf/sensys/GreensteinKE04}, and
+programming in the aggregate~\cite{1052213,conf/dcoss/GummadiGG05}.
+New language constructs 
+enable easier expression of certain
+programming idioms.  They can also make programs more amenable to 
+static checking.  Our tool currently analyzes
+ordinary C programs, since that is the language that SOS employs, but
+it would be interesting to explore ways to leverage specialized
+language constructs to improve the tool's effectiveness.
+
+
+%% Sensor network programming platforms: tinyos, sos, UCDavis paper from Sensys05, macroprogramming,
+%% snack, region abstraction.
+
+Recent work in the programming languages community has explored the
+concept of {\em ownership
+  types}~\cite{ownership,ownership2,BoyapatiEtAl02,aliasjava} for
+object-oriented languages.  Ownership types designate an owner object for
+each object, and the static type system ensures a form of {\em
+  confinement} for each object with respect to its owner.  For
+example, a typical invariant guaranteed by ownership type systems is
+that an object will
+only be accessed by its owner or by other objects owned by
+the same owner.  In this way, an object's owner forms a dynamic scope
+within which the object is confined.  Related work on {\em confined
+  types}~\cite{confined1,confined2} provides a more static form of
+confinement, in which an object is guaranteed not to escape a
+particular static scope.
+
+Our work provides a static notion of ownership analogous to that of
+confined types:  all accesses
+to a given resource may only occur within the static scope of its
+owning module.  On a technical level, however, the foundation of our work is
+quite distinct from that of both ownership types and confined types,
+as we rely on dataflow analysis rather than on type
+systems. %%  At the same time, we employ lightweight program annotations
+%% to avoid whole-program analysis, instead safely checking each module
+%% in isolation.
+Our use of dataflow analysis is necessary in order to 
+safely accommodate dynamic transfer of ownership, which the systems
+described above lack.
+Ownership transfer is critical in practice for sensor network
+applications, for example to properly account for split-phase
+operations.  Although recent work has
+explored a form of transfer in the context of ownership type
+systems~\cite{DBLP:conf/ecoop/BanerjeeN05},
+that work requires programmers to provide detailed assertions about
+ownership, and these assertions are proven as part of a more
+general program specification and verification framework.
+
+Finally, there have been several proposals for a form of 
+{\em unique} or {\em linear}
+pointer~\cite{Boyland:2001:ABU,aliasjava,Wad90:linear,adoption-focus},
+which is guaranteed to be the only reference to its referent.
+These systems typically include a form of transfer of uniqueness from
+one pointer to another.  For example, a {\tt unique} pointer in
+AliasJava~\cite{aliasjava} can be transferred as long as a dataflow
+analysis shows that the original pointer is no longer accessed
+after the transfer.
+Our tool allows a resource to have any number of
+aliases from within its owner, which is less restrictive than the
+uniqueness requirement.  At the same time, transfer is still allowed
+safely, as long as none of these aliases are accessed after the
+transfer.
