@@ -1,242 +1,202 @@
-\section{Message Ownership in SOS}
+\section{Illistrative Examples of Tracking Resource Usage}
 \label{sec:example}
 
-We illustrate our technique for static checking of dynamic
-resources through an example of dynamic memory
-management in SOS~\cite{sos}.
-The SOS kernel supports dynamic linking of modules and has a dynamic memory
-subsystem that can be used by the modules to create and pass around messages
-as well as to store dynamically created state.
-While providing a great deal of flexibility and expressiveness to
-programmers, these abilities also
-introduce programmer obligations to correctly access and manage memory.
-Since the underlying hardware
-does not have memory protection, following a dangling pointer
-may cause the entire system to crash.
-Since SOS runs on highly memory-constrained hardware, memory leaks can
-bring down the system very quickly.
-%We illustrate the ownership model of resource usage applied 
-%to memory management in SOS.
+We illustrate our technique for static checking of dynamic resources
+through two example applications.  First is the surge application in
+SOS that uses dynamiclly allocated memory to pass data buffers through
+protocol stacks.  Second is the generic base component from TinyOS
+that uses swapping of staticlly allocated messages to efficently
+implement an interface to receive data messages.  Running on hardware
+without memory protection, improper management of either the SOS
+buffers or the TinyOS messages can lead to corruption of data or
+simply crash the sensor node.
 
-\begin{figure}[t]
-\centering\includegraphics[angle=270,width=4.1in]{surge}
-\caption{{\tt surge} dataflow\label{fig:surge-dataflow}}
-\end{figure}
+%
+% NOTE (ROY): I am not sure that the following figure is doing
+% anything other than taking up space.  I will remove it for now.
+% 10-18-06
+%
+%\begin{figure}[t]
+%\centering\includegraphics[angle=270,width=4.1in]{surge}
+%\caption{{\tt surge} dataflow\label{fig:surge-dataflow}}
+%\end{figure}
 
+
+\subsection{Resource useage in {\tt surge}}
 
 \begin{figure}[t]
 \input{surge.c}
 \caption{SOS implementation of {\tt surge}\label{fig:surge}}
 \end{figure}
 
-\subsection{{\tt surge}}
-
-Figure~\ref{fig:surge} shows a portion of the 
-SOS module that implements {\tt surge},
-a simple sensor network application
-that takes sensor readings and sends the readings over a multihop network
-to a base station~\cite{nesC}. 
-The function
-{\tt surge\_module} is the entry point into {\tt surge}
-for messages from the kernel and from other
-modules. 
-The function takes two arguments: a pointer to
-the module's persistent state, which
-is saved in the kernel, and a pointer to the current message.
-The code for the function is a {\tt switch}
-statement that appropriately handles each kind of message. 
-%Certain messages have predefined meanings in SOS, for example, the message
-%{\tt MSG\_INIT} initializes the module state (and is guaranteed to be sent
-%by the kernel before any other messages), and the message {\tt MSG\_FINAL}
-%cleans up the module before it is removed by the kernel.
-Figure~\ref{fig:surge} shows the handlers for the messages
-{\tt MSG\_DATA\_READY} and {\tt MSG\_TR\_DATA\_PKT}.
+Figure~\ref{fig:surge} shows a portion of the SOS module that
+implements {\tt surge}, a simple sensor network application that takes
+sensor readings and sends the readings over a multihop network to a
+base station~\cite{nesC}.  The function {\tt surge\_module} is the
+entry point into {\tt surge} for messages from the kernel and from
+other modules.  The function takes two arguments: a pointer to the
+module's persistent state, which is saved in the kernel, and a pointer
+to the current message.  A {\tt switch} statement is used to direct
+each message type to an appropriate handler.  The handlers of interest
+in this example are for the messages types {\tt MSG\_DATA\_READY} and
+{\tt MSG\_TR\_DATA\_PKT}.
 
 A sensor sends the message {\tt MSG\_DATA\_READY} to the surge module
-when requested sensor data is ready to be read. The sensor data
-is passed as the {\tt data} field of the message, which in general
-always contains a message's payload.  Upon receiving this message,
-the {\tt surge} message handler
-allocates a new packet ({\tt ker\_malloc})
-to be sent to the base station and posts a message ({\tt post\_long})
-to the tree-routing module in order to forward the sensor data.  The
-{\tt post\_long} call is asynchronous, causing the kernel to 
-package up all the given arguments into a {\tt
-  Message} structure and to schedule this message for eventual delivery.
+when requested sensor data is ready to be read. The sensor data is
+passed as the {\tt data} field of the message, which in general always
+contains a message's payload.  Upon receiving this message, the {\tt
+surge} message handler allocates a new packet ({\tt ker\_malloc}) to
+be sent to the base station and posts a message ({\tt post\_long}) to
+the tree-routing module in order to forward the sensor data.  The {\tt
+post\_long} call is asynchronous, causing the kernel to package up all
+the given arguments into a {\tt Message} structure and to schedule
+this message for eventual delivery.
 
-The message {\tt MSG\_TR\_DATA\_PKT} is sent by the tree-routing module
-when data is received at the base station node.
-Upon receiving this message, the {\tt surge} message handler 
-confirms that 
-the current node is the base station.  If so, 
-the message handler 
-forwards the data to the UART driver via an
-asynchronous message send ({\tt post\_net}).
+The message {\tt MSG\_TR\_DATA\_PKT} is sent by the tree-routing
+module when data is received at the base station node.  Upon receiving
+this message, the {\tt surge} message handler confirms that the
+current node is the base station.  If so, the message handler forwards
+the data to the UART driver via an asynchronous message send ({\tt
+post\_net}).
 
-%% In each case, the data is handled using an ownership principle: data is 
-%% accessed only when it has been claimed via {\tt ker\_msg\_take\_data}
-%% (or allocated in the current module),
-%% and never accessed again once it has been released to other modules.
+The SOS kernel provides an API for programmers to manage dynamic
+memory.  As shown in Figure~\ref{fig:surge}, the {\tt ker\_malloc}
+function acts as expected, allocating a new block of memory.  The
+kernel also provides a {\tt ker\_free} function for destroying
+dynamically allocated memory.  Additionally, ownership of dynamic
+memory can be transfered between modules through the messaging
+interface provided in SOS.
 
-\subsection{Dynamic Memory Management in SOS}
-
-The SOS kernel provides an API for programmers to manage
-dynamic memory.  As shown in Figure~\ref{fig:surge}, the
-{\tt ker\_malloc} function acts as expected, allocating a new block of
-memory.  The kernel also provides a {\tt ker\_free} function for
-destroying dynamically allocated memory.
-
-In order to provide a simple form of automatic
-garbage collection for dynamically allocated memory, the SOS kernel
-imposes an {\em ownership}
-model on dynamic memory~\cite{sos}.  Each block of memory
-has a unique owner at any point in time, and the kernel maintains a mapping
-from each block of memory to its owner.  A block's initial owner is
-the module that allocates that block.  For example,
-the call to {\tt ker\_malloc} sets the {\tt surge}
-module as the initial owner of the newly allocated block.
-When a module is removed from the system at run time, the
-kernel automatically frees all memory owned by that module.
-
-%% The memory ownership model used in SOS requires data to have exactly one well
-%% defined owner at all times.
-%% %
-%% All memory blocks are originally owned by the kernel.
-%% %
-%% Modules can allocate memory from the kernel and release allocated memory back
-%% to the kernel's control.
-%% %
-%% Modules can also transfer ownership of memory blocks to other modules.
-
-
-%% A module can gain ownership of a block of memory by calling
-%% \texttt{ker\_malloc} to allocate a block from the kernel. 
-%% %
-%% A successful call to \texttt{ker\_malloc} gives the calling module ownership
-%% of the returned block.
 %
-%% A module can also gain ownership of a block by calling
-%% \texttt{ker\_msg\_take\_data} on an incoming message.
-%% %
-%% This causes the module to either: claim ownership of the data payload if the
-%% payload was released by the sender of the message, or gain ownership of a new
-%% copy of the data payload if the sender of the message did not release the
-%% data.
-%% %
-%% Both \texttt{ker\_malloc} and \texttt{ker\_msg\_take\_data} can return a NULL
-%% pointer, signaling that the allocation attempt failed.
-%% %
-%% Finally, a module gains ownership of a block of memory by calling a
-%% function with a formal parameter that has the \texttt{sos\_claim} attribute
-%% set.
-
-The SOS kernel provides facilities for ownership transfer.  Such
-transfer occurs in two phases.  
+% NOTE (ROY): This is not adding much to the discussion.  10-18-06
 %
-First, the owner of a block of dynamically allocated memory can explicitly {\em
-  release} ownership of that block when it is passed as the payload in
-  a message.  This is accomplished by setting the
-\texttt{SOS\_MSG\_RELEASE} flag in the corresponding
-  {\tt post\_*} call.  
-  For example, the {\tt surge}
-  module releases ownership of the newly allocated {\tt pkt} upon
-  sending it to the tree-routing module.
-  Second, a module can acquire ownership of a message's payload, which
-  is stored in the {\tt data} field, by calling
+%In order to provide a simple form of automatic garbage collection for
+%dynamically allocated memory, the SOS kernel imposes an {\em
+%ownership} model on dynamic memory~\cite{sos}.  Each block of memory
+%has a unique owner at any point in time, and the kernel maintains a
+%mapping from each block of memory to its owner.  A block's initial
+%owner is the module that allocates that block.  For example, the call
+%to {\tt ker\_malloc} sets the {\tt surge} module as the initial owner
+%of the newly allocated block.  When a module is removed from the
+%system at run time, the kernel automatically frees all memory owned by
+%that module.
+
+Transfer of dynamic memory ownership occures at the end points of a
+message.  First, the owner of a block of dynamically allocated memory
+can explicitly {\em release} ownership of that block when it is passed
+as the payload in a message.  This is accomplished by setting the
+\texttt{SOS\_MSG\_RELEASE} flag in the corresponding {\tt post\_*}
+call.  For example, the {\tt surge} module releases ownership of the
+newly allocated {\tt pkt} upon sending it to the tree-routing module.
+Second, a module can acquire ownership of a message's payload, which
+is stored in the {\tt data} field, by calling
 \texttt{ker\_msg\_take\_data} on an incoming message.  The function
-  returns a pointer to the message's payload.  For example,
-  if the current node is the base station,
-  the {\tt surge} module explicitly takes ownership of the given
-  message's data under the name {\tt payload}.
+returns a pointer to the message's payload.  For example, if the
+current node is the base station, the {\tt surge} module explicitly
+takes ownership of the given message's data under the name {\tt
+payload}.
 
-%
-There are four release/take scenarios to consider.  If data is
-both released by its sender and taken by its receiver, then ownership
-of the data is transferred from the sender to the receiver.
-If data is released by its sender but not taken by its receiver,
-then the kernel automatically frees the memory after
-the receiver's message handler completes.  If data is not released
-by its sender but is taken by its receiver, then the sender keeps
-ownership of the original message and the receiver gains ownership of
-a new block of memory containing a copy of that data.  Finally, if the data is
-not released by the sender and not claimed by the receiver, then the sender
-keeps ownership of the original message and the receiver has direct access to
-``borrowed'' data for a limited period of time.  This last case is not generally used
-in SOS due to the synchronization complications that can result.
-%% Rather, sharing
-%% of this type is accomplished through direct (synchronous) function calls
-%% in which the scope of the ``borrowed'' data is limited to the duration of the
-%% function call.
-%
-%% Both \texttt{ker\_malloc} and \texttt{ker\_msg\_take\_data} can return a NULL
-%% pointer, signaling that the allocation attempt failed.
-%% %
-%% Finally, a module gains ownership of a block of memory by calling a
-%% function with a formal parameter that has the \texttt{sos\_claim} attribute
-%% set.
+There are four release/take scenarios to consider.  If data is both
+released by its sender and taken by its receiver, then ownership of
+the data is transferred from the sender to the receiver.  If data is
+released by its sender but not taken by its receiver, then the kernel
+automatically frees the memory after the receiver's message handler
+completes.  If data is not released by its sender but is taken by its
+receiver, then the sender keeps ownership of the original message and
+the receiver gains ownership of a new block of memory containing a
+copy of that data.  Finally, if the data is not released by the sender
+and not claimed by the receiver, then the sender keeps ownership of
+the original message and the receiver has direct access to
+``borrowed'' data for a limited period of time.  This last case is not
+generally used in SOS due to the synchronization complications that
+can result.
 
 
-%
-%% Functions that can use this flag are: \texttt{post}, \texttt{post\_net} and
-%% \texttt{post\_long}.
-%% %
-%% This causes the ownership of the data to be transfered to kernel.
-%% %
-%% The kernel then gives ownership to the receiver of the message if the
-%% receiver requests ownership of the data, or returns the data block back to the
-%% free pool for memory allocation if the receiver is not present or if the
-%% receiver does not request ownership of the data.
-%% %
-%% Second, a data block can be passed to another module by having the owner of
-%% the data call the function \texttt{ker\_change\_own} and supplying the module
-%% ID of the receiving module.
-%% %
-%% Third, a data block can be passed to another module via a call to a function
-%% that directly or transitively releases the block to another module. 
-%% %
-%% In this case the prototype of the function call should add the attribute
-%% \texttt{sos\_release} to the formal parameter of the data released by the
-%% function.
-%% %
-%% Note that the first case listed above is simply a common special case of this
-%% third rule.
-%% %
-%% In some situations a function may conditionally release data.
-%% %
-%% This is currently facilitated by using the \texttt{sos\_may\_release}
-%% attribute in conjunction with a flag describing if the data is to be released,
-%% as is the case with the messaging API.
+\subsection{Resource useage in {\tt GenericBaseM}}
+
+\begin{figure}[t]
+\input{surge.c}
+\caption{TinyOS implementation of {\tt GenericBaseM recieve
+interface}\label{fig:genericbase}}
+\end{figure}
 
 
-%% A module should only release data that it owns.
-%% %
-%% Released data is considered dead to the module that releases it and should
-%% not be referenced.
-%% %
-%% The module that receives the released data becomes the new owner of the block
-%% with all the responsibilities associated with block ownership.
+Figure~\ref{fig:genericbase} shows a portion of the TinyOS component that
+implements the {\tt receive} event handler for {\tt GenericBase}, an
+application that uses a sensor node as a bridge between a base station
+and the rest of a sensor network.  The {\tt receive} event handler is
+passed in a {\tt TOS\_MsgPtr} pointing to the incoming message and a
+flag describing where the message source.
+
+% TODO: Start editing here!!!
+
+% base station~\cite{nesC}.  The function {\tt surge\_module} is the
+% entry point into {\tt surge} for messages from the kernel and from
+% other modules.  The function takes two arguments: a pointer to the
+% module's persistent state, which is saved in the kernel, and a pointer
+% to the current message.  A {\tt switch} statement is used to direct
+% each message type to an appropriate handler.  The handlers of interest
+% in this example are for the messages types {\tt MSG\_DATA\_READY} and
+% {\tt MSG\_TR\_DATA\_PKT}.
+% 
+% A sensor sends the message {\tt MSG\_DATA\_READY} to the surge module
+% when requested sensor data is ready to be read. The sensor data is
+% passed as the {\tt data} field of the message, which in general always
+% contains a message's payload.  Upon receiving this message, the {\tt
+% surge} message handler allocates a new packet ({\tt ker\_malloc}) to
+% be sent to the base station and posts a message ({\tt post\_long}) to
+% the tree-routing module in order to forward the sensor data.  The {\tt
+% post\_long} call is asynchronous, causing the kernel to package up all
+% the given arguments into a {\tt Message} structure and to schedule
+% this message for eventual delivery.
+% 
+% The message {\tt MSG\_TR\_DATA\_PKT} is sent by the tree-routing
+% module when data is received at the base station node.  Upon receiving
+% this message, the {\tt surge} message handler confirms that the
+% current node is the base station.  If so, the message handler forwards
+% the data to the UART driver via an asynchronous message send ({\tt
+% post\_net}).
+% 
+% The SOS kernel provides an API for programmers to manage dynamic
+% memory.  As shown in Figure~\ref{fig:surge}, the {\tt ker\_malloc}
+% function acts as expected, allocating a new block of memory.  The
+% kernel also provides a {\tt ker\_free} function for destroying
+% dynamically allocated memory.  Additionally, ownership of dynamic
+% memory can be transfered between modules through the messaging
+% interface provided in SOS.
+% 
+% Transfer of dynamic memory ownership occures at the end points of a
+% message.  First, the owner of a block of dynamically allocated memory
+% can explicitly {\em release} ownership of that block when it is passed
+% as the payload in a message.  This is accomplished by setting the
+% \texttt{SOS\_MSG\_RELEASE} flag in the corresponding {\tt post\_*}
+% call.  For example, the {\tt surge} module releases ownership of the
+% newly allocated {\tt pkt} upon sending it to the tree-routing module.
+% Second, a module can acquire ownership of a message's payload, which
+% is stored in the {\tt data} field, by calling
+% \texttt{ker\_msg\_take\_data} on an incoming message.  The function
+% returns a pointer to the message's payload.  For example, if the
+% current node is the base station, the {\tt surge} module explicitly
+% takes ownership of the given message's data under the name {\tt
+% payload}.
+% 
+% There are four release/take scenarios to consider.  If data is both
+% released by its sender and taken by its receiver, then ownership of
+% the data is transferred from the sender to the receiver.  If data is
+% released by its sender but not taken by its receiver, then the kernel
+% automatically frees the memory after the receiver's message handler
+% completes.  If data is not released by its sender but is taken by its
+% receiver, then the sender keeps ownership of the original message and
+% the receiver gains ownership of a new block of memory containing a
+% copy of that data.  Finally, if the data is not released by the sender
+% and not claimed by the receiver, then the sender keeps ownership of
+% the original message and the receiver has direct access to
+% ``borrowed'' data for a limited period of time.  This last case is not
+% generally used in SOS due to the synchronization complications that
+% can result.
+% 
 
 
-%% Modules are responsible for deallocating, releasing, or storing a persistent
-%% reference to blocks that they own.
-%% %
-%% A block can be deallocated with a call to \texttt{ker\_free} and should only
-%% be deallocated by the module that owns the block.  
-%% %
-%% Releasing data is described above.
-%% %
-%% A persistent reference to data is be created by storing a reference to the
-%% data in a module's state.
-
-
-%% After a block becomes dead to a module, it may not be accessed in any form by
-%% the previous owner.
-%% %
-%% Program statements that follow the statement that killed that data my not
-%% dereference the data in any form.
-%% %
-%% Program statements that came before the statement that killed the data should
-%% not deallocate, release, or create a persistent reference to the freed data.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
