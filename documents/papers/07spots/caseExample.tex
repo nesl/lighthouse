@@ -1,11 +1,11 @@
-\section{Illistrative Examples of Tracking Resource Usage}
+\section{Illustrative Examples of Tracking Resource Usage}
 \label{sec:example}
 
 We illustrate our technique for static checking of dynamic resources
 through two example applications.  First is the surge application in
-SOS that uses dynamiclly allocated memory to pass data buffers through
+SOS that uses dynamically allocated memory to pass data buffers through
 protocol stacks.  Second is the generic base component from TinyOS
-that uses swapping of staticlly allocated messages to efficently
+that uses swapping of statically allocated messages to efficiently
 implement an interface to receive data messages.  Running on hardware
 without memory protection, improper management of either the SOS
 buffers or the TinyOS messages can lead to corruption of data or
@@ -22,7 +22,7 @@ simply crash the sensor node.
 %\end{figure}
 
 
-\subsection{Resource useage in {\tt surge}}
+\subsection{Resource usage in {\tt surge}}
 
 \begin{figure}[t]
 \input{surge.c}
@@ -64,7 +64,7 @@ memory.  As shown in Figure~\ref{fig:surge}, the {\tt ker\_malloc}
 function acts as expected, allocating a new block of memory.  The
 kernel also provides a {\tt ker\_free} function for destroying
 dynamically allocated memory.  Additionally, ownership of dynamic
-memory can be transfered between modules through the messaging
+memory can be transferred between modules through the messaging
 interface provided in SOS.
 
 %
@@ -81,7 +81,7 @@ interface provided in SOS.
 %system at run time, the kernel automatically frees all memory owned by
 %that module.
 
-Transfer of dynamic memory ownership occures at the end points of a
+Transfer of dynamic memory ownership occurs at the end points of a
 message.  First, the owner of a block of dynamically allocated memory
 can explicitly {\em release} ownership of that block when it is passed
 as the payload in a message.  This is accomplished by setting the
@@ -112,11 +112,11 @@ generally used in SOS due to the synchronization complications that
 can result.
 
 
-\subsection{Resource useage in {\tt GenericBaseM}}
+\subsection{Resource usage in {\tt GenericBaseM}}
 
 \begin{figure}[t]
 \input{surge.c}
-\caption{TinyOS implementation of {\tt GenericBaseM recieve
+\caption{TinyOS implementation of {\tt GenericBaseM receive
 interface}\label{fig:genericbase}}
 \end{figure}
 
@@ -137,9 +137,9 @@ swapping.  Buffer swapping is throughout systems when dynamic buffer
 creation is not desired or when dynamic buffer creation is simply not
 allowed and is is a common technique used within TinyOS to allow data
 to quickly pass through stacks of components.  Rather than
-dynamicallyl allocating a new buffer, a call stack can simply return a
+dynamically allocating a new buffer, a call stack can simply return a
 free buffer to the caller.  In the the TinyOS environment, handlers
-that implement buffer swapping have implict memory ownership
+that implement buffer swapping have implicit memory ownership
 responsibilities.  The handler can be though of needing to claim the
 incoming {\tt TOS\_MsgPtr} and release a buffer to the caller.  Note
 that this can be accomplished by returning the incoming buffer.
@@ -158,11 +158,11 @@ some memory while another module (or even the same module) still has a
 pointer to that memory.  If that pointer is ever accessed later, an
 invalid dereference will result.  
 
-A similar problem can occure with buffer swapping in TinyOS.  A TinyOS
+A similar problem can occur with buffer swapping in TinyOS.  A TinyOS
 component can improperly return a pointer to a buffer that is not yet
 free during a buffer swap.  From that point on two components in the
-system belive that they own the same buffer.  This leads to
-unpredictable and unintional sharing of the buffer.
+system believe that they own the same buffer.  This leads to
+unpredictable and unintentional sharing of the buffer.
 
 %
 % NOTE: This depends on the garbage collection comment above
@@ -205,7 +205,7 @@ avoided.
 
 \subsubsection{Applying Ownership Protocol to {\tt surge}}
 
-The {\tt surge} module described above can be showen to adhere to this
+The {\tt surge} module described above can be shown to adhere to this
 ownership protocol.  The {\tt MSG\_DATA\_RDY} message handler
 allocates {\tt pkt} and takes ownership. This pointer is then
 dereferenced in order to provide the sensor data to be sent up the
@@ -246,7 +246,7 @@ accessed, although they are at times accessed via the alias {\tt
 nextReceiveBuffer}.  At the end of the handler the buffer aliased by
 {\tt nextReceiveBuffer} is returned to the calling function.  Note
 that regardless of the path taken through the handler, at the call to
-return the returned buffer is distinct from the buffer presistently
+return the returned buffer is distinct from the buffer persistently
 stored in {\tt ourBuffer}.  Thus the returned buffer is not accessed
 by this component after the call to return.
 
