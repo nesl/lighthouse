@@ -2,34 +2,29 @@
 
 \begin{abstract}
 %
-\noindent 
-Many sensor network systems expose general interfaces to system
-developers for dynamically
-creating and manipulating resources of various kinds.
+\noindent Many sensor network systems expose general interfaces to
+system developers for dynamically creating and manipulating resources
+of various kinds.
 %
-While these interfaces allow programmers to accomplish
-common system tasks simply and efficiently,
-they also admit the potential for programmers to mismanage resources,
-for example through
-leaked resources or improper resource sharing. 
+While these interfaces allow programmers to accomplish common system
+tasks simply and efficiently, they also admit the potential for
+programmers to mismanage resources, for example through leaked
+resources or improper resource sharing. 
 %
-We describe a static analysis algorithm and tool that 
-brings the safety of static resource management to
-systems that dynamically manage resources.
-Our analysis is based on the observation that programmers
-often use implicit {\em ownership} schemes
-to correctly manage dynamic resources.  In such a scheme, each
-resource has a unique owner, who has both the capabilities to
-manipulate the resource and the responsibilities to use the resource
-properly and 
-to dispose of it eventually.
-Our tool checks resources at compile time for violations of
-this ownership discipline.
-%
+We describe a static analysis algorithm and tool that brings the
+safety of static resource management to systems that dynamically
+manage resources.  Our analysis is based on the observation that
+programmers often use implicit {\em ownership} schemes to correctly
+manage dynamic resources.  In such a scheme, each resource has a
+unique owner, who has both the capabilities to manipulate the resource
+and the responsibilities to use the resource properly and to dispose
+of it eventually.  Our tool checks resources at compile time for
+violations of this ownership discipline.
 
-We apply our tool to ensure proper management
-of dynamically allocated memory in programs written on top of
-SOS, a sensor network operating system.
+
+We apply our tool to ensure proper management of dynamically allocated
+memory in programs written on top of SOS, a sensor network operating
+system.
 %
 We have evaluated the tool on all historical versions of all user
 modules in the SOS CVS repository, as well as on the SOS kernel
@@ -37,8 +32,8 @@ itself.
 %
 Our tool generated
 %
-88 warnings of which 16 were real errors when checking user modules and
-28 warnings of which 2 were real errors when checking the kernel,
+88 warnings of which 16 were real errors when checking user modules
+and 28 warnings of which 2 were real errors when checking the kernel,
 % 
 demonstrating the tool's utility for practical sensor network systems.
 %
