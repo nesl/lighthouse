@@ -20,17 +20,40 @@ changing the owner of a resource.
 %
 Such abstractions can simplify application development and allow an
 application to naturally respond to the changing needs of its
-environment.  Several platforms for sensor networks provide a form of
-dynamic resource management.  For example, the SOS operating
-system~\cite{sos} supports dynamic allocation of memory, while MANTIS
-OS~\cite{abrach03mantis} supports both dynamic memory allocation and
-thread creation.  TinyOS~\cite{TinyOS} uses buffer swapping between
-components for efficient sharing of staticlly allocated buffers.
-Frameworks built on top of sensor network systems also include
-components that make resources dynamically available to other parts of
-the system.  The buffer pool used in the VanGo
-framework~\cite{greenstein05vango} for TinyOS is an example of this
-form of dynamic resource management.
+environment.  
+%
+Several platforms for sensor networks provide a form of dynamic
+resource management.  
+%
+For example, the SOS operating system~\cite{sos} supports dynamic
+allocation of memory, while MANTIS OS~\cite{abrach03mantis} supports
+both dynamic memory allocation and thread creation.
+TinyOS~\cite{TinyOS} uses buffer swapping between components for
+efficient sharing of statically allocated buffers.  Frameworks built on
+top of sensor network systems also include components that make
+resources dynamically available to other parts of the system.  The
+buffer pool used in the VanGo framework~\cite{greenstein05vango} for
+TinyOS is an example of this form of dynamic resource management.
+
+%
+% NOTE: With the addition of buffer swapping in TinyOS added above, is
+% this paragraph still needed?
+%
+% While especially important for the proper management of dynamic
+% resources, this kind of ownership model is also useful for managing
+% static resources.  For example, TinyOS lacks support for dynamic
+% memory allocation, but statically allocated buffers are often
+% transferred among components for efficiency reasons.  TinyOS employs a
+% split-phase approach to message passing~\cite{TinyOS}: a message
+% pointer is passed via a call to {\tt Send.send}, and the sender
+% receives the {\tt Send.sendDone} event when message transmission has
+% completed.  The calling component should not modify the message
+% pointer in any way until receiving the {\tt sendDone} event.
+% Ownership is a natural protocol for guaranteeing this behavior:  the
+% calling component transfers ownership of the pointer to the callee
+% upon a {\tt send} call and regains ownership upon the {\tt sendDone}
+% event~\cite{ownershipthread}.
+
 
 While the ability to manipulate resources increases the expressiveness
 of sensor network applications, this expressiveness can be a
@@ -74,33 +97,26 @@ producer-consumer pattern.  Therefore, sensor network programmers
 typically implement correct and efficient resource management using
 implicit {\em ownership-based} data access protocols.  In this style,
 every resource has exactly one {\em owner} module at any point.  The
-module that creates the resource (through some kernel call) assumes
-initial ownership.  Ownership of a resource is explicitly transferred
-through kernel calls that implement message passing.  Each module has
-the right to access the resources that it owns, but also the
-responsibility to either free the resource or transfer ownership to
-another module.  A module may not manipulate resources that it does
-not own.  If all modules obey this protocol, then there can be neither
-accesses to dangling pointers nor resource leaks.
+module that creates the resource (through some kernel call or statically
+at program load time via a global variable) assumes initial ownership.
+Ownership of a resource is explicitly transferred through kernel calls
+that implement message passing.  
+%
+\mynote{ROY: This is a little awkward.  I added the notion of
+``static'' resource allocation above.  Here I am trying to explain
+that it is valid for a module to simply ``remember'' a resource (ie.
+not leak it).  In the prior version we simply said that a module must
+free or transfer ownership of data.}
+%
+Each module has the right to access the resources that it owns, but
+also the responsibility to either free the resource, transfer
+ownership to another module, or simply maintain a reference to the
+resource.  
+%
+A module may not manipulate resources that it does not own.  If all
+modules obey this protocol, then there can be neither accesses to
+dangling pointers nor resource leaks.
 
-This kind of ownership model is useful even in systems without dynamic
-resource creation.
-
-
-While especially important for the proper management of dynamic
-resources, this kind of ownership model is also useful for managing
-static resources.  For example, TinyOS lacks support for dynamic
-memory allocation, but statically allocated buffers are often
-transferred among components for efficiency reasons.  TinyOS employs a
-split-phase approach to message passing~\cite{TinyOS}: a message
-pointer is passed via a call to {\tt Send.send}, and the sender
-receives the {\tt Send.sendDone} event when message transmission has
-completed.  The calling component should not modify the message
-pointer in any way until receiving the {\tt sendDone} event.
-Ownership is a natural protocol for guaranteeing this behavior:  the
-calling component transfers ownership of the pointer to the callee
-upon a {\tt send} call and regains ownership upon the {\tt sendDone}
-event~\cite{ownershipthread}.
 
 
 Current sensor-network systems do not help programmers to ensure that
@@ -151,12 +167,13 @@ approach for providing early feedback about memory errors in real
 sensor-network software.
 
 The rest of the paper is structured as follows.
-Section~\ref{sec:example} illustrates the problems for dynamic
-resource management via a small example and informally describes our
-ownership protocol that resolves these problems.
-Section~\ref{sec:alg} presents a precise description of this protocol
-and the way in which our tool enforces it.  Section~\ref{sec:eval}
-provides our experimental results, which illustrate the utility of our
-tool in practice.  Section~\ref{sec:related} compares against related
-work, and Section~\ref{sec:conc} concludes.
+Section~\ref{sec:example} illustrates the problems for resource
+management via a small examples from SOS and TinyOS.  It continues
+with an informal description of the ownership protocol that resolves
+these problems.  Section~\ref{sec:alg} presents a precise description
+of this protocol and the way in which our tool enforces it.
+Section~\ref{sec:eval} provides our experimental results, which
+illustrate the utility of our tool in practice.
+Section~\ref{sec:related} compares against related work, and
+Section~\ref{sec:conc} concludes.
 

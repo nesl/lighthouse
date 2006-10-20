@@ -50,35 +50,34 @@
 %% %
 %% \end{table}
 
-First we performed a study to understand the prevalence of
-dynamic memory operations in the SOS source.
-The SOS API includes a number of functions that manipulate memory.  These
-functions include {\tt ker\_malloc} and {\tt ker\_free} to allocate and
-free data, {\tt ker\_msg\_take\_data} and {\tt SOS\_MSG\_RELEASE} used to
-transfer data ownership, and a handful of functions that employ these
-primitives to 
-allocate specific kinds of data structures.  Examining the SOS CVS head from April
-2006 reveals that nearly one memory operation appears per
-100 source lines of code (SLOC).  Of the 46371 SLOC examined, 12990 are from
-modules written by end users to build applications, rather than from
-the implementation of SOS itself and associated drivers.  The frequency of
-memory operations in end-user modules is even higher than the overall average,
-with one such operation for every 60 SLOC.  
+First we performed a study to understand the prevalence of dynamic
+memory operations in the SOS source.  The SOS API includes a number of
+functions that manipulate memory.  These functions include {\tt
+ker\_malloc} and {\tt ker\_free} to allocate and free data, {\tt
+ker\_msg\_take\_data} and {\tt SOS\_MSG\_RELEASE} used to transfer
+data ownership, and a handful of functions that employ these
+primitives to allocate specific kinds of data structures.  Examining
+the SOS CVS head from April 2006 reveals that nearly one memory
+operation appears per 100 source lines of code (SLOC).  Of the 46371
+SLOC examined, 12990 are from modules written by end users to build
+applications, rather than from the implementation of SOS itself and
+associated drivers.  The frequency of memory operations in end-user
+modules is even higher than the overall average, with one such
+operation for every 60 SLOC.  
 %% Table~\ref{tab:alloc} summarizes the use of dynamic memory.
 These findings indicate that memory management is an important part of
 sensor-network programming in SOS.
 %% Further, anecdotal evidence from the developers' mailing list suggests that
 %% memory leaks are an important class of bugs.
 
+
 \subsection{Validating SOS End-User Modules}
 
-%% Having identified that dynamic memory management is frequent within SOS,
-Next we ran our tool on all SOS end-user modules from the
-April head of the SOS CVS repository.  
-The goal of this experiment was to demonstrate that the tool is
-practical for use as part of the standard development cycle
-and to demonstrate its ability to locate errors in real sensor-network
-software.
+Next we ran our tool on all SOS end-user modules from the April head
+of the SOS CVS repository.  The goal of this experiment was to
+demonstrate that the tool is practical for use as part of the standard
+development cycle and to demonstrate its ability to locate errors in
+real sensor-network software.
 
 %
 %% Source code for this evaluation was obtained from the April head of the
@@ -96,12 +95,12 @@ software.
 %% \end{footnotesize}
 %% %
 
-We integrated our checker in the normal SOS build process by
-adding a target to the Makefile that invokes the checker on the given code
-during compilation.
-The average time to check a file is less than a quarter of a second.
-Output from the analysis takes the form of warnings similar to those generated
-during other stages of compilation.
+We integrated our checker in the normal SOS build process by adding a
+target to the Makefile that invokes the checker on the given code
+during compilation.  The average time to check a file is less than a
+quarter of a second.  Output from the analysis takes the form of
+warnings similar to those generated during other stages of
+compilation.
 %
 The analysis generates three types of warnings:
 %
@@ -110,11 +109,11 @@ The analysis generates three types of warnings:
 \item[Dangling pointer:] Source code is accessing data that was
 released or freed at an earlier point.
 %
-\item[Access to dead data freed in a loop:] Special case of the prior warning.
-Limitations of CIL's may-alias analysis result in
-false positives when data is freed in a loop.  Separating this case out alerts
-the user to a probable false positive.  Users may also set a flag
-to suppress these warnings.
+\item[Access to dead data freed in a loop:] Special case of the prior
+warning.  Limitations of CIL's may-alias analysis result in false
+positives when data is freed in a loop.  Separating this case out
+alerts the user to a probable false positive.  Users may also set a
+flag to suppress these warnings.
 %
 \item[Memory leak:] Source code neither stores, releases, nor frees
 data that was taken or allocated.
@@ -152,32 +151,28 @@ data that was taken or allocated.
 \end{table}
 
 %% \smallskip\noindent{\bf SOS CVS.}
-We applied the checker to every historic version of
-each user module included in the SOS CVS repository.  Of the 203 historic versions
-of the 37 modules available, 77 versions resulted in
-warnings from the checker, eight versions caused 
- the CIL parser to crash before checking could occur, and the
- remaining 118 versions passed the checker with no warnings.
-%% A small set of functions that properly compile cause cause the base CIL~\ref{XXX} file parser to crash.  
-We have not yet had the opportunity to resolve the problem with CIL's
-parser.
+We applied the checker to every historic version of each user module
+included in the SOS CVS repository.  Of the 203 historic versions of
+the 37 modules available, 77 versions resulted in warnings from the
+checker, eight versions caused the CIL parser to crash before checking
+could occur, and the remaining 118 versions passed the checker with no
+warnings.  We have not yet had the opportunity to resolve the problem
+with CIL's parser.
 
-A total of 307 warnings were generated by the checker during this experiment.
-Each warning was examined by hand and classified as an
+A total of 307 warnings were generated by the checker during this
+experiment.  Each warning was examined by hand and classified as an
 actual error or a false positive; the results are presented in
-Table~\ref{tab:module}.  Sixteen of the warnings turned out
-to be real memory leaks in the code, resulting from four distinct
-errors 
-that remained in place across multiple CVS versions.  An example
-memory leak from the code is described at the end of this section.
+Table~\ref{tab:module}.  Sixteen of the warnings turned out to be real
+memory leaks in the code, resulting from four distinct errors that
+remained in place across multiple CVS versions.  An example memory
+leak from the code is described at the end of this section.
 
-The 291 remaining warnings were further classified to better understand the
-sources of imprecision in 
-the current implementation of the checker.  
-%
+The 291 remaining warnings were further classified to better
+understand the sources of imprecision in the current implementation of
+the checker.  
 
-\smallskip
-\noindent{\bf Missing annotations.}
+
+\smallskip \noindent{\bf Missing annotations.}
 %% Instead of annotating the SOS codebase
 %% with ownership attributes
 %% up front, we iteratively added annotations to function parameters
@@ -196,47 +191,42 @@ the current implementation of the checker.
 %% handler function as a store.
 We ran the checker with 20 ownership attributes on functions from the
 core SOS API, as well as an {\tt sos\_state} attribute for the {\tt
-  state} argument to each module's message handler.
+state} argument to each module's message handler.
 %% Our final evaluation used a fixed set of 20 annotations to functions from the
 %% core SOS API, in addition to one annotation for the primary event handler
 %% function of each module examined.
-While testing the tool on historic versions, 153 warnings were due to missing
-annotations.
-These warnings consist of 60 due to changes in the behavior of
-SOS API functions
-over time, 49 due to
-(currently deprecated) functions in the core SOS API that required
-annotations and are used in historic versions of 
-modules,
-and 44 warnings from the need for additional {\tt sos\_state}
-attributes (for example, when a message handler's {\tt state} argument
-is passed as a parameter to a helper function).
+While testing the tool on historic versions, 153 warnings were due to
+missing annotations.  These warnings consist of 60 due to changes in
+the behavior of SOS API functions over time, 49 due to (currently
+deprecated) functions in the core SOS API that required annotations
+and are used in historic versions of modules, and 44 warnings from the
+need for additional {\tt sos\_state} attributes (for example, when a
+message handler's {\tt state} argument is passed as a parameter to a
+helper function).
 %% To help automate the testing of the many historic versions
 %% of SOS modules we did not update are configuration for theses false positives.
 %% Based on our experience generating the annotation configuration for the SOS
 %% head, we are confidant that the few annotations needed to remove these false
 %% positives could be iteratively added as code is developed with little burden to
 %% the end user.
-All of
-these warnings are eliminated once the appropriate annotations
+All of these warnings are eliminated once the appropriate annotations
 are added to the code.
 
-\smallskip
-\noindent{\bf Free within a loop.}
+\smallskip\noindent{\bf Free within a loop.}
+%
 As mentioned earlier, imprecisions in the may-alias analysis cause
 warnings to be signaled when data is freed within a loop.
 There were 66 such false positives across all historical versions of
 the end-user modules.  As mentioned earlier, our tool includes an
 option to suppress these warnings, which is enabled by default.  
 
-\smallskip
-\noindent{\bf Other false positives.}
-After elimination of the above two classes of warnings (either
-by annotation or by suppression), we are left with 72 false
-positives, which come from three main sources.
-The primary culprit is CIL's flow-insensitive field-insensitive
-may-alias analysis, which is particularly imprecise
-for reasoning about deep data structures.  
+\smallskip\noindent{\bf Other false positives.}
+%
+After elimination of the above two classes of warnings (either by
+annotation or by suppression), we are left with 72 false positives,
+which come from three main sources.  The primary culprit is CIL's
+flow-insensitive field-insensitive may-alias analysis, which is
+particularly imprecise for reasoning about deep data structures.  
 %% However, our framework simply calls into the alias analysis.  
 %% This will allow us to easily replace
 %% the current alias analysis with a more powerful framework at any time.
@@ -244,18 +234,19 @@ We plan to experiment with more sophisticated alias analyses to
 eliminate many of these false positives.
 
 A second source of false positives arises from functions that
-conditionally release data in SOS.  Some functions take as input a dynamically
-allocated buffer and return a status code indicating whether the data was released.
-The caller of the function is responsible for checking this return value and,
-based on its value, properly treating the data.
-Since our analysis is not path-sensitive, these kinds of functions
-result in false positives.
-However, the presence of these warnings has led us to conversations with the SOS 
+conditionally release data in SOS.  Some functions take as input a
+dynamically allocated buffer and return a status code indicating
+whether the data was released.  The caller of the function is
+responsible for checking this return value and, based on its value,
+properly treating the data.  Since our analysis is not path-sensitive,
+these kinds of functions result in false positives.  However, the
+presence of these warnings has led us to conversations with the SOS
 developers about transitioning away from this style of API.
 
-A third source of false positives arises from application-level protocols that
-ensure memory is used correctly across multiple invocations of the
-module's message handler, but which cannot be validated modularly.
+A third source of false positives arises from application-level
+protocols that ensure memory is used correctly across multiple
+invocations of the module's message handler, but which cannot be
+validated modularly.
 
 
 %% There were 153 warnings generated while configuring the tool.
@@ -328,46 +319,33 @@ module's message handler, but which cannot be validated modularly.
 %% %
 %% \end{table}
 
-We ran a similar experiment on the SOS kernel.
-We ran the checker on the current version of all code required to
-build the core SOS kernel with a simple ``blink'' application for the
-Mica2 hardware.  This configuration consists of approximately 15000 SLOC and
-required analyzing 37 source files, of which 16
-generated warnings.
-A detailed listing of these warnings is
-provided in table~\ref{tab:kernel}.
+We ran a similar experiment on the SOS kernel.  We ran the checker on
+the current version of all code required to build the core SOS kernel
+with a simple ``blink'' application for the Mica2 hardware.  This
+configuration consists of approximately 15000 SLOC and required
+analyzing 37 source files, of which 16 generated warnings.  A detailed
+listing of these warnings is provided in table~\ref{tab:kernel}.
 %
 A total of 43 warnings are reported by the checker.
 
-Surprisingly,
-although the SOS kernel code is stable and heavily exercised, the checker found
-two actual errors.
-The first is a memory leak similar to the example shown in the next
-subsection.
-Listed here is the other error, an improper access to data that has been released to
-another module.
+Surprisingly, although the SOS kernel code is stable and heavily
+exercised, the checker found two actual errors.  The first is a memory
+leak similar to the example shown in the next subsection.  Listed here
+is the other error, an improper access to data that has been released
+to another module.
 %
-\begin{footnotesize}
-\begin{verbatim}
-if( post_long(fst->requester, KER_FETCHER_PID,
-              MSG_FETCHER_DONE, sizeof(fetcher_state_t),
-              fst, SOS_MSG_RELEASE) != SOS_OK ) {
-    ...
-    return;
-}
-cam = ker_cam_lookup( fst->map.key );
-...
-\end{verbatim}
-\end{footnotesize}
+\begin{footnotesize} \begin{verbatim} if( post_long(fst->requester,
+KER_FETCHER_PID, MSG_FETCHER_DONE, sizeof(fetcher_state_t), fst,
+SOS_MSG_RELEASE) != SOS_OK ) { ...  return; } cam = ker_cam_lookup(
+fst->map.key ); ...  \end{verbatim} \end{footnotesize}
 %
-In this segment of code the variable {\tt fst} is released by the call to {\tt
-post\_long} and subsequently accessed when the {\tt if} clause fails.
-Both of
-the kernel errors found by the checker
-have been reported to the SOS development team.
-The presence of memory errors in mature and well-tested code, written by systems
-programmers, demonstrates the utility of an automatic tool for
-validating memory management.
+In this segment of code the variable {\tt fst} is released by the call
+to {\tt post\_long} and subsequently accessed when the {\tt if} clause
+fails.  Both of the kernel errors found by the checker have been
+reported to the SOS development team.  The presence of memory errors
+in mature and well-tested code, written by systems programmers,
+demonstrates the utility of an automatic tool for validating memory
+management.
 
 %% \subsection{Warnings Breakdown}
 
@@ -415,14 +393,13 @@ return SOS_OK;
 
 The following is an example of a memory leak found by the checker.
 The error was found during testing of historic versions of the file
-{\tt loader.c},
-which is used in SOS to dynamically load other modules onto running nodes.  
-In mid-October 2005 the block of code shown in Figure~\ref{fig:leak} was
-checked into CVS as part of {\tt loader.c}.
-All paths through this block of code leak the {\tt
-mod\_op} pointer, which the module acquires ownership of through {\tt
-  ker\_msg\_take\_data}.
-This code results in the following warning from the checker:
+{\tt loader.c}, which is used in SOS to dynamically load other modules
+onto running nodes.  In mid-October 2005 the block of code shown in
+Figure~\ref{fig:leak} was checked into CVS as part of {\tt loader.c}.
+All paths through this block of code leak the {\tt mod\_op} pointer,
+which the module acquires ownership of through {\tt
+ker\_msg\_take\_data}.  This code results in the following warning
+from the checker:
 
 \begin{footnotesize}
 \begin{verbatim}
@@ -432,9 +409,9 @@ is not stored
 \end{verbatim}
 \end{footnotesize}
 
-After three additional revisions that do not significantly modify or fix the
-memory leak, a fourth revision was made in mid-December 2005.  This
-revision expands the functionality of {\tt loader.c} and breaks
+After three additional revisions that do not significantly modify or
+fix the memory leak, a fourth revision was made in mid-December 2005.
+This revision expands the functionality of {\tt loader.c} and breaks
 the code up into smaller functions:
 
 \begin{footnotesize}
@@ -465,17 +442,15 @@ is not stored
 \end{verbatim}
 \end{footnotesize}
 
-Clearly {\tt mod\_op} is still being leaked if {\tt mod\_op->op} does not
-find a matching case in the {\tt switch} statement.
-Further, adding the {\tt sos\_release} attribute to the third formal
-parameter of the functions
-{\tt module\_op\_insmod} and {\tt module\_op\_rmmod} and rerunning the
-checker 
-reveals that both of these
-functions also leak {\tt mod\_op}!
+Clearly {\tt mod\_op} is still being leaked if {\tt mod\_op->op} does
+not find a matching case in the {\tt switch} statement.  Further,
+adding the {\tt sos\_release} attribute to the third formal parameter
+of the functions {\tt module\_op\_insmod} and {\tt module\_op\_rmmod}
+and rerunning the checker reveals that both of these functions also
+leak {\tt mod\_op}!
 
-A day later, eight weeks after the memory leaks were first
-introduced, these memory leaks were found and fixed:
+A day later, eight weeks after the memory leaks were first introduced,
+these memory leaks were found and fixed:
 
 \begin{footnotesize}
 \begin{verbatim}
@@ -496,13 +471,11 @@ return SOS_OK;
 \end{verbatim}
 \end{footnotesize}
 
-As shown above, a call to {\tt ker\_free} has been added before the final {\tt
-  return}, in order to properly dispose of {\tt mod\_op}.
+As shown above, a call to {\tt ker\_free} has been added before the
+final {\tt return}, in order to properly dispose of {\tt mod\_op}.
 The functions {\tt module\_op\_insmod} and {\tt module\_op\_rmmod}
-similarly free their third argument.
-The CVS log message 
-%%, nearly identical to those around it, 
-simply reads ``fixed another memory leak.''
+similarly free their third argument.  The CVS log message simply reads
+``fixed another memory leak.''
 
 
 
