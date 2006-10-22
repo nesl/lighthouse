@@ -39,21 +39,21 @@ def clean(dir, file):
 ##
 # Helper function to clean up the source tree
 ##
-def copy(dir, file, versionDate):
+def copy(moduleDir, file, versionDate, saveDir="."):
     
     versionString = versionDate.replace("/", "_").replace(" ", "_").replace(":", "_")
    
-    cin = open(os.path.join(dir, file + ".c"), "rb")
+    cin = open(os.path.join(moduleDir, file + ".c"), "rb")
     
     try:
-        iin = open(os.path.join(dir, file + ".i"), "rb")
+        iin = open(os.path.join(moduleDir, file + ".i"), "rb")
     except IOError:
         print "Failed to find " + file + ".i"
         cin.close()
         return
     
-    cout = open(file + "_" + versionString + ".c", "wb")
-    iout = open(file + "_" + versionString + ".i", "wb")
+    cout = open(os.path.join(saveDir, file + "_" + versionString + ".c"), "wb")
+    iout = open(os.path.join(saveDir, file + "_" + versionString + ".i"), "wb")
 
     cout.write(cin.read())
     iout.write(iin.read())
@@ -87,10 +87,8 @@ def changeCvsVersion(root, date):
 # Build a specifc module
 ##
 def buildModule(path, file, buildTarget="mica2"):
-    DEBUG("Starting: buildModule")
     clean(path, file)
     build(path, buildTarget)
-    DEBUG("End: buildModule")
 
 
 ##
@@ -173,18 +171,7 @@ def modifyMake():
 # Go go driver function.
 ################################################################
 
-if __name__ == '__main__':
-    
-    
-    if len(sys.argv) != 5:
-        print "Usage: " + sys.argv[0] + " <sosRoot> <modulePathe> <moduleName> <buildTarget>"
-        sys.exit()
-
-    # Get vital stats
-    sosRoot = sys.argv[1]
-    modulePath = sys.argv[2]
-    moduleName = sys.argv[3]
-    buildTarget = sys.argv[4]
+def buildAll(sosRoot, modulePath, moduleName, savePath, buildTarget):
     
     # Assume that this is run from the SOS directory so change into base directory
     os.chdir(sosRoot)
@@ -203,7 +190,29 @@ if __name__ == '__main__':
         changeCvsVersion(sosRoot, versionDate)
         mkFile = modifyMake()
         buildModule(modulePath, moduleName, buildTarget) 
-        copy(modulePath, moduleName, versionDate)
+        copy(modulePath, moduleName, versionDate, savePath)
         os.remove(mkFile)
-        
+       
 
+################################################################
+# Stand alone program
+################################################################
+if __name__ == '__main__':
+    
+    if len(sys.argv) != 5:
+        print "Usage: " + sys.argv[0] + " <sosRoot> <modulePath> <moduleName> <savePath>"
+        print "Tool to generate .i files for each CVS version of an SOS module." 
+        print "    sosRoot: Root of the SOS distrobution (assumes anonymous checkout"
+        print "    modulePath: Path to module relative to sosRoot"
+        print "    moduleName: Name of module (without .c)"
+        print "    savePath: Location to save generated .c and .i files REALITIVE TO sosRoot"
+        sys.exit()
+
+    # Get vital stats
+    sosRoot = sys.argv[1]
+    modulePath = sys.argv[2]
+    moduleName = sys.argv[3]
+    savePath = sys.argv[4]
+    buildTarget = "mica2"
+    
+    
