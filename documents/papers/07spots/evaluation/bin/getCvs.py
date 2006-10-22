@@ -184,8 +184,9 @@ def buildAll(sosRoot, modulePath, moduleName, savePath, buildTarget):
     for versionDate in dates:
 
         count = count + 1
-        #DEBUG("Checking " + moduleName + " from " + versionDate + ":")
+        DEBUG("----------------------------------------")
         DEBUG("Checking %s from %s (%d of %d)" % (moduleName, versionDate, count, total))
+        DEBUG("----------------------------------------")
         
         changeCvsVersion(sosRoot, versionDate)
         mkFile = modifyMake()
