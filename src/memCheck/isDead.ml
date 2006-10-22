@@ -107,14 +107,7 @@ let is_dead_exp (e:exp) : bool =
    
     List.exists 
       (fun e -> 
-         let b = 
-           MA.may_alias_wrapper e !target
-         in
-           ignore (printf "Checking to see if %a may alias dead data %a: %b\n"
-                     d_exp e d_exp !target b
-           );
-           flush stdout;
-           b
+         MA.may_alias_wrapper e !target
     ) non_null
 ;;
 

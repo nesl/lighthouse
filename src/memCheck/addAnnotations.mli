@@ -7,6 +7,9 @@
 
 (** Manipulate variable attributes *)
 
+(** Configuration file to use.  This defaults to config.txt *)
+val config_file : string ref
+
 (** Update function's type with attributes described by the list.
   *)
 val addFunAttributes: Cil.varinfo -> string option list -> Cil.typ

@@ -11,8 +11,9 @@ module IS = IsStored;;
 module CA = CallerAllocates;;
 module MU = MemUtil;;
 module IE = IsEquivalent;;
-module MA = MayAliasWrapper
-
+module MA = MayAliasWrapper;;
+module AA = AddAnnotations;;
+              
 (** {1 Overview of Transformations} 
   *
   * Lighthouse performs a number of transformations to produce a C file
@@ -297,6 +298,9 @@ let argDescr = [
   ("--out", Arg.String (openFile "output" (fun oc -> outChannel := Some oc)),
    "Name of the output CIL file");
 
+  ("--config", Arg.String (fun config -> AA.config_file := config),
+   "Use custom configuration file for alias annotations");
+
   (* Debugging for IsDead *)
 
   ("--mem_dbg_free_exp", Arg.Unit (fun _ -> dbg_free_exp := true),
@@ -377,7 +381,7 @@ let doFile (file_name: string) : unit =
   ignore (Simplify.feature.fd_doit !cil_file);
   ignore (MakeOneCFG.make_one_cfg !cil_file);
   ignore (Ptranal.feature.fd_doit !cil_file);
-  ignore (AddAnnotations.feature.fd_doit !cil_file);
+  ignore (AA.feature.fd_doit !cil_file);
 
   (* Generate a table to note persistent stores *)
   global_stores := get_global_vars !cil_file;
