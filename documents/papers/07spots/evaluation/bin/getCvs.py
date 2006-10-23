@@ -47,7 +47,6 @@ def copy(moduleDir, file, versionDate, saveDir="."):
         cin = open(os.path.join(moduleDir, file + ".c"), "rb")
     except IOError:
         print "Failed to find version " + versionString + " of " + file + ".c"
-        cin.close()
         return
 
     
