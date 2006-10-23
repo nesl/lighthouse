@@ -1,5 +1,10 @@
 #!/usr/bin/python
 
+##
+# For fun shell usage of this you can try something along the lines of:
+# for i in `cat moduleNames.txt`; do python ../bin/timeDiff.py . $i; done
+##
+
 import re
 import difflib
 import sys
@@ -36,7 +41,10 @@ def ignoreLine(line):
     # Error messages that we know are okay
     whitelist = [ \
             'Error: Function ker_msg_take_data fails to return allocated memory', \
-            'Check time: ' \
+            'Check time: ', \
+            'Warning: Return statement with a value in function returning void', \
+            'Unable to make address of non-lval expression', \
+            'Function sys_msg_take_data fails to return allocated memory', \
             ]
 
     # Check if the line can be ignored
@@ -68,9 +76,8 @@ def clean(lines):
     tmpNum = re.compile('tmp___\d+')
 
     tmp = []
+
     for line in lines:
-        if ignoreLine(line):
-            continue
         clean = line
         clean = lineFileNum.sub('#line XXX', clean)
         clean = lineNum.sub('#line XXX', clean)
@@ -95,8 +102,21 @@ def smartDiff(fileA, fileB):
     a.close()
     b.close()
 
-    cleanA = clean(aLines)
-    cleanB = clean(bLines)
+    # Filter out white listed statements
+    aOrig = []
+    for line in aLines:
+        if ignoreLine(line):
+            continue
+        aOrig.append(line)
+    bOrig = []
+    for line in bLines:
+        if ignoreLine(line):
+            continue
+        bOrig.append(line)
+
+
+    cleanA = clean(aOrig)
+    cleanB = clean(bOrig)
    
     # Hairy custom diff that uses the result of ndiff to output the NON-CLEAN
     # diff or cleanA and cleanB
@@ -111,11 +131,11 @@ def smartDiff(fileA, fileB):
             indexB += 1
         elif line[0:2] == '- ': 
             # Slice indexes are pulling version from the file name
-            diffList.append(fileA[-25:-8] + ": " + aLines[indexA])
+            diffList.append(fileA[-27:-8] + ": " + aOrig[indexA])
             indexA += 1
         elif line[0:2] == '+ ':
             # Slice indexes are pulling version from the file name
-            diffList.append(fileB[-25:-8] + ": " + bLines[indexB])
+            diffList.append(fileB[-27:-8] + ": " + bOrig[indexB])
             indexB += 1
         
     return diffList        
@@ -142,10 +162,11 @@ if __name__ == '__main__':
         f = open(files[0])
         cleanData = clean(f.readlines())
         f.close()
-        outFile = files[0][-25:-6] + ".timeDiff"
-        print "Opening file: " + outFile
-        g = open(moduleName + "_" + "00XXXXXXXXXXXXXXXXX__" + outFile, 'w')
+        outFile = files[0][-27:-8] + ".timeDiff"
+        g = open(moduleName + "_" + "0000XXXXXXXXXXXXXXX__" + outFile, 'w')
         for line in cleanData:
+            if ignoreLine(line):
+                continue
             line = line.rstrip()
             g.write(line + "\n")
         g.close()
@@ -160,7 +181,7 @@ if __name__ == '__main__':
             DEBUG("    " + files[index])
             DEBUG("    " + files[index + 1])
             outFile = moduleName + "_" + \
-                    files[index][-25:-6] + "__" + files[index+1][-25:-6] + \
+                    files[index][-27:-8] + "__" + files[index+1][-27:-8] + \
                     ".timeDiff"
             f = open(outFile, 'w')
             f.write("Found point of interest between files:\n")
