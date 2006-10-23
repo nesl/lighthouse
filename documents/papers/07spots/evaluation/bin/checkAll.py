@@ -14,36 +14,6 @@ def DEBUG(out):
 
 
 ##
-# Function to ignore bogus errors in the build logs.  Returns true if the line
-# can be safely ignored.
-##
-def ignoreLine(line):
-
-    # Error messages that we know are okay
-    #whitelist = [ \
-    #        'Warning: Return statement with a value in function returning void', \
-    #        'Warning: Retrun value must reference memory in function ker_msg_take_data', \
-    #        'Warning: Retrun value must reference memory in function ker_malloc', \
-    #        'Warning: Foraml var ptr must be stored or released in function ker_free', \
-    #        ]
-    whitelist = []
-
-    # Check if the line can be ignored
-    for ignore in whitelist:
-        if ignore in line:
-            return True
-
-    # Check for the empty line
-    blank = re.compile("^\s$")
-    if blank.match(line):
-        return True
-    
-    # Note that the line can not be ignored
-    return False
-
-
-
-##
 # Helper function to clean up the source tree
 ##
 def check(file, options = "", check="/home/rshea/svn/lighthouse/trunk/src/memCheck/memory --config /home/rshea/svn/lighthouse/trunk/src/memCheck/config.txt"):
@@ -61,9 +31,6 @@ def check(file, options = "", check="/home/rshea/svn/lighthouse/trunk/src/memChe
     # Write output into a file
     f = open(file + ".check", "w")
     for line in lines:
-        if ignoreLine(line):
-            continue
-        
         print line,
         f.write(line)
     
