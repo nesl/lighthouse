@@ -18,8 +18,14 @@ def getModules(file):
     config = open(file, "r")
     modules = []
     for line in config:
+        
+        if line[0] == '#':
+            print ("Skipping line" + line)
+            continue
+
         (path, module) = line.strip().split(" ")
         modules.append((path, module))
+    
     config.close()
     return modules
 
