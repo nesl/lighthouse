@@ -76,7 +76,7 @@ def changeCvsVersion(root, date):
 
     # Check out dated release (this assumes an anon checkout)
     os.environ['CVS_RSH'] = 'ssh'
-    child = pexpect.spawn('cvs up -P -d -D"' + date + '"')
+    child = pexpect.spawn('cvs up -d -D"' + date + '"')
     child.expect('password:')
     child.sendline('anon')
     child.expect(pexpect.EOF)
@@ -174,6 +174,7 @@ def modifyMake():
 def buildAll(sosRoot, modulePath, moduleName, savePath, buildTarget):
     
     # Assume that this is run from the SOS directory so change into base directory
+    origDir = os.getcwd()
     os.chdir(sosRoot)
         
     # Get all version dates that need to be checked out
@@ -193,7 +194,9 @@ def buildAll(sosRoot, modulePath, moduleName, savePath, buildTarget):
         buildModule(modulePath, moduleName, buildTarget) 
         copy(modulePath, moduleName, versionDate, savePath)
         os.remove(mkFile)
-       
+
+    # Change back into the base directory
+    os.chdir(origDir)
 
 ################################################################
 # Stand alone program
