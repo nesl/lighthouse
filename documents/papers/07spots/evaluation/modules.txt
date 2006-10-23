@@ -1,4 +1,4 @@
-modules/ker_module/ads7828 ads7828
+modules/ker_module/ads7828 ads7828_test
 modules/ker_module/ds2438 ds2438
 modules/ker_module/sht15 sht15
 modules/routing/flooding flooding

@@ -43,7 +43,13 @@ def copy(moduleDir, file, versionDate, saveDir="."):
     
     versionString = versionDate.replace("/", "_").replace(" ", "_").replace(":", "_")
    
-    cin = open(os.path.join(moduleDir, file + ".c"), "rb")
+    try:
+        cin = open(os.path.join(moduleDir, file + ".c"), "rb")
+    except IOError:
+        print "Failed to find version " + versionString + " of " file + ".c"
+        cin.close()
+        return
+
     
     try:
         iin = open(os.path.join(moduleDir, file + ".i"), "rb")
@@ -186,7 +192,7 @@ def buildAll(sosRoot, modulePath, moduleName, savePath, buildTarget):
 
         count = count + 1
         DEBUG("----------------------------------------")
-        DEBUG("Checking %s from %s (%d of %d)" % (moduleName, versionDate, count, total))
+        DEBUG("Building %s from %s (%d of %d)" % (moduleName, versionDate, count, total))
         DEBUG("----------------------------------------")
         
         changeCvsVersion(sosRoot, versionDate)
