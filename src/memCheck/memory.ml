@@ -234,12 +234,16 @@ class memoryVisitor = object inherit nopCilVisitor
 
     let bad_stores = 
       List.filter
-        (fun e -> not (IS.is_stored_instr 
-                         e 
-                         !currentStmt 
-                         i 
-                         !currentFunc 
-                         (!local_stores @ !global_stores)))
+        (fun e -> 
+           not (
+             IS.is_stored_instr 
+               e 
+               !currentStmt 
+               i 
+               !currentFunc 
+               (!local_stores @ !global_stores)
+           )
+        )
         (MU.get_claim i)
     in
 

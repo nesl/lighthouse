@@ -508,7 +508,7 @@ let getStmtState (data: status IH.t) (s: stmt): status option =
 let get_return_statements (f: fundec) : stmt list =
   List.filter 
     (fun s -> match s.skind with Return _ -> true | _ -> false) 
-    f.sbody.bstmts
+    f.sallstmts
 ;;
 
 
@@ -520,12 +520,14 @@ let set_claim_on_return (f: fundec) : unit =
 
 
 let is_stored (f: fundec) : bool =
+  
   List.for_all 
     (fun s -> 
        try match (IH.find DFO.stmtStartData s.sid) with
            Taken | Null | ReturnTaken -> true
-         | MustTake | Error -> false
-       with Not_found -> false)
+           | MustTake | Error -> false
+       with Not_found -> false
+    )
     (get_return_statements f)
 ;;
 
@@ -571,7 +573,7 @@ let is_stored_instr
       s.succs;
     Track.compute s.succs;
      
-    is_stored f  
+    is_stored f
 ;;
   
 
