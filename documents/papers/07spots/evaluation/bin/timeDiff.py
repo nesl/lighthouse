@@ -155,7 +155,7 @@ if __name__ == '__main__':
    
     os.chdir(savePath)
 
-    files = getCheckFiles(moduleName + '_*.check')
+    files = getCheckFiles(moduleName + '_2*.check')
 
     # Generate a start file of time diff
     if len(files) > 0:
