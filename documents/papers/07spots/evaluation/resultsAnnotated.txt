@@ -2,19 +2,19 @@
 ////////////////////////////////////////////////////////////
 
 dft_loader
-==========
+----------
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 2006_02_25_06_29_55
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Dead (256)
-~~~~~~~~~~
+^^^^^^^^^^
 ----
 ker_free(st.version_data);
-st.version_data = (msg_version_data_t*) ker_msg_take_data(KER_DFT_LOADER_PID, msg);
+st.version_data - (msg_version_data_t*) ker_msg_take_data(KER_DFT_LOADER_PID, msg);
 ----
 
 *BUG*: May alias causing problems?  In genereal it should be okay to stare
@@ -22,20 +22,20 @@ into a dead variable.  But may alias expansion may cause problems for this.
 
 
 Store (257)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-st.version_data = (msg_version_data_t*) ker_msg_take_data(KER_DFT_LOADER_PID, msg);
+st.version_data - (msg_version_data_t*) ker_msg_take_data(KER_DFT_LOADER_PID, msg);
 ----
 
 *BUG*: Save into the static state variable `st` should not be a problem.  
 
 
 Store (330)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-st.version_data = ker_malloc(sizeof(msg_version_data_t), KER_DFT_LOADER_PID);
+st.version_data - ker_malloc(sizeof(msg_version_data_t), KER_DFT_LOADER_PID);
 ----
 
 *BUG*: Same as above.  Save into the static state variable `st` should not be a problem.  
@@ -45,13 +45,13 @@ st.version_data = ker_malloc(sizeof(msg_version_data_t), KER_DFT_LOADER_PID);
 ////////////////////////////////////////
 
 2006_01_24_04_14_00
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (52)
-~~~~~~~~~~
+^^^^^^^^^^
 
 ----
-fetcher_state_t *f = (fetcher_state_t*) ker_msg_take_data(KER_DFT_LOADER_PID, msg);
+fetcher_state_t *f - (fetcher_state_t*) ker_msg_take_data(KER_DFT_LOADER_PID, msg);
 if(is_fetcher_succeed(f)) {
     ...
     fetcher_commit(f, true);
@@ -70,25 +70,25 @@ if(is_fetcher_succeed(f)) {
 ////////////////////////////////////////////////////////////
 
 digital_adc
-===========
+-----------
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 2006_07_18_20_36_12
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (121)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
 case ADS_POWER_ON:
     {
-        uint8_t* power_mask = ker_msg_take_data(ADS7828_ID, msg);
+        uint8_t* power_mask - ker_msg_take_data(ADS7828_ID, msg);
         HAS_CRITICAL_SECTION;
         ENTER_CRITICAL_SECTION();
-        ADS7828_DIRECTION = ADS7828_DIRECTION | *power_mask;
-        ADS7828_PORT = ADS7828_PORT | *power_mask;
+        ADS7828_DIRECTION - ADS7828_DIRECTION | *power_mask;
+        ADS7828_PORT - ADS7828_PORT | *power_mask;
         LEAVE_CRITICAL_SECTION();
         break;
     }
@@ -97,11 +97,11 @@ case ADS_POWER_ON:
 *HIT*
 
 Store (159)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
 // Send a request to configure ADC for a read from CH0
-s->command = (uint8_t *)ker_malloc(1, ADS7828_ID);
+s->command - (uint8_t *)ker_malloc(1, ADS7828_ID);
 ----
 
 *BUG*: This is stored into the local store created by the module state passed
@@ -112,19 +112,19 @@ into this function.  Adding in the missing annotation should clean this up.
 ////////////////////////////////////////////////////////////
 
 echo
-====
+----
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 2006_03_20_21_07_13
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (59)
-~~~~~~~~~~
+^^^^^^^^^^
 
 ----
-uint8_t *d = ker_msg_take_data(s->pid, msg);
+uint8_t *d - ker_msg_take_data(s->pid, msg);
 post_auto(msg->sid, s->pid, MSG_ECHO, l, d, SOS_MSG_RELEASE, msg->saddr);	
 return SOS_OK;
 ----
@@ -136,20 +136,20 @@ return SOS_OK;
 ////////////////////////////////////////////////////////////
 
 echo_uart
-=========
+---------
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 2006_01_24_04_14_00
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (66)
-~~~~~~~~~~
+^^^^^^^^^^
 
 ----
-buff_to_send = (uint8_t*)ker_msg_take_data(s->pid, msg);
-if (buff_to_send != NULL) {
+buff_to_send - (uint8_t*)ker_msg_take_data(s->pid, msg);
+if (buff_to_send !- NULL) {
     LED_DBG(LED_GREEN_TOGGLE);
     post_net(DFLT_APP_ID0, DFLT_APP_ID0, MSG_MOTE_TO_PC, msg_len, 
             (void*)buff_to_send, SOS_MSG_RELEASE, UART_ADDRESS);
@@ -163,22 +163,22 @@ if (buff_to_send != NULL) {
 ////////////////////////////////////////////////////////////
 
 flooding
-========
+--------
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 2006_05_12_23_07_43
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (83)
-~~~~~~~~~~
+^^^^^^^^^^
 
 ----
-dupbuff = ker_malloc(msg->len, MOD_FLOODING_PID);
-if (dupbuff == NULL) return SOS_OK; // Out of memory
-for (i = 0; i < msg->len; i++) {
-    dupbuff[i] = msg->data[i];
+dupbuff - ker_malloc(msg->len, MOD_FLOODING_PID);
+if (dupbuff -- NULL) return SOS_OK; // Out of memory
+for (i - 0; i < msg->len; i++) {
+    dupbuff[i] - msg->data[i];
 }
 post_long(hdr->dst_pid, MOD_FLOODING_PID, hdr->dest_msg_type, msg->len, dupbuff, SOS_MSG_RELEASE);
 ----
@@ -186,18 +186,18 @@ post_long(hdr->dst_pid, MOD_FLOODING_PID, hdr->dest_msg_type, msg->len, dupbuff,
 *BUG*: Not sure why this was not caught.
 
 Store (93)
-~~~~~~~~~~
+^^^^^^^^^^
 
 ----
-hdr = (flood_hdr_t*)ker_msg_take_data(MOD_FLOODING_PID, msg);
-if(hdr == NULL) return -ENOMEM;
+hdr - (flood_hdr_t*)ker_msg_take_data(MOD_FLOODING_PID, msg);
+if(hdr -- NULL) return -ENOMEM;
 post_net(MOD_FLOODING_PID, MOD_FLOODING_PID, MSG_FLOOD_DATA_PKT, l, hdr, SOS_MSG_RELEASE, BCAST_ADDRESS);
 ----
 
 *BUG*: Not sure why this was not caught.
 
 Store (168)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
 ker_change_own(pktpayload, MOD_FLOODING_PID);
@@ -211,19 +211,19 @@ return post_net(MOD_FLOODING_PID, MOD_FLOODING_PID, MSG_FLOOD_DATA_PKT, payloadl
 ////////////////////////////////////////////////////////////
 
 i2c_comm_ping_pong
-==================
+------------------
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 2006_02_22_18_20_12
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (114)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-if ((s->sos_i2c_data = ker_malloc(s->msg_len,s->pid)) != NULL) {
+if ((s->sos_i2c_data - ker_malloc(s->msg_len,s->pid)) !- NULL) {
     ...
 }
 ----
@@ -232,13 +232,13 @@ if ((s->sos_i2c_data = ker_malloc(s->msg_len,s->pid)) != NULL) {
 into this function.  Adding in the missing annotation should clean this up.
 
 Dead (121)
-~~~~~~~~~~
+^^^^^^^^^^
 
 ----
 case MSG_TIMER_TIMEOUT:
 ...
-if(s->state == T_I2C_COMM_IDLE) {
-    if ((s->sos_i2c_data = ker_malloc(s->msg_len,s->pid)) != NULL) {
+if(s->state -- T_I2C_COMM_IDLE) {
+    if ((s->sos_i2c_data - ker_malloc(s->msg_len,s->pid)) !- NULL) {
         ...
         post_link(DFLT_APP_ID0,
                 DFLT_APP_ID0,
@@ -250,7 +250,7 @@ if(s->state == T_I2C_COMM_IDLE) {
     } else {
         ...
     }
-    s->state = T_I2C_COMM_SEND_SOS_I2C_MSG;
+    s->state - T_I2C_COMM_SEND_SOS_I2C_MSG;
 } else {
     ...
 }
@@ -263,13 +263,13 @@ if(s->state == T_I2C_COMM_IDLE) {
 ////////////////////////////////////////
 
 2006_02_20_00_18_43
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (121)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-if ((s->sos_i2c_msg->data = ker_malloc(s->msg_len,s->pid)) != NULL) {
+if ((s->sos_i2c_msg->data - ker_malloc(s->msg_len,s->pid)) !- NULL) {
     ...
 }
 ----
@@ -282,19 +282,19 @@ into this function.  Adding in the missing annotation should clean this up.
 ////////////////////////////////////////////////////////////
 
 i2c_comm_tx
-===========
+-----------
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 2006_02_20_00_18_43
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (127)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----					
-if ((s->sos_i2c_msg = ker_malloc(sizeof(Message), s->pid)) != NULL) {
+if ((s->sos_i2c_msg - ker_malloc(sizeof(Message), s->pid)) !- NULL) {
     ...   
 }
 ----
@@ -304,10 +304,10 @@ into this function.  Adding in the missing annotation should clean this up.
 
 
 Store (134)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-if ((s->sos_i2c_msg->data = ker_malloc(s->msg_len,s->pid)) != NULL) {
+if ((s->sos_i2c_msg->data - ker_malloc(s->msg_len,s->pid)) !- NULL) {
     ...
 }
 ----
@@ -316,7 +316,7 @@ if ((s->sos_i2c_msg->data = ker_malloc(s->msg_len,s->pid)) != NULL) {
 into this function.  Adding in the missing annotation should clean this up.
 
 Dead (145)
-~~~~~~~~~~
+^^^^^^^^^^
 
 ----
 if (...) {
@@ -326,24 +326,24 @@ if (...) {
 } else {
     ...
 }
-s->state = T_I2C_COMM_SEND_SOS_I2C_MSG;
+s->state - T_I2C_COMM_SEND_SOS_I2C_MSG;
 ----
 
 *BUG*: May alias is probably causing problems.
 
 
 Dead (191)
-~~~~~~~~~~
+^^^^^^^^^^
 
 ----
 case MSG_I2C_SEND_DONE:
 {
     ker_free(msg->data);
     ker_i2c_release_bus(s->pid);
-    if (s->state == T_I2C_COMM_SEND_RAW) {
-        s->state = T_I2C_COMM_SEND_RAW_DONE;
+    if (s->state -- T_I2C_COMM_SEND_RAW) {
+        s->state - T_I2C_COMM_SEND_RAW_DONE;
     } else {
-        s->state = T_I2C_COMM_SEND_SOS_MSG_DONE;
+        s->state - T_I2C_COMM_SEND_SOS_MSG_DONE;
     }
     break;
 }
@@ -353,7 +353,7 @@ case MSG_I2C_SEND_DONE:
 `.i` file to understand.
 
 Dead (254)
-~~~~~~~~~~
+^^^^^^^^^^
 
 ----
 case MSG_ERROR:
@@ -376,20 +376,20 @@ above.
 ////////////////////////////////////////////////////////////
 
 mag_sensor
-==========
+----------
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 
 2006_08_30_23_09_58
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (94)
-~~~~~~~~~~
+^^^^^^^^^^
 
 ----
-s->i2c_data_ptr = ker_malloc(sizeof(uint16_t), MAG_SENSOR_PID);
+s->i2c_data_ptr - ker_malloc(sizeof(uint16_t), MAG_SENSOR_PID);
 ----
 
 *BUG*: This is stored into the local store created by the module state into
@@ -397,10 +397,10 @@ the local store resulting from a call to `ker_get_module_state`.  Should add
 feature to deal with this type of "dynamic call generation".
 
 Store (191)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-(s->i2c_data_ptr) = ker_malloc(sizeof(uint16_t), MAG_SENSOR_PID);
+(s->i2c_data_ptr) - ker_malloc(sizeof(uint16_t), MAG_SENSOR_PID);
 ----
 
 *BUG*: This is stored into the local store created by the module state into
@@ -409,15 +409,15 @@ feature to deal with this type of "dynamic call generation".
 
 
 Dead (302)
-~~~~~~~~~~
+^^^^^^^^^^
 
 ----
 ker_free(s->i2c_data_ptr);
 ker_i2c_release_bus(MAG_SENSOR_PID);
-if(s->callibrate_timeout == 0) {
+if(s->callibrate_timeout -- 0) {
     ker_timer_start(MAG_SENSOR_PID, 1, 50);
 } else {
-    s->callibrate_mode = 0;
+    s->callibrate_mode - 0;
 }
 break;
 ----
@@ -429,22 +429,22 @@ break;
 ////////////////////////////////////////////////////////////
 
 mag_test_app
-============
+------------
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 2006_08_30_23_09_58
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (79)
-~~~~~~~~~~
+^^^^^^^^^^
 
 ----				
-temp = ker_malloc(sizeof(uint8_t), MAG_TEST_PID);
-*temp = 0;
+temp - ker_malloc(sizeof(uint8_t), MAG_TEST_PID);
+*temp - 0;
 ker_sensor_control(s->pid, MTS310_MAG_0_SID, temp);	
-s->state = MAG_TEST_APP_IDLE_0;
+s->state - MAG_TEST_APP_IDLE_0;
 break;
 ----
 
@@ -453,13 +453,13 @@ releasing the buffer.  In fact, I know that in error cases it does not release
 the buffer.
 
 Store (88)
-~~~~~~~~~~
+^^^^^^^^^^
 
 ----
-temp = ker_malloc(sizeof(uint8_t), MAG_TEST_PID);
-*temp = 1;
+temp - ker_malloc(sizeof(uint8_t), MAG_TEST_PID);
+*temp - 1;
 ker_sensor_control(s->pid, MTS310_MAG_1_SID, temp); 
-s->state = MAG_TEST_APP_IDLE_1;
+s->state - MAG_TEST_APP_IDLE_1;
 break;
 ----
 
@@ -471,21 +471,21 @@ the buffer.  Exact same as the above.
 ////////////////////////////////////////////////////////////
 
 rats
-====
+----
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 2006_03_29_19_29_21
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (220)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----					
-period_packet_t * period_packet_ptr = ker_malloc(sizeof(period_packet_t), s->pid);
-period_packet_ptr->old_period = s->ts_packet.transmission_period;
-period_packet_ptr->new_period = s->validation_period;
+period_packet_t * period_packet_ptr - ker_malloc(sizeof(period_packet_t), s->pid);
+period_packet_ptr->old_period - s->ts_packet.transmission_period;
+period_packet_ptr->new_period - s->validation_period;
 post_net(s->pid, s->pid, MSG_VALIDATE, sizeof(period_packet_t), period_packet_ptr, SOS_MSG_RELEASE, UART_ADDRESS);	
 ----
 
@@ -493,12 +493,12 @@ post_net(s->pid, s->pid, MSG_VALIDATE, sizeof(period_packet_t), period_packet_pt
 
 
 Store (290)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-period_packet_t * period_packet_ptr = ker_malloc(sizeof(period_packet_t), s->pid);
-period_packet_ptr->old_period = s->ts_packet.transmission_period;
-period_packet_ptr->new_period = temp_transmission_period;
+period_packet_t * period_packet_ptr - ker_malloc(sizeof(period_packet_t), s->pid);
+period_packet_ptr->old_period - s->ts_packet.transmission_period;
+period_packet_ptr->new_period - temp_transmission_period;
 post_net(s->pid, s->pid, MSG_VALIDATE, sizeof(period_packet_t), period_packet_ptr, SOS_MSG_RELEASE, UART_ADDRESS);	
 ----
 
@@ -506,10 +506,10 @@ post_net(s->pid, s->pid, MSG_VALIDATE, sizeof(period_packet_t), period_packet_pt
 
 
 Store (452)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-s->ts_list = (timesync_t *)ker_malloc(sizeof(timesync_t), s->pid);
+s->ts_list - (timesync_t *)ker_malloc(sizeof(timesync_t), s->pid);
 ----
 
 *BUG*: This is stored into the local store created by the module state passed
@@ -517,10 +517,10 @@ into this function.  Adding in the missing annotation should clean this up.
 
 
 Store (455)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-s->ts_list->timestamps = (uint32_t *)ker_malloc(BUFFER_SIZE*sizeof(uint32_t), s->pid);
+s->ts_list->timestamps - (uint32_t *)ker_malloc(BUFFER_SIZE*sizeof(uint32_t), s->pid);
 ----
 
 *BUG*: This is stored into the local store created by the module state passed
@@ -528,10 +528,10 @@ into this function.  Adding in the missing annotation should clean this up.
 
 
 Store (456)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-s->ts_list->my_time = (uint32_t *)ker_malloc(BUFFER_SIZE*sizeof(uint32_t), s->pid);
+s->ts_list->my_time - (uint32_t *)ker_malloc(BUFFER_SIZE*sizeof(uint32_t), s->pid);
 ----
 
 *BUG*: This is stored into the local store created by the module state passed
@@ -539,10 +539,10 @@ into this function.  Adding in the missing annotation should clean this up.
 
 
 Store (497)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-float *buffer = (float *)ker_malloc(8*sizeof(float), s->pid);
+float *buffer - (float *)ker_malloc(8*sizeof(float), s->pid);
 ...
 post_net(s->pid, s->pid, MSG_DEBUG3, 8*sizeof(float), buffer, SOS_MSG_RELEASE, ROOT_NODE);
 ----
@@ -551,10 +551,10 @@ post_net(s->pid, s->pid, MSG_DEBUG3, 8*sizeof(float), buffer, SOS_MSG_RELEASE, R
 
 
 Store (498)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-float *buffer2 = (float *)ker_malloc(8*sizeof(float), s->pid);
+float *buffer2 - (float *)ker_malloc(8*sizeof(float), s->pid);
 ...
 post_net(s->pid, s->pid, MSG_DEBUG3, 8*sizeof(float), buffer2, SOS_MSG_RELEASE, ROOT_NODE);
 ----
@@ -563,36 +563,36 @@ post_net(s->pid, s->pid, MSG_DEBUG3, 8*sizeof(float), buffer2, SOS_MSG_RELEASE, 
 
 
 Store (576)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-ts_list_ptr = s->ts_list;
+ts_list_ptr - s->ts_list;
 ...
-ts_list_ptr->next = (timesync_t *)ker_malloc(sizeof(timesync_t), s->pid);
+ts_list_ptr->next - (timesync_t *)ker_malloc(sizeof(timesync_t), s->pid);
 ----
 
 *BUG*: This is stored into the local store created by the module state passed
 into this function.  Adding in the missing annotation should clean this up.
 
 Store (580)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-ts_list_ptr = s->ts_list;
+ts_list_ptr - s->ts_list;
 ...
-ts_list_ptr->timestamps = (uint32_t *)ker_malloc(BUFFER_SIZE*sizeof(uint32_t), s->pid);
+ts_list_ptr->timestamps - (uint32_t *)ker_malloc(BUFFER_SIZE*sizeof(uint32_t), s->pid);
 ----
 
 *BUG*: This is stored into the local store created by the module state passed
 into this function.  Adding in the missing annotation should clean this up.
 
 Store (581)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-ts_list_ptr = s->ts_list;
+ts_list_ptr - s->ts_list;
 ...
-ts_list_ptr->my_time = (uint32_t *)ker_malloc(BUFFER_SIZE*sizeof(uint32_t), s->pid);
+ts_list_ptr->my_time - (uint32_t *)ker_malloc(BUFFER_SIZE*sizeof(uint32_t), s->pid);
 ----
 
 *BUG*: This is stored into the local store created by the module state passed
@@ -603,21 +603,21 @@ into this function.  Adding in the missing annotation should clean this up.
 ////////////////////////////////////////////////////////////
 
 rats_checker
-============
+------------
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 2006_06_25_00_13_46
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (112)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-ext_packet_t * ext_packet_ptr = (ext_packet_t *)ker_malloc(sizeof(ext_packet_t), s->pid);
-ext_packet_ptr->node_id = ker_id();
-ext_packet_ptr->type = TEST_PACKET;
+ext_packet_t * ext_packet_ptr - (ext_packet_t *)ker_malloc(sizeof(ext_packet_t), s->pid);
+ext_packet_ptr->node_id - ker_id();
+ext_packet_ptr->type - TEST_PACKET;
 post_net(RATS_TIMESYNC_PID, s->pid, MSG_TIMESTAMP, sizeof(ext_packet_t), ext_packet_ptr, SOS_MSG_RELEASE, BCAST_ADDRESS);
 ----
 
@@ -628,19 +628,19 @@ post_net(RATS_TIMESYNC_PID, s->pid, MSG_TIMESTAMP, sizeof(ext_packet_t), ext_pac
 ////////////////////////////////////////////////////////////
 
 surge
-=====
+-----
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 2006_10_16_03_01_11
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (200)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-payload = ker_msg_take_data(SURGE_MOD_PID, msg); 
+payload - ker_msg_take_data(SURGE_MOD_PID, msg); 
 post_uart(SURGE_MOD_PID,
         SURGE_MOD_PID,
         msg->type,
@@ -657,14 +657,14 @@ post_uart(SURGE_MOD_PID,
 ////////////////////////////////////////
 
 2005_10_12_01_11_00
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (168)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-pkt = (uint8_t*)ker_malloc(hdr_size + sizeof(SurgeMsg), SURGE_MOD_PID);
-if (pkt == NULL) break; 
+pkt - (uint8_t*)ker_malloc(hdr_size + sizeof(SurgeMsg), SURGE_MOD_PID);
+if (pkt -- NULL) break; 
 ...
 post_long(TREE_ROUTING_PID, 
         SURGE_MOD_PID, 
@@ -681,13 +681,13 @@ post_long(TREE_ROUTING_PID,
 ////////////////////////////////////////
 
 2005_10_25_20_22_48
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (203)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-uint8_t *payload = ker_msg_take_data(SURGE_MOD_PID, msg); 
+uint8_t *payload - ker_msg_take_data(SURGE_MOD_PID, msg); 
 post_net(SURGE_MOD_PID,
         SURGE_MOD_PID,
         msg->type,
@@ -705,20 +705,20 @@ post_net(SURGE_MOD_PID,
 ////////////////////////////////////////////////////////////
 
 test_taosphotosensor
-=====
+--------------------
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 2005_11_17_12_24_15
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (99)
-~~~~~~~~~~
+^^^^^^^^^^
 
 ----
-buff = ker_malloc(sizeof(test_taosphotosensor_t), DFLT_APP_ID0);
-if (buff != NULL){
+buff - ker_malloc(sizeof(test_taosphotosensor_t), DFLT_APP_ID0);
+if (buff !- NULL){
     ...
     post_net(DFLT_APP_ID0, DFLT_APP_ID0, TAOS_PHOTOSENSOR_DATA,
             sizeof(test_taosphotosensor_t), buff, SOS_MSG_RELEASE, BCAST_ADDRESS);
@@ -730,11 +730,11 @@ if (buff != NULL){
 
 
 Store (121)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-buff = ker_malloc(sizeof(test_taosphotosensor_t), DFLT_APP_ID0);
-if (buff != NULL){
+buff - ker_malloc(sizeof(test_taosphotosensor_t), DFLT_APP_ID0);
+if (buff !- NULL){
     ...
     post_net(DFLT_APP_ID0, DFLT_APP_ID0, TAOS_PHOTOSENSOR_DATA, 
             sizeof(test_taosphotosensor_t), buff, SOS_MSG_RELEASE, BCAST_ADDRESS);
@@ -748,41 +748,41 @@ if (buff != NULL){
 ////////////////////////////////////////////////////////////
 
 test_tpsn
-=========
+---------
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 2006_03_20_10_18_35
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (86)
-~~~~~~~~~~
+    ^^^^^^^^^^
 
-----
-s->tpsn_ptr = (tpsn_t *)ker_malloc(sizeof(tpsn_t), s->pid);
-----
+    ----
+    s->tpsn_ptr - (tpsn_t *)ker_malloc(sizeof(tpsn_t), s->pid);
+    ----
 
-*BUG*: This is stored into the local store created by the module state passed
-into this function.  Adding in the missing annotation should clean this up.
+    *BUG*: This is stored into the local store created by the module state passed
+    into this function.  Adding in the missing annotation should clean this up.
 
 
-////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////
 
-test_uart_comm_tx
-=================
+    test_uart_comm_tx
+    -----------------
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 2006_02_02_05_12_45
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (125)
-~~~~~~~~~~~
+^^^^^^^^^^^
 ----
-if ((s->sos_uart_msg = ker_malloc(sizeof(Message), s->pid)) != NULL) {
+if ((s->sos_uart_msg - ker_malloc(sizeof(Message), s->pid)) !- NULL) {
     ...
 }
 ----
@@ -791,10 +791,10 @@ if ((s->sos_uart_msg = ker_malloc(sizeof(Message), s->pid)) != NULL) {
 into this function.  Adding in the missing annotation should clean this up.
 
 Store (131)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-if ((s->sos_uart_msg->data = ker_malloc(s->msg_len,s->pid)) != NULL) {
+if ((s->sos_uart_msg->data - ker_malloc(s->msg_len,s->pid)) !- NULL) {
 ...
 }
 ----
@@ -803,7 +803,7 @@ if ((s->sos_uart_msg->data = ker_malloc(s->msg_len,s->pid)) != NULL) {
 into this function.  Adding in the missing annotation should clean this up.
 
 Dead (142)
-~~~~~~~~~~
+^^^^^^^^^^
 
 ----
 if (...) {
@@ -813,23 +813,23 @@ if (...) {
 }else {
     ...
 }
-s->state = T_UART_COMM_SEND_SOS_UART_MSG;
+s->state - T_UART_COMM_SEND_SOS_UART_MSG;
 ----
 
 *BUG*: I am guessing a may alias bug.
 
 Dead (186)
-~~~~~~~~~~
+^^^^^^^^^^
 				
 ----
 case MSG_UART_SEND_DONE:
 {
     ker_free(msg->data);
     ker_uart_release_bus(s->pid);
-    if (s->state == T_UART_COMM_SEND_RAW) {
-        s->state = T_UART_COMM_SEND_RAW_DONE;
+    if (s->state -- T_UART_COMM_SEND_RAW) {
+        s->state - T_UART_COMM_SEND_RAW_DONE;
     } else {
-        s->state = T_UART_COMM_SEND_SOS_MSG_DONE;
+        s->state - T_UART_COMM_SEND_SOS_MSG_DONE;
     }
     break;
 }
@@ -839,7 +839,7 @@ case MSG_UART_SEND_DONE:
 `.i` file to understand.
 
 Dead (201)
-~~~~~~~~~~
+^^^^^^^^^^
 
 ----
 case MSG_ERROR:
@@ -864,20 +864,20 @@ case MSG_ERROR:
 ////////////////////////////////////////////////////////////
 
 tree_routing
-============
+------------
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 2006_10_14_00_34_59
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (216)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-tr_hdr_t *hdr = (tr_hdr_t*) ker_msg_take_data(TREE_ROUTING_PID, msg);
-if(hdr == NULL) return -ENOMEM;
+tr_hdr_t *hdr - (tr_hdr_t*) ker_msg_take_data(TREE_ROUTING_PID, msg);
+if(hdr -- NULL) return -ENOMEM;
 ...
 post_long(hdr->dst_pid, TREE_ROUTING_PID, 
         MSG_TR_DATA_PKT, msg_len, hdr,  
@@ -891,16 +891,16 @@ return SOS_OK;
 ////////////////////////////////////////
 
 2005_09_06_19_14_28
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (149)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-neighbor_entry_t *nb = (neighbor_entry_t*) ker_malloc(sizeof(neighbor_entry_t),TREE_ROUTING_PID);
-if(nb != NULL) {
+neighbor_entry_t *nb - (neighbor_entry_t*) ker_malloc(sizeof(neighbor_entry_t),TREE_ROUTING_PID);
+if(nb !- NULL) {
     ...
-    s->gpCurrentParent = nb;      
+    s->gpCurrentParent - nb;      
     ...
 } else {
     ...
@@ -910,14 +910,14 @@ if(nb != NULL) {
 *BUG*: Not sure why this was not caught.
 
 Store (411)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-nb = (neighbor_entry_t*) ker_malloc(sizeof(neighbor_entry_t), TREE_ROUTING_PID);
-if(nb == NULL) return NULL;
+nb - (neighbor_entry_t*) ker_malloc(sizeof(neighbor_entry_t), TREE_ROUTING_PID);
+if(nb -- NULL) return NULL;
 init_nb(nb, saddr);
-nb->next = s->nb_list;
-s->nb_list = nb;
+nb->next - s->nb_list;
+s->nb_list - nb;
 ----
 
 *BUG*: This is stored into the local store created by the module state passed
@@ -925,11 +925,11 @@ into this function.  Adding in the missing annotation should clean this up.
 
 
 Store (486)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-pkt = (tr_beacon_t*)ker_malloc(pkt_size, TREE_ROUTING_PID);
-if(pkt == NULL) return;
+pkt - (tr_beacon_t*)ker_malloc(pkt_size, TREE_ROUTING_PID);
+if(pkt -- NULL) return;
 ...
 post_net(TREE_ROUTING_PID, 
         TREE_ROUTING_PID, 
@@ -945,11 +945,11 @@ post_net(TREE_ROUTING_PID,
 ////////////////////////////////////////
 
 2005_12_16_16_25_18
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 ----
-tr_hdr_t *hdr = (tr_hdr_t*) ker_msg_take_data(TREE_ROUTING_PID, msg);
-if(hdr == NULL) return -ENOMEM;
+tr_hdr_t *hdr - (tr_hdr_t*) ker_msg_take_data(TREE_ROUTING_PID, msg);
+if(hdr -- NULL) return -ENOMEM;
 ...
 post_long(hdr->dst_pid, 
         TREE_ROUTING_PID, 
@@ -965,19 +965,19 @@ post_long(hdr->dst_pid,
 ////////////////////////////////////////////////////////////
 
 tree_routing_test
-=================
+-----------------
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 2006_08_04_02_05_14
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (116)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-payload = sys_msg_take_data(msg);
+payload - sys_msg_take_data(msg);
 sys_post_uart(TR_TEST_PID, msg->type, msg_len, payload, SOS_MSG_RELEASE, BCAST_ADDRESS);
 ----
 
@@ -988,19 +988,19 @@ sys_post_uart(TR_TEST_PID, msg->type, msg_len, payload, SOS_MSG_RELEASE, BCAST_A
 ////////////////////////////////////////////////////////////
 
 uart_speed
-==========
+----------
 
 ////////////////////////////////////////
 ////////////////////////////////////////
 
 2006_02_16_10_13_17
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Store (108)
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 ----
-s->msgPtrs[i] = ker_malloc(MSG_LEN, UART_SPEED_ID);
+s->msgPtrs[i] - ker_malloc(MSG_LEN, UART_SPEED_ID);
 ----
 
 *BUG*: This is stored into the local store created by the module state passed
