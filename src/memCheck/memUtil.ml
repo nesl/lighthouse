@@ -121,7 +121,7 @@ let get_released (i:instr): exp list =
   in
 
   let may_release = match i with 
-
+  
       Call (_, Lval((Var vi), NoOffset), formal_list, _)
         when (vi.vname = "post_net" || 
               vi.vname = "post_link" || 

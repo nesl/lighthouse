@@ -524,9 +524,13 @@ let is_stored (f: fundec) : bool =
   List.for_all 
     (fun s -> 
        try match (IH.find DFO.stmtStartData s.sid) with
-           Taken | Null | ReturnTaken -> true
-           | MustTake | Error -> false
-       with Not_found -> false
+           Taken | Null | ReturnTaken -> 
+               true
+           | MustTake | Error -> 
+               flush stdout;
+               false
+       with Not_found -> 
+         true
     )
     (get_return_statements f)
 ;;
