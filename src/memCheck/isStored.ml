@@ -568,8 +568,24 @@ let is_stored_instr
     | Call (Some lv, _, _, _) when (
         (is_field_of (Lval lv) !stores s.sid) 
         (* List.exists (fun store -> IE.is_equiv (Lval lv) store s.sid) !stores *)
-      ) -> Taken
-    | _ -> MustTake
+      ) -> 
+        if !dbg_is_store_i then (
+          ignore 
+            (printf 
+               "IsStored.DFO.is_store_Instr: Data enters as Taken via %a\n" 
+               d_instr i
+            );
+        );
+        Taken
+    | _ -> 
+        if !dbg_is_store_i then (
+          ignore 
+            (printf 
+               "IsStored.DFO.is_store_Instr: Data enters as MustTake via %a\n" 
+               d_instr i
+            );
+        );
+        MustTake
   in
 
     List.iter 
