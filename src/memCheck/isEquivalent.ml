@@ -460,14 +460,17 @@ module DFM = struct
               dbg (Lval lv) nullPtr state;
               DF.Done state
 
+        (* Not correct.  Integers are often pointers.  Removing 10-16-06 *)
+        (*
         | Set (lv, e, _) when (isConstant e) || (match isInteger e with None -> false | _ -> true) ->
             let state = kill (Lval lv) state in
             let state = ListSet.add_singleton (Lval lv) state in
               dbg (Lval lv) (Lval lv) state;
               DF.Done state
+         *)
 
         | Set (lv, e, _) -> 
-            
+            ignore (printf "*** HIT ***\n"); flush stdout;
             let state = kill (Lval lv) state in
             
               begin match (stripCasts e) with

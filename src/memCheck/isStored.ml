@@ -563,6 +563,28 @@ let is_stored_instr
              
   IH.clear DFO.stmtStartData;
 
+  let start_state = match (instr_stores i s.sid) with
+      | IStore -> 
+          if !dbg_is_store_i then (
+            ignore 
+              (printf 
+                 "IsStored.DFO.is_store_Instr: Data enters as Taken via %a\n" 
+                 d_instr i
+              );
+          );
+          Taken
+      | _ -> 
+          if !dbg_is_store_i then (
+            ignore 
+              (printf 
+                 "IsStored.DFO.is_store_Instr: Data enters as MustTake via %a\n" 
+                 d_instr i
+              );
+          );
+          MustTake
+  in
+  
+  (*
   let start_state = match i with
       Set (lv, _, _) 
     | Call (Some lv, _, _, _) when (
@@ -587,7 +609,8 @@ let is_stored_instr
         );
         MustTake
   in
-
+   *)
+  
     List.iter 
       (fun s -> IH.add DFO.stmtStartData s.sid start_state) 
       s.succs;
