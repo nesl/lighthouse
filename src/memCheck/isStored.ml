@@ -327,9 +327,8 @@ module DFO = struct
 
       | (Taken, IStore) ->
           (* Double store is bad *)
-          ignore (printf "IsStored.doInstr: Dobule store at instruction %a (%a)\n"
-                    d_instr i d_loc (get_instrLoc i)
-          );
+          E.error "IsStored.doInstr: DOUBLE store at instruction %a (%a)\n"
+                    d_instr i d_loc (get_instrLoc i);
           DF.Done Error
 
       | (MustTake, IStore)
@@ -360,9 +359,8 @@ module DFO = struct
             IH.replace stmtStartData s.sid ReturnTaken;
             DF.SDone
           ) else (
-            ignore (printf "IsStored.doInstr: Dobule store via return %d (%a)\n"
-                      s.sid d_loc (get_stmtLoc s.skind)
-            );
+            E.error "IsStored.doInstr: DOUBLE store via return %d (%a)\n"
+              s.sid d_loc (get_stmtLoc s.skind);
             IH.replace stmtStartData s.sid Error;
             DF.SDone
           )
