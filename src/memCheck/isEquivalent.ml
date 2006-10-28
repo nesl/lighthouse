@@ -237,6 +237,34 @@ module DFM = struct
   ;;
 
 
+  (* Custom helper function to obtain the "children" of an expression, where a
+   * child is a sub-expression.
+   * *)
+  let rec children_of (parent: exp) : exp list = 
+    match parent with            
+        Lval (Var v, Field (_, _))
+      | Lval (Var v, Index (_, _)) ->
+          [Lval (var v)]
+
+      | Lval (Mem e, Field (_, _))
+      | Lval (Mem e, Index (_, _))
+      | BinOp (PlusPI, e, _, _)
+      | BinOp (IndexPI, e, _, _)
+      | BinOp (MinusPI, e, _, _) ->
+          (stripCasts e) :: (children_of e)
+
+      | BinOp (PlusA, e, c, _)
+      | BinOp (MinusA, e, c, _) when (isConstant c) ->
+          (stripCasts e) :: (children_of e)
+
+      | BinOp (PlusA, c, e, _)
+      | BinOp (MinusA, c, e, _) when (isConstant c) ->
+          (stripCasts e) :: (children_of e)
+
+      | _ -> []
+  ;;
+  
+  
   (* Custom helper function to obtain the aliases of an expression.
    * 
    * An equivalent value is:
@@ -249,7 +277,7 @@ module DFM = struct
    * - And so on...
    *
    * A simple way to accomplish this is to:
-   * - Call getEquiv
+   * - Call GETeQUIv
    * - Sort and uniqify the resulting list and call this l_0
    * - Call getEquiv on each element of l_0
    * - Sort and uniquify the union of these calls and call this l_1
@@ -269,6 +297,7 @@ module DFM = struct
     );
 
     let rec get_aliases_helper (e:exp) =  
+
       match (stripCasts e) with
           Lval lv ->
             let aliases = 
@@ -280,6 +309,14 @@ module DFM = struct
               )
               with Not_found -> []
             in
+
+            let aliases = aliases @ 
+                          (List.fold_left 
+                             (fun nl e -> (children_of e) @ nl) 
+                             [] aliases
+                          ) 
+            in
+              
               List.map 
                 (fun e -> Lval (mkMem ~addr:e ~off:NoOffset)) 
                 (aliases @ (get_aliases_helper (mkAddrOf lv)))
@@ -292,17 +329,39 @@ module DFM = struct
             );
             []
 
-        | BinOp (PlusPI, _, _, _)
-        | BinOp (IndexPI, _, _, _)
-        | BinOp (MinusPI, _, _, _) 
-        | BinOp (PlusA, _, _, _)
-        | BinOp (MinusA, _, _, _) ->
+        (* Blah.  Okay, so this is a nice conservative thing to do.  But, field
+         * references are being expanded into the form:    
+         *     tmp = (unsigned int)(&store) + 4; 
+         *     (*(int **)tmp) = (int* ) ker_malloc(42, 1);
+         * and requires that we realize that __cil_tmp4 + 4U is really a field
+         * of whatever __cil_tmp4 is pointing to.  ASSUMING that we don't have
+         * bad pointer math lying around, this should be okay to do.
+         *)
+                                                       
+        | BinOp (PlusPI, e1, _, _)
+        | BinOp (IndexPI, e1, _, _)
+        | BinOp (MinusPI, e1, _, _) ->
             if !verbose then (
               E.warn "IsEquivalent.DFM.getEquiv:";
               E.warn "  Using entire pointer arith expression %a." d_exp e;
             );
             [e]
-
+        
+        | BinOp (PlusA, e1, c, _)
+        | BinOp (MinusA, e1, c, _) when isConstant c ->
+            if !verbose then (
+              E.warn "IsEquivalent.DFM.getEquiv:";
+              E.warn "  Using entire pointer arith expression %a." d_exp e;
+            );
+            [e]
+       
+        | BinOp (PlusA, c, e1, _)
+        | BinOp (MinusA, c, e1, _) when isConstant c ->
+            if !verbose then (
+              E.warn "IsEquivalent.DFM.getEquiv:";
+              E.warn "  Using entire pointer arith expression %a." d_exp e;
+            );
+            [e]
 
         | _ ->
             if !verbose then (
@@ -314,34 +373,69 @@ module DFM = struct
     in
 
 
+    let checked = ref [] in
+    
     let get_all_aliases (el:exp list) : exp list = 
+      
+      (* Add in all "children" expressions of an expression *)
+      let children = 
+        (List.fold_left 
+          (fun nl e -> (children_of e) @ nl)
+          [] el
+        )          
+      in
 
+      let el = el @ children in
+      
+      (* Filter out expression that we have already checked. *)
+      let el = 
+        List.filter (fun e -> not (List.mem e !checked)) el 
+      in
+
+      (* For each element e of el, grab the set that contains e.  Combine all of
+       * these into one big set. *)
       let direct = 
         (List.fold_left
-           (fun el e ->
-              try (EquivSet.elements (List.find (fun eq -> EquivSet.mem e eq) state))
+           (fun dl e ->
+              try ((EquivSet.elements (List.find (fun eq -> EquivSet.mem e eq) state)) @ dl)
               with Not_found -> [])
            [] el
         )
       in
 
+      
+      (* *)
       let indirect = 
         (List.fold_left
-           (fun el e -> (U.sort_and_uniq (get_aliases_helper e) @ el))
+           (fun il e -> (U.sort_and_uniq (get_aliases_helper e) @ il))
            [] el
         )
       in
 
+        (* Update the checked list *)
+        checked := (!checked @ el);
+     
+        (* 
+        ignore (printf "+ Direct aliases:\n");
+        List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) direct;
+        ignore (printf "- Indirect aliases:\n");
+        List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) indirect;
+        ignore (printf "* Checked:\n");
+        List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) !checked;
+        flush stdout;
+         *)
+      
         U.sort_and_uniq (direct @ indirect)
     in
 
     let l0 = ref [] in
     let l1 = ref [] in
-
+      
       l0 := get_all_aliases [e];
       l1 := get_all_aliases !l0;
 
       while not ((compare !l0 !l1) = 0) do
+        checked := []; 
         if !dbg_is_equiv_get_aliases then (
           ignore (printf "Aliases of expression %a:\n" d_exp e);
           List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) !l0;
@@ -407,30 +501,6 @@ module DFM = struct
       in
 
 
-      let rec children_of (parent: exp) : exp list = 
-        match parent with            
-            Lval (Var v, Field (_, _))
-          | Lval (Var v, Index (_, _)) ->
-              [Lval (var v)]
-
-          | Lval (Mem e, Field (_, _))
-          | Lval (Mem e, Index (_, _))
-          | BinOp (PlusPI, e, _, _)
-          | BinOp (IndexPI, e, _, _)
-          | BinOp (MinusPI, e, _, _) ->
-              e :: (children_of e)
-
-          | BinOp (PlusA, e, c, _)
-          | BinOp (MinusA, e, c, _) when (isConstant c) ->
-              e :: (children_of e)
-
-          | BinOp (PlusA, c, e, _)
-          | BinOp (MinusA, c, e, _) when (isConstant c) ->
-              e :: (children_of e)
-
-          | _ -> []
-      in
-
       let aliases = aliases_of e in
 
       let kill_set = List.fold_left (fun ks e -> e :: (children_of e) @ ks) [] aliases in
@@ -470,7 +540,6 @@ module DFM = struct
          *)
 
         | Set (lv, e, _) -> 
-            ignore (printf "*** HIT ***\n"); flush stdout;
             let state = kill (Lval lv) state in
             
               begin match (stripCasts e) with
@@ -806,15 +875,20 @@ let is_equiv (e1:exp) (e2:exp) (id:int) : (bool) =
 
   let results = List.map unify_type (get_equiv_set e1 id) in
   let query = unify_type e2 in
-  
+
    (* 
     List.iter 
       (fun e -> 
-           ignore (printf "%a to %a (%a, %a) with %b\n" 
+         (*  
+         ignore (printf "%a to %a (%a, %a) with %b\n" 
                      d_exp query d_exp e 
                      d_type (typeOf query) d_type (typeOf e) 
                      (query = e));
-           flush stdout;
+          *)
+           ignore (printf "%a to %a with %b\n" 
+                     d_exp query d_exp e 
+                     ((compare query e) = 0)
+           );
       )
       results;
     *)

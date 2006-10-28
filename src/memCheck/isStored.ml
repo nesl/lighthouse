@@ -157,6 +157,8 @@ let instr_stores (i: instr) (sid: int) : instr_status =
          | Call (Some lv, _, _, _) ->
              ignore (printf "...is_target \"%a\": %b\n" 
                        d_lval lv (is_field_of !target [(Lval lv)] sid));
+             ignore (printf "...is_store \"%a\": %b\n" 
+                       d_lval lv (is_field_of (Lval lv) !stores sid));
          | _ -> ()
       );
       flush stdout;
@@ -563,34 +565,25 @@ let is_stored_instr
              
   IH.clear DFO.stmtStartData;
 
-  let start_state = match (instr_stores i s.sid) with
-      | IStore -> 
-          if !dbg_is_store_i then (
-            ignore 
-              (printf 
-                 "IsStored.DFO.is_store_Instr: Data enters as Taken via %a\n" 
-                 d_instr i
-              );
-          );
-          Taken
-      | _ -> 
-          if !dbg_is_store_i then (
-            ignore 
-              (printf 
-                 "IsStored.DFO.is_store_Instr: Data enters as MustTake via %a\n" 
-                 d_instr i
-              );
-          );
-          MustTake
-  in
-  
-  (*
   let start_state = match i with
       Set (lv, _, _) 
     | Call (Some lv, _, _, _) when (
-        (is_field_of (Lval lv) !stores s.sid) 
-        (* List.exists (fun store -> IE.is_equiv (Lval lv) store s.sid) !stores *)
+        (* (is_field_of (Lval lv) !stores s.sid) *)
+        List.exists 
+          (fun store -> IE.is_equiv (Lval lv) store s.sid) 
+          !stores
       ) -> 
+        (*
+        ignore (printf "Checking to see if Lval %a is a store:\n" d_lval lv);
+        List.iter
+          (fun store -> 
+             ignore (printf "    %a --> %b\n"
+                       d_exp store 
+                       (IE.is_equiv (Lval lv) store s.sid)
+             )
+          )
+          !stores;
+         *)
         if !dbg_is_store_i then (
           ignore 
             (printf 
@@ -599,6 +592,22 @@ let is_stored_instr
             );
         );
         Taken
+    | Call (Some lv, _, _, _) ->        
+        (*
+        ignore (printf "Checking to see if Lval %a is a store:\n" d_lval lv);
+        List.iter
+          (fun store -> 
+             ignore (printf "    %a --> %b\n"
+                       d_exp store 
+                       (IE.is_equiv (Lval lv) store s.sid)
+             )
+          )
+          !stores;
+        ignore (printf "FAILURE!!! Data inters as MustTake via %a\n" d_instr i);
+        flush stdout;
+         *)
+        MustTake
+        
     | _ -> 
         if !dbg_is_store_i then (
           ignore 
@@ -609,7 +618,6 @@ let is_stored_instr
         );
         MustTake
   in
-   *)
   
     List.iter 
       (fun s -> IH.add DFO.stmtStartData s.sid start_state) 
