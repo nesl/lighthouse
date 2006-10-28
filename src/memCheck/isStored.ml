@@ -39,6 +39,23 @@ let verbose = ref false;;
 (* Dataflow specific debugging. *)
 let dbg_is_store_df = ref false;;
 
+
+(************************************************************)
+(* Helper functions *)
+(************************************************************)
+
+
+(* A valid form of storing an expression e is to store it:
+ * 
+ * - directly into a store s such as:
+ *     s = e
+ * - into a field of a store s such as either of:
+ *     s.a = e
+ *     s->b = e
+ * 
+ * This function is used to see if an expression is either one of a set of
+ * targets OR a member of a field of a target.
+ *)
 let is_field_of (e: exp) (targets: exp list) (sid: int) : bool =
 
   let rec is_field_of_helper (el: exp list) =
@@ -91,115 +108,56 @@ let is_field_of (e: exp) (targets: exp list) (sid: int) : bool =
 ;;
 
 
-(************************************************************)
-(* Helper functions *)
-(************************************************************)
-
 (* An instruction can:
+ * 
  * - use a Set or Call to overwrite the target expression
  * - use a Set to save the target into a store
  * - use a Call to release the target
  * - have no effect on the target
+ * 
+ * There is another posiblity.  A Call instruction could directly save allocated
+ * memory into a store. Ie:
+ *     store = malloc(size);
+ * This is a special case that can only occure in the instruction that causes
+ * the allocation.  As such, we handle it elsewhere and leave this as a more
+ * specific function for analyizing instruction AFTER the allocation point.
  *)
 let instr_stores (i: instr) (sid: int) : instr_status = 
 
   
   let is_released (i: instr) (id: int) : bool = 
-    (List.length (U.get_released i) > 0) &&
-    (List.exists
-       (fun release -> IE.is_equiv release !target id)
-       (U.get_released i)
-    )
+    let released_formals = U.get_released i in
+      (List.length released_formals > 0) &&
+      (List.exists (fun release -> IE.is_equiv release !target id) released_formals)
   in
   
-  (* TODO: Should this be looking for field membership? *) 
-  let is_heap (e: exp) (id: int) : bool =
-    List.exists
-      (fun e -> match e with
-
-           Lval (Var v, NoOffset) ->
-             (* Used to cover IsEquivalent transformation *)
-             (Str.string_match (Str.regexp "__heap") v.vname 0)
-
-         | Lval (Mem (Lval (Var v, NoOffset)), NoOffset) ->
-             (* Used to cover SimpleMem transformation *)
-             (Str.string_match (Str.regexp "mem_") v.vname 0)
-
-         | _ -> false
-      )
-      (IE.get_equiv_set e id)
-  in
-                         
-
-    
+  
   let is_overwritten (i: instr) (id: int) : bool = 
-    (List.length (U.get_claim i) > 0) &&
-    (List.exists
-       (fun release -> IE.is_equiv release !target id)
-       (U.get_claim i)
+    let claimed_formals = U.get_claim i in
+    (List.length (claimed_formals) > 0) &&
+    (List.exists (fun release -> IE.is_equiv release !target id) claimed_formals
     )
   in
-
-    if !verbose then (
-      ignore (printf "IsStored.instr_stores trying to store \"%a\":\n" d_exp !target);
-      ignore (printf "...is_released: %b\n" (is_released i sid));
-      ignore (printf "...is_overwritten: %b\n" (is_overwritten i sid));
-      (match i with
-           Set (lv, e, _) ->
-             ignore (printf "...is_target \"%a\": %b\n" 
-                       d_lval lv (is_field_of !target [(Lval lv)] sid));
-             ignore (printf "...is_store \"%a\": %b\n" 
-                       d_lval lv (is_field_of (Lval lv) !stores sid));
-             ignore (printf "...is_target \"%a\": %b\n" 
-                       d_exp e (is_field_of !target [e] sid));
-             ignore (printf "...is_store \"%a\": %b\n" 
-                       d_exp e (is_field_of e !stores sid));
-         | Call (Some lv, _, _, _) ->
-             ignore (printf "...is_target \"%a\": %b\n" 
-                       d_lval lv (is_field_of !target [(Lval lv)] sid));
-             ignore (printf "...is_store \"%a\": %b\n" 
-                       d_lval lv (is_field_of (Lval lv) !stores sid));
-         | _ -> ()
-      );
-      flush stdout;
-    );
     
-    match i with
+  
+  let action = match i with
+    (* TODO: These three could be incorrect if the target is also passed as a
+     * formal in the expression *)
+    | Set (lv, _, _) when (IE.is_equiv (Lval lv) !target sid) -> IOverWrite
+    | Call (Some lv, _, _, _) when (IE.is_equiv (Lval lv) !target sid) -> IOverWrite
+    | Call (_, _, _, _) when (is_overwritten i sid) -> IOverWrite
 
-      (* TODO: These three could be incorrect if the target is also passed as a
-       * formal in the expression *)
-      | Set (lv, _, _) when (IE.is_equiv (Lval lv) !target sid)
-        -> IOverWrite
-      | Call (Some lv, _, _, _) when (IE.is_equiv (Lval lv) !target sid)
-        -> IOverWrite
-      | Call (_, _, _, _) when (is_overwritten i sid)
-        -> IOverWrite
-     
-      | Set (lv, e, _) ->
+    | Set (lv, e, _) when ( 
+        (is_field_of (Lval lv) !stores sid) && 
+        (is_field_of !target [e] sid) 
+      ) -> IStore
 
-          if (
-            (is_field_of (Lval lv) !stores sid) && 
-            (is_field_of !target [e] sid) 
-          ) then (
-            IStore
-          )
-         
-                  (* 
-          else if (
-            (is_heap (Lval lv) sid) && 
-            (is_field_of !target [e] sid) 
-          ) then (
-            ignore (printf "SUCCESS!!!\n");
-            IStore
-          )
-                   *)
-          
-          else (INoEffect)
+    | Call (_, _, _, _) when (is_released i sid) -> IStore
 
-      | Call (_, _, _, _) when (is_released i sid) 
-        -> IStore
+    | _ -> INoEffect
+  in
 
-      | _ -> INoEffect
+      action
 ;;
           
 
@@ -211,7 +169,7 @@ let instr_stores (i: instr) (sid: int) : instr_status =
 module DFO = struct
 
   (* Vital stats for this dataflow. *)
-  let name = "ownFlow";;
+  let name = "is_stared_flow";;
   let debug = dbg_is_store_df;;
   type t = status;;
 
@@ -234,8 +192,19 @@ module DFO = struct
   (****************************************)
   (* Helper functions used within the dataflow for debugging *)  
   (****************************************)
+ 
+  let debug_combine_head (s: stmt) (new_state: t) (old_state: t): unit =
+    if !dbg_is_store_c then (
+      ignore (printf "IsStored.DFO.combinePredecessors: Entering statement %d (%a) with states:\n"
+                s.sid d_loc (get_stmtLoc s.skind)
+      );
+      ignore (printf "old: %a, new: %a\n" pretty old_state pretty new_state);
+      flush stdout;
+    );
+  ;;
   
-  let debug_combine (s: stmt) (transition: t option) (old_state: t): unit =
+  
+  let debug_combine_tail (s: stmt) (transition: t option) (old_state: t): unit =
     if !dbg_is_store_c then (
       ignore (printf "IsStored.DFO.combinePredecessors: ");
       ignore (printf "Join at statement (%a):\n%a\n" d_loc (get_stmtLoc s.skind) d_stmt s);
@@ -295,6 +264,7 @@ module DFO = struct
   (* Statments do not have a default state *)
   let computeFirstPredecessor (s: stmt) (state: status): status = state;;
 
+
   (* Dataflow types are releated via:
    * - Error dominating all
    * - Taken dominating Null
@@ -305,14 +275,8 @@ module DFO = struct
    *)
   let combinePredecessors (s: stmt) ~(old: status) (new_state: status) = 
 
-    if !dbg_is_store_c then (
-      ignore (printf "IsStored.DFO.combinePredecessors: Entering statement %d (%a) with states:\n"
-                s.sid d_loc (get_stmtLoc s.skind)
-      );
-      ignore (printf "old: %a, new: %a\n" pretty old pretty new_state);
-      flush stdout;
-    );
-  
+    debug_combine_head s new_state old;
+
     let transition = match (new_state, old) with
       | (Null, Null) 
       | (Taken, Taken)
@@ -338,7 +302,7 @@ module DFO = struct
       | _ -> Some Error
     in
 
-      debug_combine s transition old;
+      debug_combine_tail s transition old;
       transition
   ;;
 
@@ -363,6 +327,9 @@ module DFO = struct
 
       | (Taken, IStore) ->
           (* Double store is bad *)
+          ignore (printf "IsStored.doInstr: Dobule store at instruction %a (%a)\n"
+                    d_instr i d_loc (get_instrLoc i)
+          );
           DF.Done Error
 
       | (MustTake, IStore)
@@ -393,6 +360,9 @@ module DFO = struct
             IH.replace stmtStartData s.sid ReturnTaken;
             DF.SDone
           ) else (
+            ignore (printf "IsStored.doInstr: Dobule store via return %d (%a)\n"
+                      s.sid d_loc (get_stmtLoc s.skind)
+            );
             IH.replace stmtStartData s.sid Error;
             DF.SDone
           )
@@ -499,21 +469,25 @@ module Track = DF.ForwardsDataFlow(DFO);;
 (* Interface functions to the dataflow *)
 (************************************************************)
 
-(* Lower layer interface is not currently used *)
-(*
-let getStmtState (data: status IH.t) (s: stmt): status option =
-  try Some (IH.find data s.sid)
-  with Not_found -> None (* Assume that data is not taken *)
-;;
+(* Called after running the dataflow for a specific target.  This function
+ * checks that the dataflow state is such that at each Return statement the
+ * target is claimed.
  *)
-
-let get_return_statements (f: fundec) : stmt list =
-  List.filter 
-    (fun s -> match s.skind with Return _ -> true | _ -> false) 
-    f.sallstmts
+let is_stored (f: fundec) : bool =
+  List.for_all 
+    (fun s -> 
+       try match (IH.find DFO.stmtStartData s.sid) with
+           Taken | Null | ReturnTaken -> true
+           | MustTake | Error -> false
+       with Not_found -> true
+    )
+    (U.get_return_statements f)
 ;;
 
 
+(* Helper function to initialize the dataflow state.  Notes if the function
+ * returns allocated data.  
+ *)
 let set_claim_on_return (f: fundec) : unit =
   claim_on_return := match f.svar.vtype with
       TFun (t, _, _, _) when (hasAttribute "sos_claim" (typeAttrs t)) -> true
@@ -521,24 +495,8 @@ let set_claim_on_return (f: fundec) : unit =
 ;;
 
 
-let is_stored (f: fundec) : bool =
-  
-  List.for_all 
-    (fun s -> 
-       try match (IH.find DFO.stmtStartData s.sid) with
-           Taken | Null | ReturnTaken -> 
-               true
-           | MustTake | Error -> 
-               flush stdout;
-               false
-       with Not_found -> 
-         true
-    )
-    (get_return_statements f)
-;;
-
-
-(* Check to see if the formal variable v is stored within function f *)
+(* Check to see if the formal variable v is stored within function f. 
+ *)
 let is_stored_func (e: exp) (f: fundec) (new_stores: exp list) : bool = 
   
   target := e;
@@ -553,10 +511,10 @@ let is_stored_func (e: exp) (f: fundec) (new_stores: exp list) : bool =
 ;;
 
 
-(* Check to see that the expression e is stored before the end of the current
- * function f *)
-let is_stored_instr
-      (e: exp) (s: stmt) (i: instr) (f: fundec) (new_stores: exp list)
+(* Check to see that the expression e allocated by instruction i is stored
+ * before the end of the current function f. *)
+let is_stored_instr 
+      (e: exp) (s: stmt) (i: instr) (f: fundec) (new_stores: exp list) 
       : bool = 
   
   target := e;
@@ -573,51 +531,15 @@ let is_stored_instr
           (fun store -> IE.is_equiv (Lval lv) store s.sid) 
           !stores
       ) -> 
-        (*
-        ignore (printf "Checking to see if Lval %a is a store:\n" d_lval lv);
-        List.iter
-          (fun store -> 
-             ignore (printf "    %a --> %b\n"
-                       d_exp store 
-                       (IE.is_equiv (Lval lv) store s.sid)
-             )
-          )
-          !stores;
-         *)
-        if !dbg_is_store_i then (
-          ignore 
-            (printf 
-               "IsStored.DFO.is_store_Instr: Data enters as Taken via %a\n" 
-               d_instr i
-            );
-        );
         Taken
-    | Call (Some lv, _, _, _) ->        
-        (*
-        ignore (printf "Checking to see if Lval %a is a store:\n" d_lval lv);
-        List.iter
-          (fun store -> 
-             ignore (printf "    %a --> %b\n"
-                       d_exp store 
-                       (IE.is_equiv (Lval lv) store s.sid)
-             )
-          )
-          !stores;
-        ignore (printf "FAILURE!!! Data inters as MustTake via %a\n" d_instr i);
-        flush stdout;
-         *)
-        MustTake
-        
     | _ -> 
-        if !dbg_is_store_i then (
-          ignore 
-            (printf 
-               "IsStored.DFO.is_store_Instr: Data enters as MustTake via %a\n" 
-               d_instr i
-            );
-        );
         MustTake
   in
+       
+    if !dbg_is_store_i then (
+      ignore (printf "IsStored.DFO.is_store_Instr:");
+      ignore (printf "Data enters as %a via %a\n" DFO.pretty start_state d_instr i);
+    );
   
     List.iter 
       (fun s -> IH.add DFO.stmtStartData s.sid start_state) 
@@ -627,4 +549,36 @@ let is_stored_instr
     is_stored f
 ;;
   
+
+
+
+
+  (* 
+  (* TODO: Should this be looking for field membership? *) 
+  let is_heap (e: exp) (id: int) : bool =
+    List.exists
+      (fun e -> match e with
+
+           Lval (Var v, NoOffset) ->
+             (* Used to cover IsEquivalent transformation *)
+             (Str.string_match (Str.regexp "__heap") v.vname 0)
+
+         | Lval (Mem (Lval (Var v, NoOffset)), NoOffset) ->
+             (* Used to cover SimpleMem transformation *)
+             (Str.string_match (Str.regexp "mem_") v.vname 0)
+
+         | _ -> false
+      )
+      (IE.get_equiv_set e id)
+  in
+   *)
+    (* 
+     else if (
+     (is_heap (Lval lv) sid) && 
+     (is_field_of !target [e] sid) 
+     ) then (
+     ignore (printf "SUCCESS!!!\n");
+     IStore
+     )
+     *)
 
