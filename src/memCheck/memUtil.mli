@@ -7,10 +7,14 @@
 
 (** Collection of utility functions *)
 
-(** Checks to see if the first expression expression [sub] is a subexpression
-  * contained within the second expression [e].
+(** Checks to see if the first expression expression [parent] is a subexpression
+  * contained within the second expression [child].
   *)
-val is_subexpression_of: Cil.exp -> Cil.exp -> bool;;
+val is_parent_of: Cil.exp -> Cil.exp -> bool;;
+
+val get_parents_of: Cil.exp -> Cil.exp list;;
+
+val get_return_statements: Cil.fundec -> Cil.stmt list;;
 
 val get_claim: Cil.instr -> Cil.exp list;;
 

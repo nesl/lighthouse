@@ -163,13 +163,6 @@ let run_dataflow (f: fundec) : unit =
 ;;
 
 
-let get_return_statements (f: fundec) : stmt list =
-  List.filter 
-    (fun s -> match s.skind with Return _ -> true | _ -> false) 
-    f.sbody.bstmts
-;;
-
-
 let var_is_allocated (v: varinfo) (f: fundec) = 
 
   run_dataflow f;
@@ -181,7 +174,7 @@ let var_is_allocated (v: varinfo) (f: fundec) =
            (fun e -> IE.is_equiv (Lval (var v)) e s.sid)
            claim_list
     )
-    (get_return_statements f)
+    (U.get_return_statements f)
   
 ;;
 
@@ -200,7 +193,7 @@ let return_is_allocated (f: fundec) : bool =
                (IH.find DFF.stmtStartData s.sid)
        | _ -> false 
     )
-    (get_return_statements f)
+    (U.get_return_statements f)
   
 ;;
 

@@ -27,7 +27,16 @@ let currentStmt = ref (mkEmptyStmt ());;
 let alloc_funcs = ref [("malloc", 0)];;
 let free_funcs = ref [("free", 1)];; 
 
+(* Counter used to create temporary names for heap allocated data *)
 let heap_counter = ref 0;;
+
+(* Expression representing the null pointer *)
+let nullPtr = CastE (intPtrType, zero);;
+
+
+(****************************************)
+(* Collection of modules used to create "equivalency" sets for expressions *)
+(****************************************)
 
 (* Equivalency information will be stored as sets of expressions *)
 module Equiv =
@@ -37,8 +46,6 @@ struct
 end;;
 
 module EquivSet = Set.Make(Equiv);;
-
-let nullPtr = CastE (intPtrType, zero);;
 
 type equiv_table = EquivSet.t list;;
 
@@ -90,11 +97,15 @@ module ListSet = struct
       eqsl1
   ;;
 
-  (* Remove element or super element from any sets that it occupies. *)
-  let remove (e : exp) (eqsl: EquivSet.t list) : (EquivSet.t list) =
+  (* Remove element or child element from all sets. *)
+  let remove (parent : exp) (eqsl: EquivSet.t list) : (EquivSet.t list) =
     List.fold_left
       (fun result eq ->
-         let new_set = EquivSet.filter (fun e2 -> not (U.is_subexpression_of e e2)) eq in
+         let new_set = 
+           EquivSet.filter 
+             (fun child -> not (U.is_parent_of parent child)) 
+             eq 
+         in
            if EquivSet.is_empty new_set then 
              result
            else
@@ -118,6 +129,7 @@ module ListSet = struct
             E.s (E.error "isEquivalent: ListSet.add_pair: Invalid list set state\n")
   ;;
 
+  
   (* Add the pair of elements to the set that contains e1 or the set that
    * contains e2.  Note that if both e1 and e2 are contained in a set then this
    * is a mistake. *)
@@ -237,34 +249,6 @@ module DFM = struct
   ;;
 
 
-  (* Custom helper function to obtain the "children" of an expression, where a
-   * child is a sub-expression.
-   * *)
-  let rec children_of (parent: exp) : exp list = 
-    match parent with            
-        Lval (Var v, Field (_, _))
-      | Lval (Var v, Index (_, _)) ->
-          [Lval (var v)]
-
-      | Lval (Mem e, Field (_, _))
-      | Lval (Mem e, Index (_, _))
-      | BinOp (PlusPI, e, _, _)
-      | BinOp (IndexPI, e, _, _)
-      | BinOp (MinusPI, e, _, _) ->
-          (stripCasts e) :: (children_of e)
-
-      | BinOp (PlusA, e, c, _)
-      | BinOp (MinusA, e, c, _) when (isConstant c) ->
-          (stripCasts e) :: (children_of e)
-
-      | BinOp (PlusA, c, e, _)
-      | BinOp (MinusA, c, e, _) when (isConstant c) ->
-          (stripCasts e) :: (children_of e)
-
-      | _ -> []
-  ;;
-  
-  
   (* Custom helper function to obtain the aliases of an expression.
    * 
    * An equivalent value is:
@@ -310,13 +294,6 @@ module DFM = struct
               with Not_found -> []
             in
 
-            let aliases = aliases @ 
-                          (List.fold_left 
-                             (fun nl e -> (children_of e) @ nl) 
-                             [] aliases
-                          ) 
-            in
-              
               List.map 
                 (fun e -> Lval (mkMem ~addr:e ~off:NoOffset)) 
                 (aliases @ (get_aliases_helper (mkAddrOf lv)))
@@ -376,16 +353,6 @@ module DFM = struct
     let checked = ref [] in
     
     let get_all_aliases (el:exp list) : exp list = 
-      
-      (* Add in all "children" expressions of an expression *)
-      let children = 
-        (List.fold_left 
-          (fun nl e -> (children_of e) @ nl)
-          [] el
-        )          
-      in
-
-      let el = el @ children in
       
       (* Filter out expression that we have already checked. *)
       let el = 
@@ -501,13 +468,11 @@ module DFM = struct
       in
 
 
-      let aliases = aliases_of e in
-
-      let kill_set = List.fold_left (fun ks e -> e :: (children_of e) @ ks) [] aliases in
+      let kill_set = aliases_of e in
 
       let kill_set = U.sort_and_uniq kill_set in
 
-        (* Print the aliases and children *) 
+        (* Print the aliases and parent *) 
         if (!dbg_is_equiv_i) then (
           ignore (printf "isEquiv: doInstr: Found killset for expression %a:\n" d_exp e);
           List.iter
@@ -530,15 +495,6 @@ module DFM = struct
               dbg (Lval lv) nullPtr state;
               DF.Done state
 
-        (* Not correct.  Integers are often pointers.  Removing 10-16-06 *)
-        (*
-        | Set (lv, e, _) when (isConstant e) || (match isInteger e with None -> false | _ -> true) ->
-            let state = kill (Lval lv) state in
-            let state = ListSet.add_singleton (Lval lv) state in
-              dbg (Lval lv) (Lval lv) state;
-              DF.Done state
-         *)
-
         | Set (lv, e, _) -> 
             let state = kill (Lval lv) state in
             
@@ -553,22 +509,12 @@ module DFM = struct
                 | BinOp (PlusPI, e1, _, _)
                 | BinOp (IndexPI, e1, _, _)
                 | BinOp (MinusPI, e1, _, _) ->
-                    if !verbose then (
-                      E.warn "IsEquivalent.DFM.doInstr:";
-                      E.warn "  Not killing base expression in BinOp %a.." d_exp e;
-                      E.warn "  Adding new pair to analysis.";
-                    );
                     let state = ListSet.add_pair (Lval lv) (stripCasts e) state in
                       dbg (Lval lv) (stripCasts e) state;
                       DF.Done state
 
                 | BinOp (PlusA, e1, c, _)
                 | BinOp (MinusA, e1, c, _) when isConstant c ->
-                    if !verbose then (
-                      E.warn "IsEquivalent.DFM.doInstr:";
-                      E.warn "  Not killing base expression in BinOp %a.." d_exp e;
-                      E.warn "  Adding new pair to analysis.";
-                    );
                     let state = ListSet.add_pair (Lval lv) (stripCasts e) state in
                       dbg (Lval lv) (stripCasts e) state;
                       DF.Done state
@@ -576,11 +522,6 @@ module DFM = struct
 
                 | BinOp (PlusA, c, e1, _)
                 | BinOp (MinusA, c, e1, _) when isConstant c ->
-                    if !verbose then (
-                      E.warn "IsEquivalent.DFM.doInstr:";
-                      E.warn "  Not killing base expression in BinOp %a.." d_exp e;
-                      E.warn "  Adding new pair to analysis.";
-                    );
                     let state = ListSet.add_pair (Lval lv) (stripCasts e) state in
                       dbg (Lval lv) (stripCasts e) state;
                       DF.Done state
@@ -597,9 +538,7 @@ module DFM = struct
               end
 
         | Call (rop, e, formals, _) ->
-            (* Note: The order of these modifcations to the state is significant
-             *)
-
+            
             (* First remove references to freed heap data *)
             let (free_names, free_nums) = List.split !free_funcs in
             let state = match e with
@@ -730,7 +669,7 @@ end
 
 
 
-module TrackF = DF.ForwardsDataFlow(DFM)
+module TrackF = DF.ForwardsDataFlow(DFM);;
 
 (* Run the data flow to generate must alias information for a function.  Need to
  * jump start the dataflow with information about global variables and formals.
@@ -745,11 +684,7 @@ let generate_equiv (f:fundec) (cilFile:file): unit =
       (fun s g -> match g with
          | GFun (fd, _) -> s
          | GVar (v, _, _)
-         | GVarDecl (v, _) ->
-             (*
-             ignore (printf "Adding global %s\n" v.vname);
-              *)
-             v::s
+         | GVarDecl (v, _) -> v::s
          | _ -> s
       ) 
       []
@@ -793,29 +728,25 @@ let generate_equiv (f:fundec) (cilFile:file): unit =
 
 (* Helper function that returns the equivalince sets for a given statement ID
  *)                      
-let get_id_state (data: equiv_table IH.t) (id: int): equiv_table option =
-  try Some (IH.find data id)
-  with Not_found -> None
+let get_equiv_sets (id: int): (exp list list) =
+  try List.map (fun s -> EquivSet.elements s) (IH.find DFM.stmtStartData id)
+  with Not_found -> []
 ;;
 
 
 (* Print the alias information gatherd for a particular statment ID *)                      
 let print_equiv_sets (id:int) =
-  match (get_id_state DFM.stmtStartData id) with
-      Some table -> 
-        ignore (printf "\n\nState %d:\n" id);
-        print_equiv_table table
-    | None ->
+  match (get_equiv_sets id) with
+      [] -> 
         ignore (printf "\n\nUnable to find state %d\n" id)
-;;
-
-
-(* Get the alias information gatherd for a particular statment ID *)                      
-let get_equiv_sets (id:int) : (exp list list) =
-  match (get_id_state DFM.stmtStartData id) with
-      Some table -> 
-        List.map (fun s -> EquivSet.elements s) table
-    | None -> []
+    | table -> 
+        ignore (printf "\n\nState %d:\n" id);
+        List.iter
+          (fun el  -> 
+             ignore (printf "* Set ->\n");
+             List.iter (fun e -> ignore (printf "    %a\n" d_exp e)) el
+          )
+          table
 ;;
 
 
@@ -824,31 +755,28 @@ let get_equiv_set (e:exp) (id:int) : (exp list) =
 
   let e = stripCasts e in
 
-    match (get_id_state DFM.stmtStartData id) with
-        Some table -> (
-          let direct = 
-            try (EquivSet.elements (List.find (fun eq -> EquivSet.mem e eq) table))
-            with Not_found -> [e]
-          in
+  let state = 
+    try (IH.find DFM.stmtStartData id)
+    with Not_found -> []
+  in
+      
+  let direct = 
+    try (EquivSet.elements (List.find (fun eq -> EquivSet.mem e eq) state))
+    with Not_found -> [e]
+  in
 
-          let indirect = (DFM.getEquiv e table)
-          in
+  let indirect = (DFM.getEquiv e state)
+  in
 
-            if !dbg_is_equiv_get_equiv_set then (
-              ignore (printf "\n");
-              ignore (printf "Direct to %a:\n" d_exp (stripCasts e));
-              List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) direct;
-              ignore (printf "Inirect to %a:\n" d_exp e);
-              List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) indirect;
-              ignore (printf "DONE INTERNAL\n");
-              flush stdout;
-            );
+    if !dbg_is_equiv_get_equiv_set then (
+      ignore (printf "Directly equivalent to %a:\n" d_exp (stripCasts e));
+      List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) direct;
+      ignore (printf "Inirectly equivalent to %a:\n" d_exp e);
+      List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) indirect;
+      flush stdout;
+    );
 
-            U.sort_and_uniq (indirect @ direct)
-
-        )
-      | None -> 
-          [e]
+    U.sort_and_uniq (indirect @ direct)
 ;;
 
 
