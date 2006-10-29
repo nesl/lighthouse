@@ -34,6 +34,7 @@ let dbg_is_store_i = ref false;;
 let dbg_is_store_s = ref false;;
 let dbg_is_store_g = ref false;;
 let dbg_is_store_c = ref false;;
+let dbg_is_store_f = ref false;;
 let verbose = ref false;;
 
 (* Dataflow specific debugging. *)
@@ -56,55 +57,92 @@ let dbg_is_store_df = ref false;;
  * This function is used to see if an expression is either one of a set of
  * targets OR a member of a field of a target.
  *)
-let is_field_of (e: exp) (targets: exp list) (sid: int) : bool =
+let is_equiv_to_field_of (e: exp) (targets: exp list) (sid: int) : bool =
 
-  let rec is_field_of_helper (el: exp list) =
+  (* Return simpler sub-expressions of the expression e.  But only those
+   * sub-expressions with the same level of memory derefencing.  Does that make
+   * any sense...  *)
+  let rec reduce_expression (e:exp) : exp list =
 
-    let direct = 
-      List.exists 
-        (fun target -> 
-           List.exists (fun e -> IE.is_equiv e target sid) el
-        )
-        targets 
+    let reduced = match e with
+      | Lval (Var v, NoOffset) -> [e]
+
+      | Lval (Var v, Field _) 
+      | Lval (Var v, Index _) -> [Lval (var v)]
+
+      | Lval (Mem e, NoOffset) ->
+          let addrs = reduce_expression e in
+          let aliases = 
+            List.fold_left 
+              (fun l e -> (IE.get_equiv_set e sid) @ l)
+              [] addrs
+          in
+          let cleaned = U.sort_and_uniq aliases in
+              
+            List.map (fun e -> Lval (mkMem ~addr:e ~off:NoOffset)) cleaned
+
+      | Lval (Mem e, Field _)
+      | Lval (Mem e, Index _) -> 
+          (Lval (Mem e, NoOffset))::(reduce_expression (Lval (Mem e, NoOffset)))
+
+      | BinOp (PlusPI, e, _, _)
+      | BinOp (IndexPI, e, _, _)
+      | BinOp (MinusPI, e, _, _) -> e::(reduce_expression e)
+
+      | BinOp (PlusA, e, c, _)
+      | BinOp (MinusA, e, c, _) when (isConstant c) -> e::(reduce_expression e)
+
+      | BinOp (PlusA, c, e, _)
+      | BinOp (MinusA, c, e, _) when (isConstant c) -> e::(reduce_expression e)
+
+      | BinOp (PlusA, e1, e2, _) 
+      | BinOp (MinusA, e1, e2, _)
+      | BinOp (MinusPP, e1, e2, _) -> e1::e1::(reduce_expression e1)@(reduce_expression e2)
+
+      | UnOp (_, e, _) -> e::(reduce_expression e)
+
+      | _ -> [e]
     in
 
-      if !verbose then (
-        ignore (printf "Seeing if any of (via %a) in statement %d:\n" d_exp e sid);
-        List.iter (fun e -> ignore (printf "    %a\n" d_exp e)) el;
-        ignore (printf " are equivalent to a field of:\n");
-        List.iter (fun e -> ignore (printf "    %a\n" d_exp e)) targets;
-        ignore (printf "with result %b\n" direct)
+    let reduced = List.map stripCasts reduced in
+      
+      if !dbg_is_store_f then (
+        ignore (printf "Reduced expression %a to:\n" d_exp e);
+        List.iter (fun e -> ignore (printf "    -> %a\n" d_exp e)) reduced;
+        flush stdout;
       );
 
-      if direct then true 
-      else (
-        List.exists
-          (fun e ->
-             match (stripCasts e) with 
-                 Lval (Var v, Field _) 
-               | Lval (Var v, Index _) ->
-                   is_field_of_helper (IE.get_equiv_set (Lval (var v)) sid)
-
-               | Lval (Mem e, _) -> 
-                   is_field_of_helper (IE.get_equiv_set e sid)
-
-               | BinOp (IndexPI, e, _, _)
-               | BinOp (MinusPI, e, _, _) ->
-                   is_field_of_helper (IE.get_equiv_set e sid)
-
-               | BinOp (PlusA, e1, e2, _)
-               | BinOp (MinusA, e1, e2, _) ->
-                   is_field_of_helper (IE.get_equiv_set e1 sid) || 
-                   is_field_of_helper (IE.get_equiv_set e2 sid)
-
-               | _ -> 
-                   false
-          )
-          el
-      )
+      reduced
   in
 
-    is_field_of_helper (IE.get_equiv_set e sid)
+  let l0 = ref [] in
+  let l1 = ref [] in
+  let debug = ref 0 in
+
+    l0 := IE.get_equiv_set e sid;
+    l1 := List.fold_left (fun l e -> (reduce_expression e) @ l) !l0 !l0;
+    l1 := U.sort_and_uniq !l1;
+    l1 := List.fold_left (fun l e -> (IE.get_equiv_set e sid) @ l) [] !l1;
+    l1 := U.sort_and_uniq !l1;
+      
+    while not ((compare !l0 !l1) = 0) do
+    
+      l0 := !l1;
+      l1 := List.fold_left (fun l e -> (reduce_expression e) @ l) !l0 !l0;
+      l1 := U.sort_and_uniq !l1;
+      l1 := List.fold_left (fun l e -> (IE.get_equiv_set e sid) @ l) [] !l1;
+      l1 := U.sort_and_uniq !l1;
+    
+    done;
+
+    if !dbg_is_store_f then (
+      ignore (printf "IsStored.is_equiv_to_field_of: %a is related to:\n" d_exp e);
+      List.iter (fun e -> ignore (printf "    %a\n" d_exp e)) !l0;
+      flush stdout;
+    );
+
+    List.exists (fun e -> List.mem e targets) !l0
+  
 ;;
 
 
@@ -148,8 +186,8 @@ let instr_stores (i: instr) (sid: int) : instr_status =
     | Call (_, _, _, _) when (is_overwritten i sid) -> IOverWrite
 
     | Set (lv, e, _) when ( 
-        (is_field_of (Lval lv) !stores sid) && 
-        (is_field_of !target [e] sid) 
+        (is_equiv_to_field_of (Lval lv) !stores sid) && 
+        (is_equiv_to_field_of !target [e] sid) 
       ) -> IStore
 
     | Call (_, _, _, _) when (is_released i sid) -> IStore
@@ -352,7 +390,7 @@ module DFO = struct
 
     let transition = match s.skind with 
         Return (Some e, _) when (
-          (is_field_of !target [e] s.sid) && !claim_on_return
+          (is_equiv_to_field_of !target [e] s.sid) && !claim_on_return
         ) ->
           
           if (state = MustTake || state = Null || state = ReturnTaken) then (
@@ -523,7 +561,7 @@ let is_stored_instr
 
   let start_state = match i with
       Set (lv, _, _) 
-    | Call (Some lv, _, _, _) when ((is_field_of (Lval lv) !stores s.sid)) -> 
+    | Call (Some lv, _, _, _) when ((is_equiv_to_field_of (Lval lv) !stores s.sid)) -> 
         Taken
     | _ -> 
         MustTake

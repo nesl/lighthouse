@@ -15,6 +15,7 @@ val dbg_is_store_i : bool ref;;
 val dbg_is_store_s : bool ref;;
 val dbg_is_store_g : bool ref;;
 val dbg_is_store_c : bool ref;;
+val dbg_is_store_f : bool ref;;
 
 
 (** {b IsStore Functional Interface} *)

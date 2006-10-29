@@ -336,6 +336,9 @@ let argDescr = [
   ("--dbg_is_store_c", Arg.Unit (fun _ -> IS.dbg_is_store_c := true),
    "Join level debugging of the IsStore analysis");
 
+  ("--dbg_is_store_f", Arg.Unit (fun _ -> IS.dbg_is_store_f := true),
+   "Verbose output while checking if an expression is put into a store field");
+
   (* Debugging for alias analysis MayAliasWrapper and IsEquivalent *)
 
   ("--dbg_may_alias", Arg.Unit (fun _ -> MA.dbg_may_alias := true),
