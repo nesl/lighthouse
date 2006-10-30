@@ -141,7 +141,15 @@ let is_equiv_to_field_of (e: exp) (targets: exp list) (sid: int) : bool =
       flush stdout;
     );
 
-    List.exists (fun e -> List.mem e targets) !l0
+    List.exists 
+      (fun e -> 
+         List.exists (fun t -> U.is_parent_of t e) targets
+      ) 
+      !l0
+   
+     (* 
+      List.exists (fun e -> List.mem e targets) !l0
+      *)
   
 ;;
 
