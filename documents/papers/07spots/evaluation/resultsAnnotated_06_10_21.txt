@@ -1,6 +1,59 @@
 ////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////
 
+Summary of Memory Usage in SOS:
+-------------------------------
+
+ker_malloc: 603
+
+blk_mem_alloc: 6
+
+ker_free: 372
+
+blk_mem_free: 6
+
+post_long: 958   
+
+post_link: 284    
+
+post_auto: 76    
+
+post_net: 620    
+
+post_uart: 182    
+
+post_i2c: 91    
+
+post_spi: 87    
+
+ker_msg_take_data: 608    
+
+msg_duplicate: 0       
+
+msg_create: 0       
+
+handle_incoming_msg: 0       
+
+sched_msg_alloc: 10      
+
+mq_enqueue: 0       
+
+ker_cam_add: 0       
+
+msg_dispatch: 0       
+
+pop_new_mod_op: 0       
+
+ker_change_own: 368    
+
+sys_msg_take_data: 139    
+
+fetcher_restart: 30     
+
+sos_msg_dispatch: 0       
+
+total: 4440
+
 dft_loader
 ----------
 

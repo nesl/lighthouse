@@ -1,0 +1,1209 @@
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+Summary of Memory Usage in SOS:
+-------------------------------
+
+ker_malloc: 603
+
+blk_mem_alloc: 6
+
+ker_free: 372
+
+blk_mem_free: 6
+
+post_long: 958   
+
+post_link: 284    
+
+post_auto: 76    
+
+post_net: 620    
+
+post_uart: 182    
+
+post_i2c: 91    
+
+post_spi: 87    
+
+ker_msg_take_data: 608    
+
+msg_duplicate: 0       
+
+msg_create: 0       
+
+handle_incoming_msg: 0       
+
+sched_msg_alloc: 10      
+
+mq_enqueue: 0       
+
+ker_cam_add: 0       
+
+msg_dispatch: 0       
+
+pop_new_mod_op: 0       
+
+ker_change_own: 368    
+
+sys_msg_take_data: 139    
+
+fetcher_restart: 30     
+
+sos_msg_dispatch: 0       
+
+total: 4440
+
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+cdriver
+-------
+
+2006_01_18_01_39_54
+~~~~~~~~~~~~~~~~~~~
+
+Compiler
+^^^^^^^^
+
+----
+2006_01_18_01_39_54: cdriver.c:91: Error: Cannot resolve variable LED_AMBER_TOGGLE.
+2006_01_18_01_39_54: error in doExp (Errormsg.Error)
+----
+
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+daq_system
+----------
+
+2006_02_05_05_58_11
+~~~~~~~~~~~~~~~~~~~
+
+Compiler
+^^^^^^^^
+
+----
+daq_system.c:97: Error: Cannot resolve variable ADC_PORT0.
+error in doExp (Errormsg.Error)
+...
+----
+
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+dft_loader
+----------
+
+2006_02_25_06_29_55
+~~~~~~~~~~~~~~~~~~~
+
+*TODO*: Store problem at line 255 from version 2006_02_07_05_06_10 is gone,
+but the code remains nearly identical.  What is up with that?
+
+
+2006_02_16_10_13_16
+~~~~~~~~~~~~~~~~~~~
+
+Compiler
+^^^^^^^^
+
+----
+2006_02_16_10_13_16: old type = TFun(TNamed(int8_t, TInt(signed char, ), ),
+...
+2006_02_16_10_13_16: new type = TFun(TNamed(int8_t, TInt(signed char, ), ),
+...
+----
+
+
+2006_02_07_05_06_10
+~~~~~~~~~~~~~~~~~~~
+
+Dead (254)
+^^^^^^^^^^
+----
+ker_free(st.version_data);
+st.version_data = (msg_version_data_t*) ker_msg_take_data(KER_DFT_LOADER_PID, msg);
+----
+
+*TODO*: May alias causing problems?  In genereal it should be okay to stare
+into a dead variable.  But may alias expansion may cause problems for this.
+
+Store (255)
+^^^^^^^^^^^
+
+----
+st.version_data = (msg_version_data_t*) ker_msg_take_data(KER_DFT_LOADER_PID, msg);
+----
+
+*TODO*: Argh!!!  I thought this had been cleaned up in my last round of bug
+fixes.  Store into global static variable `st` should not be a problem.  
+
+Store (330)
+^^^^^^^^^^^
+
+----
+st.version_data = ker_malloc(sizeof(msg_version_data_t), KER_DFT_LOADER_PID);
+----
+
+*TODO*: Argh!!!  I thought this had been cleaned up in my last round of bug
+fixes.  Store into global static variable `st` should not be a problem.  
+
+
+2005_10_16_19_35_34
+~~~~~~~~~~~~~~~~~~~
+
+Store (52)
+^^^^^^^^^^
+----
+fetcher_state_t *f = (fetcher_state_t*)
+    ker_msg_take_data(KER_DFT_LOADER_PID, msg);
+    if(is_fetcher_succeed(f)) {
+        ker_led(LED_GREEN_TOGGLE);
+        DEBUG("Fetch successful!\n");
+#ifndef SOS_GW
+        mod_header_ptr mod = ker_codemem_get_header_address(
+                fetcher_get_requested_pid(f),
+                fetcher_get_requested_version(f));
+        DEBUG("mod = 0x%x\n",mod);
+        ker_register_module(mod);
+#endif
+        fetcher_commit(f, true);
+        return SOS_OK;
+    } else {
+        ker_led(LED_RED_TOGGLE);
+        DEBUG("Fetch failedl!\n");
+        fetcher_restart(f, BCAST_ADDRESS);
+        //fetcher_commit(f, false);
+        return SOS_OK;
+    }
+----
+
+*MISSING ANNOTATION*: This error is (I hope!) caused from missing annotations
+on the various fecher calls `is_fetcher_succeed`, `fetcher_commit` and / or
+`fetcher_restart`.
+
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+digital_adc
+-----------
+
+2006_07_18_20_36_12
+~~~~~~~~~~~~~~~~~~~
+
+Store (121)
+^^^^^^^^^^^
+
+----
+case ADS_POWER_ON:
+{
+    uint8_t* power_mask = ker_msg_take_data(ADS7828_ID, msg);
+
+    HAS_CRITICAL_SECTION;
+    ENTER_CRITICAL_SECTION();
+    ADS7828_DIRECTION = ADS7828_DIRECTION | *power_mask;
+    ADS7828_PORT = ADS7828_PORT | *power_mask;
+    LEAVE_CRITICAL_SECTION();
+
+    break;
+}
+----
+
+*REAL BUG*: User fails to free data taken with call to `ker_msg_take_data`.
+
+
+Store (159)
+^^^^^^^^^^^
+
+----
+s->command = (uint8_t *)ker_malloc(1, ADS7828_ID);
+----
+
+*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+ds2438
+------
+
+2006_07_17_23_21_38
+~~~~~~~~~~~~~~~~~~~
+
+Store (538)
+^^^^^^^^^^^
+
+----
+data = (uint8_t *)ker_malloc(9, DS2438_ID);
+if(ds2438_read_scratch_page(SP_00, data, 9) != SOS_OK) {
+    return -EBUSY;
+}
+
+post_long(msg->sid, 
+        DS2438_ID, 
+        DS2438_CONFIG, 
+        9, 
+        data, 
+        SOS_MSG_RELEASE);
+----
+
+*REAL BUG*: Error condition causes a return before buffer is freed.
+
+
+Store (561)
+^^^^^^^^^^^
+
+----
+data = (uint8_t *)ker_malloc(9, DS2438_ID);
+if(ds2438_read_scratch_page(SP_07, data, 9) != SOS_OK) {
+    return -EBUSY;
+}
+
+post_long(msg->sid, 
+        DS2438_ID, 
+        DS2438_ACCUM, 
+        9, 
+        data, 
+        SOS_MSG_RELEASE);
+----
+
+*REAL BUG*: Exact same bug as that above.  Probably copy and paste.
+
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+echo_uart
+---------
+
+2006_01_24_04_14_00
+~~~~~~~~~~~~~~~~~~~
+
+Store (66)
+^^^^^^^^^^
+
+----
+buff_to_send = (uint8_t*)ker_msg_take_data(s->pid, msg);
+if (buff_to_send != NULL){
+    LED_DBG(LED_GREEN_TOGGLE);
+    post_net(DFLT_APP_ID0, DFLT_APP_ID0, MSG_MOTE_TO_PC, msg_len, 
+            (void*)buff_to_send, SOS_MSG_RELEASE, UART_ADDRESS);
+}
+----
+
+*OLD API*: Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
+code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
+the checker.
+
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+flooding
+--------
+
+2006_05_12_23_07_43
+~~~~~~~~~~~~~~~~~~~
+
+Store (168)
+^^^^^^^^^^^
+
+----
+ker_change_own(pktpayload, MOD_FLOODING_PID);
+return post_net(MOD_FLOODING_PID, MOD_FLOODING_PID, 
+        MSG_FLOOD_DATA_PKT, payloadlen, pktpayload, 
+        SOS_MSG_RELEASE, BCAST_ADDRESS);
+----
+
+*TODO*: Hmm... This one should not be causing a problem.  Pehraphs Lighthouse
+is not properly treating `post_net`.
+
+
+2005_12_16_16_26
+~~~~~~~~~~~~~~~~
+
+Store (80)
+^^^^^^^^^^
+
+----
+dupbuff = ker_malloc(msg->len, MOD_FLOODING_PID);
+if (dupbuff == NULL) return SOS_OK;
+for (i = 0; i < msg->len; i++) {
+    dupbuff[i] = msg->data[i];
+}
+post_long(hdr->dst_pid, 
+        MOD_FLOODING_PID, 
+        hdr->dest_msg_type, 
+        msg->len, 
+        dupbuff, 
+        SOS_MSG_RELEASE);
+----
+
+*OLD API*: Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
+code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
+the checker.
+
+
+Store (90)
+^^^^^^^^^^
+
+----
+hdr = (flood_hdr_t*)ker_msg_take_data(MOD_FLOODING_PID, msg);
+if(hdr == NULL) return -ENOMEM;
+post_net(MOD_FLOODING_PID, 
+        MOD_FLOODING_PID, 
+        MSG_FLOOD_DATA_PKT, 
+        l, 
+        hdr, 
+        SOS_MSG_RELEASE, 
+        BCAST_ADDRESS);
+----
+
+*OLD API*: Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
+code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
+the checker.
+
+
+Store (165)
+^^^^^^^^^^^
+  
+----
+ker_change_own(pktpayload, MOD_FLOODING_PID);
+return post_net(MOD_FLOODING_PID, MOD_FLOODING_PID, 
+        MSG_FLOOD_DATA_PKT, payloadlen, pktpayload, 
+        SOS_MSG_RELEASE, BCAST_ADDRESS);
+----
+
+*OLD API*: Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
+code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
+the checker.
+
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+fnclient
+--------
+
+2006_03_14_00_32_19
+~~~~~~~~~~~~~~~~~~~
+
+Compiler
+^^^^^^^^
+
+----
+2006_03_14_00_32_19: ../../../kernel/include/sos_info.h[72:0-0] : syntax error
+2006_03_14_00_32_19: Parsing error
+2006_03_14_00_32_19: Fatal error: exception Frontc.ParseError("Parse error")
+----
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+i2c_comm_ping_pong
+------------------
+
+2006_02_20_00_18_43
+~~~~~~~~~~~~~~~~~~~
+
+Store (114)
+^^^^^^^^^^^
+
+----
+if ((s->sos_i2c_msg = ker_malloc(sizeof(Message), s->pid)) != NULL) {
+----
+					
+*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+
+Store (121)
+^^^^^^^^^^^
+
+----
+if ((s->sos_i2c_msg->data = ker_malloc(s->msg_len,s->pid)) != NULL) {
+----
+
+*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+
+
+Dead (121)
+^^^^^^^^^^
+
+----
+if (...) {
+    ...
+    if (...) {
+        ...
+    } else {
+        LED_DBG(LED_RED_TOGGLE);
+        ker_free(s->sos_i2c_msg);
+    }
+} else {
+    LED_DBG(LED_RED_TOGGLE);
+}
+s->state = T_I2C_COMM_SEND_SOS_I2C_MSG;
+----
+
+*TODO*: May alias causing problems?  In genereal it should be okay to stare
+into a dead variable.  But may alias expansion may cause problems for this.
+
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+
+i2c_comm_tx
+-----------
+
+2006_02_20_00_18_43
+~~~~~~~~~~~~~~~~~~~
+
+Store (127)
+^^^^^^^^^^^
+
+----
+if ((s->sos_i2c_msg = ker_malloc(sizeof(Message), s->pid)) != NULL) {
+----
+
+*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+
+Store (134)
+^^^^^^^^^^^
+						
+----
+if ((s->sos_i2c_msg->data = ker_malloc(s->msg_len,s->pid)) != NULL) {
+----
+
+*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+
+Dead (145)
+^^^^^^^^^^
+
+----
+if (...) {
+    ...
+    if (...) {
+        ...
+    } else {
+        LED_DBG(LED_RED_TOGGLE);
+        ker_free(s->sos_i2c_msg);
+    }
+} else {
+    LED_DBG(LED_RED_TOGGLE);
+}
+s->state = T_I2C_COMM_SEND_SOS_I2C_MSG;
+----
+
+*TODO*: May alias causing problems?  In genereal it should be okay to stare
+into a dead variable.  But may alias expansion may cause problems for this.
+
+Dead (191)
+^^^^^^^^^^
+
+----
+case MSG_I2C_SEND_DONE:
+{
+    ker_free(msg->data);
+    ker_i2c_release_bus(s->pid);
+    if (s->state == T_I2C_COMM_SEND_RAW) {
+        s->state = T_I2C_COMM_SEND_RAW_DONE;
+    } else {
+        s->state = T_I2C_COMM_SEND_SOS_MSG_DONE;
+    }
+    break;
+}
+----
+
+*TODO*: May alias causing problems?  In genereal it should be okay to stare
+into a dead variable.  But may alias expansion may cause problems for this.
+
+
+Dead (254)
+^^^^^^^^^^
+
+----
+case MSG_ERROR:
+{
+    LED_DBG(LED_GREEN_OFF);
+    LED_DBG(LED_YELLOW_ON);
+
+    ker_free(msg->data);
+    ker_i2c_release_bus(s->pid);
+    break;
+}
+----
+
+*TODO*: May alias causing problems?  In genereal it should be okay to stare
+into a dead variable.  But may alias expansion may cause problems for this.
+
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+mag_sensor
+----------
+
+2006_08_30_23_09_58
+~~~~~~~~~~~~~~~~~~~
+
+store (94)
+^^^^^^^^^^
+
+----
+magnet_sensor_state_t *s = (magnet_sensor_state_t*) ker_get_module_state(MAG_SENSOR_PID);
+...
+s->i2c_data_ptr = ker_malloc(sizeof(uint16_t), MAG_SENSOR_PID);
+----
+
+*TODO*: Need annotation for the dynamic creation of a store.  Blah.
+
+store (191)
+^^^^^^^^^^^
+	
+----
+magnet_sensor_state_t *s = (magnet_sensor_state_t*) ker_get_module_state(MAG_SENSOR_PID);
+...
+(s->i2c_data_ptr) = ker_malloc(sizeof(uint16_t), MAG_SENSOR_PID);
+----
+
+*TODO*: Need annotation for the dynamic creation of a store.  Blah.
+
+dead (302)
+^^^^^^^^^^
+
+----
+(s->i2c_data_ptr) = ker_malloc(sizeof(uint16_t), MAG_SENSOR_PID);
+if(x_or_y == 0) {
+    s->current_axis = 0;
+    *(s->i2c_data_ptr) = 0x0000 | ((s->i2c_data_value)<<8);
+}
+else if(x_or_y == 1){
+    s->current_axis = 1;
+    *(s->i2c_data_ptr) = 0x0080 | ((s->i2c_data_value)<<8);
+}
+else {
+    return -EINVAL;
+}
+----
+
+*TODO*: May alias causing problems?  In genereal it should be okay to stare
+into a dead variable.  But may alias expansion may cause problems for this.
+
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+mag_test_app
+------------
+
+2006_08_30_23_09_58
+~~~~~~~~~~~~~~~~~~~
+
+Store (79)
+^^^^^^^^^^
+
+----
+temp = ker_malloc(sizeof(uint8_t), MAG_TEST_PID);
+*temp = 0;
+ker_sensor_control(s->pid, MTS310_MAG_0_SID, temp);	
+s->state = MAG_TEST_APP_IDLE_0;
+break;
+----
+
+*ANNOTATION*: Function `ker_sensor_control` either needs an annotation, or
+this is leaking data.
+
+Store (88)
+^^^^^^^^^^
+
+----
+temp = ker_malloc(sizeof(uint8_t), MAG_TEST_PID);
+*temp = 1;
+ker_sensor_control(s->pid, MTS310_MAG_1_SID, temp);	
+s->state = MAG_TEST_APP_IDLE_1;
+break;
+----
+
+*ANNOTATION*: Function `ker_sensor_control` either needs an annotation, or
+this is leaking data.
+
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+rats
+----
+
+2006_03_29_19_29_21
+~~~~~~~~~~~~~~~~~~~
+
+Store (452)
+-----------
+
+----
+s->ts_list = (timesync_t *)ker_malloc(sizeof(timesync_t), s->pid);
+----
+
+*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+
+Store (455)
+-----------
+
+----
+s->ts_list->timestamps = (uint32_t *)ker_malloc(BUFFER_SIZE*sizeof(uint32_t), s->pid);
+----
+
+*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+
+Store (456)
+-----------
+
+----
+s->ts_list->my_time = (uint32_t *)ker_malloc(BUFFER_SIZE*sizeof(uint32_t), s->pid);
+----
+
+*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+
+Store (497)
+-----------
+
+----
+float *buffer = (float *)ker_malloc(8*sizeof(float), s->pid);
+...
+post_net(s->pid, s->pid, MSG_DEBUG3, 8*sizeof(float), buffer, SOS_MSG_RELEASE, ROOT_NODE);
+----
+
+*TODO*: Hmm... This one should not be causing a problem.  Pehraphs Lighthouse
+is not properly treating `post_net`.
+
+Store (498)
+-----------
+
+----
+float *buffer2 = (float *)ker_malloc(8*sizeof(float), s->pid);
+...
+post_net(s->pid, s->pid, MSG_DEBUG3, 8*sizeof(float), buffer2, SOS_MSG_RELEASE, ROOT_NODE);
+----
+
+*TODO*: Hmm... This one should not be causing a problem.  Pehraphs Lighthouse
+is not properly treating `post_net`.
+
+Store (576)
+-----------
+
+----
+ts_list_ptr = s->ts_list;
+...
+ts_list_ptr->next = (timesync_t *)ker_malloc(sizeof(timesync_t), s->pid);
+----
+
+*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+surge
+-----
+
+2005_10_16_19_35_34
+~~~~~~~~~~~~~~~~~~~
+
+Store (168)
+^^^^^^^^^^^
+
+----	  
+pkt = (uint8_t*)ker_malloc(hdr_size + sizeof(SurgeMsg), SURGE_MOD_PID);
+if (pkt == NULL) break; 
+...
+post_long(TREE_ROUTING_PID, SURGE_MOD_PID, MSG_SEND_PACKET, hdr_size + sizeof(SurgeMsg), (void*)pkt, SOS_MSG_RELEASE);
+----
+
+*OLD API*: Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
+code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
+the checker.
+
+
+Store (205)
+^^^^^^^^^^^
+
+----
+uint8_t *payload = ker_msg_take_data(SURGE_MOD_PID, msg); 
+post_net(SURGE_MOD_PID,
+        SURGE_MOD_PID,
+        msg->type,
+        msg->len,
+        payload,
+        SOS_MSG_RELEASE,
+        UART_ADDRESS);
+----
+
+*OLD API*: Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
+code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
+the checker.
+
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+test_i2c_comm_rx
+----------------
+
+2006_02_16_10_13_17
+~~~~~~~~~~~~~~~~~~~
+
+Compiler
+^^^^^^^^
+
+----
+old type = TFun(TNamed(int8_t, TInt(signed char, ), ),
+...
+new type = TFun(TNamed(int8_t, TInt(signed char, ), ),
+...
+----
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+test_taophotosensor
+-------------------
+
+2005_11_17_12_24_15
+~~~~~~~~~~~~~~~~~~~~
+
+Store (99)
+^^^^^^^^^^
+
+----
+buff = ker_malloc(sizeof(test_taosphotosensor_t), DFLT_APP_ID0);
+if (buff != NULL) {
+    memcpy(buff, s, sizeof(test_taosphotosensor_t));
+    post_net(DFLT_APP_ID0, DFLT_APP_ID0, TAOS_PHOTOSENSOR_DATA, sizeof(test_taosphotosensor_t), buff, SOS_MSG_RELEASE, BCAST_ADDRESS);
+    ker_led(LED_GREEN_TOGGLE);
+}
+----
+
+*OLD API*: Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
+code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
+the checker.
+
+
+Store (121)
+^^^^^^^^^^^
+
+----
+buff = ker_malloc(sizeof(test_taosphotosensor_t), DFLT_APP_ID0);
+if (buff != NULL){
+    memcpy(buff, s, sizeof(test_taosphotosensor_t));
+    post_net(DFLT_APP_ID0, DFLT_APP_ID0, TAOS_PHOTOSENSOR_DATA, sizeof(test_taosphotosensor_t), buff, SOS_MSG_RELEASE, BCAST_ADDRESS);
+}
+----
+
+*OLD API*: Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
+code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
+the checker.
+
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+test_tpsn
+---------
+
+2006_03_20_10_18_35
+~~~~~~~~~~~~~~~~~~~
+
+Store (86)
+^^^^^^^^^^
+
+----
+s->tpsn_ptr = (tpsn_t *)ker_malloc(sizeof(tpsn_t), s->pid);
+----
+
+*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+test_uart_comm_tx
+-----------------
+
+2006_02_02_05_12_45
+~~~~~~~~~~~~~~~~~~~
+
+Store (125)
+^^^^^^^^^^^
+					
+----
+if ((s->sos_uart_msg = ker_malloc(sizeof(Message), s->pid)) != NULL) {
+----
+
+*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+
+Store (131)
+^^^^^^^^^^^
+
+----
+if ((s->sos_uart_msg->data = ker_malloc(s->msg_len,s->pid)) != NULL) {
+----
+
+*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+
+Dead (142)
+^^^^^^^^^^
+
+----
+if (...) {
+    ...
+        if (...) {
+            ...
+        } else {
+            LED_DBG(LED_RED_TOGGLE);
+            ker_free(s->sos_uart_msg);
+        }
+} else {
+    LED_DBG(LED_RED_TOGGLE);
+}
+s->state = T_UART_COMM_SEND_SOS_UART_MSG;
+----
+
+*TODO*: May alias causing problems?  In genereal it should be okay to stare
+into a dead variable.  But may alias expansion may cause problems for this.
+
+
+Dead (186)
+^^^^^^^^^^
+		
+----
+case MSG_UART_SEND_DONE:
+{
+    ker_free(msg->data);
+    ker_uart_release_bus(s->pid);
+    if (s->state == T_UART_COMM_SEND_RAW) {
+        s->state = T_UART_COMM_SEND_RAW_DONE;
+    } else {
+        s->state = T_UART_COMM_SEND_SOS_MSG_DONE;
+    }
+    break;
+}
+----
+
+*TODO*: May alias causing problems?  In genereal it should be okay to stare
+into a dead variable.  But may alias expansion may cause problems for this.
+
+Dead (201)
+^^^^^^^^^^
+
+----
+case MSG_ERROR:
+{
+    LED_DBG(LED_GREEN_OFF);
+    LED_DBG(LED_YELLOW_ON);
+
+    ker_free(msg->data);
+    ker_uart_release_bus(s->pid);
+    break;
+}
+----
+
+*TODO*: May alias causing problems?  In genereal it should be okay to stare
+into a dead variable.  But may alias expansion may cause problems for this.
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+tpsn
+----
+
+2006_10_21_00_01_19
+~~~~~~~~~~~~~~~~~~~
+
+Compile
+^^^^^^^
+
+----
+tpsn.c:286: Bug: typeOffset: Field on a non-compound
+Fatal error: exception Errormsg.Error
+----
+
+2006_03_20_15_55_19
+^^^^^^^^^^^^^^^^^^^
+
+----
+tpsn.c:246: Bug: typeOffset: Field on a non-compound
+Fatal error: exception Errormsg.Error
+----
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+
+tree_routing
+------------
+
+2006_10_14_00_34_59
+~~~~~~~~~~~~~~~~~~~
+
+Store (557)
+^^^^^^^^^^^
+
+----
+uint8_t msg_len = msg->len;
+tr_hdr_t *hdr = (tr_hdr_t*)
+    ker_msg_take_data(TREE_ROUTING_PID, msg);
+    bool dup;
+    uint16_t my_id = ker_id();
+    if(hdr == NULL) return -ENOMEM;
+
+    if(s->gpCurrentParent == NULL) {
+        if(my_id == entohs(hdr->originaddr)) {
+            hdr->seqno = ehtons(s->gCurrentSeqNo++);                    
+            hdr->hopcount = s->gbCurrentHopCount;
+            //DEBUG("<SEND> Data, seq = %d\n", hdr->seqno);
+            post_net(TREE_ROUTING_PID, TREE_ROUTING_PID,
+                    MSG_TR_DATA_PKT, msg_len, hdr,     
+                    SOS_MSG_RELEASE, BCAST_ADDRESS);
+            DEBUG_PID(TREE_ROUTING_PID, "No parent - Broadcasting data from local node\n");
+            return SOS_OK;  
+        } else {
+            sys_free(hdr);
+            return -EINVAL;
+        }
+    } 
+
+if(s->gbCurrentHopCount >= hdr->hopcount) {
+    //Possible cycle??
+    sys_free(hdr);
+    return -EINVAL;
+}
+
+if(my_id != entohs(hdr->originaddr)) {
+    update_neighbor(s, msg->saddr, entohs(hdr->seqno), &dup);
+} else {
+    dup = false;
+}
+
+if(dup == false) {
+    hdr->hopcount = s->gbCurrentHopCount;
+    if(my_id != entohs(hdr->originaddr)){
+        hdr->seqno = ehtons(s->gCurrentSeqNo++); 
+    } else {
+        hdr->seqno = ehtons(s->gCurrentSeqNo); 
+    }
+    post_net(TREE_ROUTING_PID, TREE_ROUTING_PID,
+            MSG_TR_DATA_PKT, msg_len, hdr,     
+            SOS_MSG_RELEASE, s->gpCurrentParent->id);
+    DEBUG_PID(TREE_ROUTING_PID, "Forward data: %d <-- %d, orig(%d)\n", 
+            s->gpCurrentParent->id, node_address, entohs(hdr->originaddr));
+    return SOS_OK;		
+} else {
+    sys_free(hdr);
+    return -EINVAL;
+} 
+----
+
+*MISSING ANNOTATION*: This error is (I hope!) caused from missing annotation
+for `sys_free`.
+
+
+2005_10_16_19_35_34
+~~~~~~~~~~~~~~~~~~~
+
+Store (212)
+^^^^^^^^^^^
+
+----
+tr_hdr_t *hdr = (tr_hdr_t*)
+    ker_msg_take_data(TREE_ROUTING_PID, msg);
+    if(hdr == NULL) return -ENOMEM;
+    bool dup;
+    if(msg->saddr != my_id){
+        update_neighbor(s, msg->saddr, entohs(hdr->seqno), &dup);
+    }
+DEBUG("<TR> src = %d, hop = %d\n", 
+        entohs(hdr->originaddr),
+        hdr->originhopcount);
+post_long(hdr->dst_pid, TREE_ROUTING_PID, 
+        MSG_TR_DATA_PKT, msg->len, msg->data, 	
+        SOS_MSG_RELEASE);
+return SOS_OK;
+----
+
+*REAL BUG*: User claims data into `hdr`, but then (incorrectly) uses
+`msg->data` in the call to `post_long`.
+
+
+Store (536)
+^^^^^^^^^^^
+
+----
+tr_hdr_t *hdr = (tr_hdr_t*)
+    ker_msg_take_data(TREE_ROUTING_PID, msg);
+    bool dup;
+    uint16_t my_id = ker_id();
+    if(hdr == NULL) return -ENOMEM;
+
+    if(s->gpCurrentParent == NULL) {
+        if(my_id == entohs(hdr->originaddr)) {
+            hdr->seqno = ehtons(s->gCurrentSeqNo++);                    
+            hdr->hopcount = s->gbCurrentHopCount;
+            //DEBUG("<SEND> Data, seq = %d\n", hdr->seqno);
+            post_net(TREE_ROUTING_PID, TREE_ROUTING_PID,
+                    MSG_TR_DATA_PKT, msg->len, msg->data,     
+                    SOS_MSG_RELEASE, BCAST_ADDRESS);
+            DEBUG("<TR> No parent - Broadcasting data from local node\n");
+            return SOS_OK;  
+        } else {
+            ker_free(hdr);
+            return -EINVAL;
+        }
+    } 
+if(s->gbCurrentHopCount >= hdr->hopcount) {
+    //Possible cycle??
+    ker_free(hdr);
+    return -EINVAL;
+}
+if(my_id != entohs(hdr->originaddr)) {
+    update_neighbor(s, msg->saddr, entohs(hdr->seqno), &dup);
+} else {
+    dup = false;
+}
+if(dup == false) {
+    hdr->hopcount = s->gbCurrentHopCount;
+    if(my_id != entohs(hdr->originaddr)){
+        hdr->seqno = ehtons(s->gCurrentSeqNo++); 
+    } else {
+        hdr->seqno = ehtons(s->gCurrentSeqNo); 
+    }
+    post_net(TREE_ROUTING_PID, TREE_ROUTING_PID,
+            MSG_TR_DATA_PKT, msg->len, msg->data,     
+            SOS_MSG_RELEASE, s->gpCurrentParent->id);
+    DEBUG("<TR> Forward data: %d <-- %d, orig(%d)\n", 
+            s->gpCurrentParent->id, node_address, entohs(hdr->originaddr));
+    return SOS_OK;		
+} else {
+    ker_free(hdr);
+    return -EINVAL;
+}
+----
+
+*REAL BUG*: User again taking data ownership with `ker_msg_take_data` but
+directly (and incorrectly) releasing data pointed to by `msg->data`.
+
+2005_09_06_19_14_28
+~~~~~~~~~~~~~~~~~~~
+
+Store (149)
+^^^^^^^^^^^
+
+----
+neighbor_entry_t *nb = (neighbor_entry_t*) ker_malloc(sizeof(neighbor_entry_t),TREE_ROUTING_PID);
+if(nb != NULL) {
+    init_nb(nb, ker_id());
+    nb->parent = ker_id();
+    nb->flags = NBRFLAG_VALID;
+    nb->hop = 0;
+    s->gpCurrentParent = nb;      
+    s->gbCurrentHopCount = 0;	
+} else {
+    //! PANIC!!!
+    DEBUG("<TR> NO Memory for tree routing!!!\n");
+}
+----
+
+*REAL BUG*: User fails to free data in the `else` clause.
+
+Store (411)
+^^^^^^^^^^^
+	
+----
+nb = (neighbor_entry_t*) ker_malloc(sizeof(neighbor_entry_t), TREE_ROUTING_PID);
+if(nb == NULL) return NULL;
+init_nb(nb, saddr);
+nb->next = s->nb_list;
+s->nb_list = nb;
+s->nb_cnt++;
+return nb;
+----
+
+*MISSING ANNOTATION*: Need to add annotation for local store `s`.  Note
+however that we are dealing with a linked list.  While adding the annoation
+for `s` should fix this problem, linked lists in general cause the checker
+grief.
+
+Store (486)
+^^^^^^^^^^^
+
+----
+if(pkt == NULL) return;
+
+//! pack  nb list
+nb = s->nb_list;
+i = 0;
+while(nb != NULL) {
+    pkt->estList[i].id = ehtons(nb->id);
+    pkt->estList[i].receiveEst = nb->receiveEst;
+    nb = nb->next;
+    i++;
+}
+pkt->seqno = ehtons((s->gCurrentSeqNo)++);
+pkt->hopcount = s->gbCurrentHopCount;
+pkt->parent = (s->gpCurrentParent) ? ehtons(s->gpCurrentParent->id) : ehtons(BCAST_ADDRESS);
+pkt->estEntries = s->nb_cnt;
+DEBUG("<TR> Send Beacon seq = %d\n", entohs(pkt->seqno));
+post_net(TREE_ROUTING_PID, TREE_ROUTING_PID, MSG_BEACON_PKT, pkt_size, pkt, SOS_MSG_RELEASE, BCAST_ADDRESS);
+----
+
+*TODO*: Hmm... This one should not be causing a problem.  Pehraphs Lighthouse
+is not properly treating `post_net`.
+
+
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+
+tree_routing_test
+-----------------
+
+2006_08_04_02_05_14
+~~~~~~~~~~~~~~~~~~~
+
+Store (116)
+^^^^^^^^^^^
+
+----
+payload = sys_msg_take_data(msg);
+sys_post_uart(TR_TEST_PID, msg->type, msg_len, payload, SOS_MSG_RELEASE, BCAST_ADDRESS);
+----
+
+*TODO*: Hmm... This one should not be causing a problem.  Pehraphs Lighthouse
+is not properly treating `post_net`.
+
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+uart_speed
+----------
+
+2006_02_16_10_13_17
+~~~~~~~~~~~~~~~~~~~
+
+Store (108)
+^^^^^^^^^^^
+
+----
+s->msgPtrs[i] = ker_malloc(MSG_LEN, UART_SPEED_ID);
+----
+
+*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+
+
+
+
