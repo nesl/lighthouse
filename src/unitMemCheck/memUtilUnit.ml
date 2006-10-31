@@ -118,7 +118,7 @@ val get_released: Cil.instr -> Cil.exp list;;
 *)
 
 (* Tests!!! *)
-let test_is_subexpression_of = 
+let test_is_parent_of = 
   
   let ga_arrow_edge = 
     Formatcil.cExp "%e:ga -> edges"
@@ -137,27 +137,27 @@ let test_is_subexpression_of =
 
 
   let ga_sub_of_ga_arrow_edge =
-    MU.is_subexpression_of !(mem_util_data.ga) ga_arrow_edge
+    MU.is_parent_of !(mem_util_data.ga) ga_arrow_edge
   in
         
   let not_ga_arrow_edge_sub_of_ga_arrow_point =
-    not (MU.is_subexpression_of ga_arrow_edge ga_arrow_point)
+    not (MU.is_parent_of ga_arrow_edge ga_arrow_point)
   in
         
   let ga_sub_of_ga_arrow_edge_index =
-    MU.is_subexpression_of !(mem_util_data.ga) ga_arrow_edge_index
+    MU.is_parent_of !(mem_util_data.ga) ga_arrow_edge_index
   in
         
   let ga_arrow_edge_sub_of_ga_arrow_edge_index =
-    MU.is_subexpression_of ga_arrow_edge ga_arrow_edge_index
+    MU.is_parent_of ga_arrow_edge ga_arrow_edge_index
   in
         
   let not_ga_arrow_edge_sub_of_ga =
-    not (MU.is_subexpression_of ga_arrow_edge !(mem_util_data.ga))
+    not (MU.is_parent_of ga_arrow_edge !(mem_util_data.ga))
   in
         
   
-    TestCase(fun _ -> assert_bool "Incorrect MU.is_subexpression_of information" 
+    TestCase(fun _ -> assert_bool "Incorrect MU.is_parent_of information" 
                         ((ga_sub_of_ga_arrow_edge) &&
                          (not_ga_arrow_edge_sub_of_ga_arrow_point) &&
                          (ga_sub_of_ga_arrow_edge_index) &&
@@ -231,7 +231,7 @@ let test_get =
 let suite_equivClone = 
   TestLabel ("MemUtil", 
              TestList [
-               TestLabel ("memUtilUnit.c is_subexpression_of:", test_is_subexpression_of);
+               TestLabel ("memUtilUnit.c is_parent_of:", test_is_parent_of);
                TestLabel ("memUtilUnit.c get_claim / get_released:", test_get);
              ]
   )

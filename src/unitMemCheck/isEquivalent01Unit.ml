@@ -98,7 +98,7 @@ visitCilFileSameGlobals tv cilFile;;
 (* Helper function to check that an expression is considerd Dead by the clone
  * analysis *)
 let is_dead (e:exp) (id:int) : bool =
-  match IE.get_equiv_set e id with
+  match IE.get_equiv_set_end e id with
       [e] -> true
     | [] -> true
     | _ -> false
@@ -111,13 +111,13 @@ let star (e:exp) : exp = (Lval (mkMem e NoOffset));;
 (* Tests!!! *)
 let test_check = 
   let x_y = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.x)
       !(equiv_test_data.y)
       equiv_test_data.id_check
   in
   let ap_x = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       (star !(equiv_test_data.alias_ptr))
       !(equiv_test_data.x)
       equiv_test_data.id_check
@@ -133,9 +133,9 @@ let test_check =
 
 (* Run all the tests *)
 let suite_check = 
-  TestLabel ("Add Annotations", 
+  TestLabel ("IsEquivalent", 
              TestList [
-               TestLabel ("equivClone01.c: Check", test_check);
+               TestLabel ("isEquivalent01: Check", test_check);
              ]
   )
 ;;

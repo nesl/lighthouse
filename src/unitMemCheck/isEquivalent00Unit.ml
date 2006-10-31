@@ -131,7 +131,7 @@ visitCilFileSameGlobals tv cilFile;;
 (* Helper function to check that an expression is considerd Dead by the clone
  * analysis *)
 let is_dead (e:exp) (id:int) : bool =
-  match IE.get_equiv_set e id with
+  match IE.get_equiv_set_end e id with
       [e] -> true
     | [] -> true
     | el -> 
@@ -152,25 +152,25 @@ let test_equivClone_one =
 
 let test_equivClone_two = 
   let ca_to_a = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.clone_a) 
       !(equiv_test_data.array_a)
       equiv_test_data.id_two
   in
   let a_to_ca = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.array_a)
       !(equiv_test_data.clone_a) 
       equiv_test_data.id_two
   in
   let cb_to_b = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.clone_b) 
       !(equiv_test_data.array_b)
       equiv_test_data.id_two
   in
   let b_to_cb = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.array_b)
       !(equiv_test_data.clone_b) 
       equiv_test_data.id_two
@@ -183,49 +183,49 @@ let test_equivClone_two =
 
 let test_equivClone_three = 
   let ca_to_a = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.clone_a) 
       !(equiv_test_data.array_a)
       equiv_test_data.id_three
   in
   let a_to_ca = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.array_a)
       !(equiv_test_data.clone_a) 
       equiv_test_data.id_three
   in
   let cb_to_b = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.clone_b) 
       !(equiv_test_data.array_b)
       equiv_test_data.id_three
   in
   let b_to_cb = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.array_b)
       !(equiv_test_data.clone_b) 
       equiv_test_data.id_three
   in
   let cab_to_b = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.clone_ab) 
       !(equiv_test_data.array_b)
       equiv_test_data.id_three
   in
   let b_to_cab = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.array_b)
       !(equiv_test_data.clone_ab) 
       equiv_test_data.id_three
   in
   let cb_to_cab = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.clone_b) 
       !(equiv_test_data.clone_ab)
       equiv_test_data.id_three
   in
   let cab_to_cb = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.clone_ab)
       !(equiv_test_data.clone_b) 
       equiv_test_data.id_three
@@ -238,25 +238,25 @@ let test_equivClone_three =
 
 let test_equivClone_four = 
   let ca_to_a = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.clone_a) 
       !(equiv_test_data.array_a)
       equiv_test_data.id_four
   in
   let a_to_ca = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.array_a)
       !(equiv_test_data.clone_a) 
       equiv_test_data.id_four
   in
   let cb_to_b = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.clone_b) 
       !(equiv_test_data.array_b)
       equiv_test_data.id_four
   in
   let b_to_cb = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.array_b)
       !(equiv_test_data.clone_b) 
       equiv_test_data.id_four
@@ -269,7 +269,7 @@ let test_equivClone_four =
 
 let test_equivClone_five_a = 
   let a_good = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.clone_a) 
       IE.nullPtr
       equiv_test_data.id_five
@@ -280,7 +280,7 @@ let test_equivClone_five_a =
 
 let test_equivClone_five_b = 
   let b_good = 
-    IE.is_equiv
+    IE.is_equiv_end
       !(equiv_test_data.clone_b) 
       IE.nullPtr
       equiv_test_data.id_five
@@ -291,7 +291,7 @@ let test_equivClone_five_b =
 
 let test_equivClone_five_ab = 
   let ab_good = 
-    IE.is_equiv
+    IE.is_equiv_end
       !(equiv_test_data.clone_ab) 
       IE.nullPtr
       equiv_test_data.id_five
@@ -307,7 +307,7 @@ let test_equivClone_six =
   in
   
   let x_to_y = 
-    IE.is_equiv 
+    IE.is_equiv_end 
       !(equiv_test_data.x) 
       !(equiv_test_data.y) 
       equiv_test_data.id_six
@@ -315,7 +315,7 @@ let test_equivClone_six =
     
   let not_sx_to_p = 
     not (
-      IE.is_equiv
+      IE.is_equiv_end
         (star !(equiv_test_data.x))
         !(equiv_test_data.p) 
         equiv_test_data.id_six
@@ -323,21 +323,21 @@ let test_equivClone_six =
   in
 
   let sy_to_q =
-    IE.is_equiv
+    IE.is_equiv_end
       (star !(equiv_test_data.y))
       !(equiv_test_data.q)
       equiv_test_data.id_six
   in
 
   let sx_to_sy =
-    IE.is_equiv
+    IE.is_equiv_end
       (star !(equiv_test_data.x))
       (star !(equiv_test_data.y))
       equiv_test_data.id_six
   in
   
   let sx_to_q =
-    IE.is_equiv
+    IE.is_equiv_end
       (star !(equiv_test_data.x))
       !(equiv_test_data.q)
       equiv_test_data.id_six

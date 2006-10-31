@@ -16,7 +16,7 @@ int main() {
 
     unsigned int tmp;
     tmp = (unsigned int)(&store) + 4; 
-    (*(int **)tmp) = (int*) ker_malloc(42, 1);
+    (*((int **)tmp)) = (int*) ker_malloc(42, 1);
     
     return 0;
 }
