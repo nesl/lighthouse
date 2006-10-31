@@ -58,6 +58,9 @@ val is_equiv_end : Cil.exp -> Cil.exp -> int -> bool;;
   *)
 val get_equiv_set_end : Cil.exp -> int -> Cil.exp list;;
 
+val is_equiv_start : Cil.exp -> Cil.exp -> Cil.stmt -> bool;;
+val get_equiv_set_start : Cil.exp -> Cil.stmt -> Cil.exp list;;
+
 (** Print the equivalency sets at the END of the given statement ID *)
 (* val print_equiv_sets : int -> unit;; *)
 

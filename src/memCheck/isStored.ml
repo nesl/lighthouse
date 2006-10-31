@@ -13,7 +13,7 @@ module E = Errormsg
 (************************************************************)
 
 (* Blah... *)             
-let current_stmt_id = ref (-1);;
+let current_stmt = ref dummyStmt;;
 let claim_on_return = ref false;;
 
 (* Reference to the varinfo ID that we are interested in *)
@@ -57,7 +57,7 @@ let dbg_is_store_df = ref false;;
  * This function is used to see if an expression is either one of a set of
  * targets OR a member of a field of a target.
  *)
-let is_equiv_to_field_of (e: exp) (targets: exp list) (sid: int) : bool =
+let is_equiv_to_field_of (e: exp) (targets: exp list) (s: stmt) : bool =
 
   (* Return simpler sub-expressions of the expression e.  But only those
    * sub-expressions with the same level of memory derefencing.  Does that make
@@ -74,7 +74,7 @@ let is_equiv_to_field_of (e: exp) (targets: exp list) (sid: int) : bool =
           let addrs = reduce_expression e in
           let aliases = 
             List.fold_left 
-              (fun l e -> (IE.get_equiv_set_end e sid) @ l)
+              (fun l e -> (IE.get_equiv_set_start e s) @ l)
               [] addrs
           in
           let cleaned = U.sort_and_uniq aliases in
@@ -119,10 +119,10 @@ let is_equiv_to_field_of (e: exp) (targets: exp list) (sid: int) : bool =
   let l1 = ref [] in
   let debug = ref 0 in
 
-    l0 := IE.get_equiv_set_end e sid;
+    l0 := IE.get_equiv_set_start e s;
     l1 := List.fold_left (fun l e -> (reduce_expression e) @ l) !l0 !l0;
     l1 := U.sort_and_uniq !l1;
-    l1 := List.fold_left (fun l e -> (IE.get_equiv_set_end e sid) @ l) [] !l1;
+    l1 := List.fold_left (fun l e -> (IE.get_equiv_set_start e s) @ l) [] !l1;
     l1 := U.sort_and_uniq !l1;
       
     while not ((compare !l0 !l1) = 0) do
@@ -130,7 +130,7 @@ let is_equiv_to_field_of (e: exp) (targets: exp list) (sid: int) : bool =
       l0 := !l1;
       l1 := List.fold_left (fun l e -> (reduce_expression e) @ l) !l0 !l0;
       l1 := U.sort_and_uniq !l1;
-      l1 := List.fold_left (fun l e -> (IE.get_equiv_set_end e sid) @ l) [] !l1;
+      l1 := List.fold_left (fun l e -> (IE.get_equiv_set_start e s) @ l) [] !l1;
       l1 := U.sort_and_uniq !l1;
     
     done;
@@ -168,20 +168,20 @@ let is_equiv_to_field_of (e: exp) (targets: exp list) (sid: int) : bool =
  * the allocation.  As such, we handle it elsewhere and leave this as a more
  * specific function for analyizing instruction AFTER the allocation point.
  *)
-let instr_stores (i: instr) (sid: int) : instr_status = 
+let instr_stores (i: instr) (s: stmt) : instr_status = 
 
   
-  let is_released (i: instr) (id: int) : bool = 
+  let is_released (i: instr) (s: stmt) : bool = 
     let released_formals = U.get_released i in
       (List.length released_formals > 0) &&
-      (List.exists (fun release -> IE.is_equiv_end release !target id) released_formals)
+      (List.exists (fun release -> IE.is_equiv_start release !target s) released_formals)
   in
   
   
-  let is_overwritten (i: instr) (id: int) : bool = 
+  let is_overwritten (i: instr) (s: stmt) : bool = 
     let claimed_formals = U.get_claim i in
     (List.length (claimed_formals) > 0) &&
-    (List.exists (fun release -> IE.is_equiv_end release !target id) claimed_formals
+    (List.exists (fun release -> IE.is_equiv_start release !target s) claimed_formals
     )
   in
     
@@ -189,16 +189,16 @@ let instr_stores (i: instr) (sid: int) : instr_status =
   let action = match i with
     (* TODO: These three could be incorrect if the target is also passed as a
      * formal in the expression *)
-    | Set (lv, _, _) when (IE.is_equiv_end (Lval lv) !target sid) -> IOverWrite
-    | Call (Some lv, _, _, _) when (IE.is_equiv_end (Lval lv) !target sid) -> IOverWrite
-    | Call (_, _, _, _) when (is_overwritten i sid) -> IOverWrite
+    | Set (lv, _, _) when (IE.is_equiv_start (Lval lv) !target s) -> IOverWrite
+    | Call (Some lv, _, _, _) when (IE.is_equiv_start (Lval lv) !target s) -> IOverWrite
+    | Call (_, _, _, _) when (is_overwritten i s) -> IOverWrite
 
     | Set (lv, e, _) when ( 
-        (is_equiv_to_field_of (Lval lv) !stores sid) && 
-        (is_equiv_to_field_of !target [e] sid) 
+        (is_equiv_to_field_of (Lval lv) !stores s) && 
+        (is_equiv_to_field_of !target [e] s) 
       ) -> IStore
 
-    | Call (_, _, _, _) when (is_released i sid) -> IStore
+    | Call (_, _, _, _) when (is_released i s) -> IStore
 
     | _ -> INoEffect
   in
@@ -279,7 +279,7 @@ module DFO = struct
   let debug_guard (e: exp) (transition: t DF.guardaction) : unit =
     if !dbg_is_store_g then (
       ignore (printf "IsStored.DFO.doGuard: Expression %a guarding statement %d\n" 
-                d_exp e !current_stmt_id);
+                d_exp e !current_stmt.sid);
       match transition with
           DF.GUse new_state -> ignore (printf " propogates %a\n" pretty new_state);
         | DF.GDefault -> ignore (printf " has no special effect\n");
@@ -356,7 +356,7 @@ module DFO = struct
   (* Examine how an instruction effects the target. *)
   let doInstr (i: instr) (state: t): t DF.action = 
     
-    let transition = match (state, (instr_stores i !current_stmt_id)) with
+    let transition = match (state, (instr_stores i !current_stmt)) with
 
         (Error, _)
       | (_, INoEffect) ->
@@ -394,11 +394,11 @@ module DFO = struct
   (* Statement can "store" data by returning the target data in a return clause
    * that has the sos_claim attribute set. *)
   let doStmt (s: stmt) (state: t) = 
-    current_stmt_id := s.sid;
+    current_stmt := s;
 
     let transition = match s.skind with 
         Return (Some e, _) when (
-          (is_equiv_to_field_of !target [e] s.sid) && !claim_on_return
+          (is_equiv_to_field_of !target [e] s) && !claim_on_return
         ) ->
           
           if (state = MustTake || state = Null || state = ReturnTaken) then (
@@ -428,12 +428,12 @@ module DFO = struct
     
     (* Helper function used to determine if a binary comparison is comparing the
      * target expression to a null pointer *)
-    let is_target_and_null (e1: exp) (e2: exp) (id: int) : bool =
+    let is_target_and_null (e1: exp) (e2: exp) (s: stmt) : bool =
       let is_target = 
-        (IE.is_equiv_end e1 !target id) || (IE.is_equiv_end e2 !target id) 
+        (IE.is_equiv_start e1 !target s) || (IE.is_equiv_start e2 !target s) 
       in
       let is_null = 
-        (IE.is_equiv_end e1 IE.nullPtr id) || (IE.is_equiv_end e2 IE.nullPtr id)
+        (IE.is_equiv_start e1 IE.nullPtr s) || (IE.is_equiv_start e2 IE.nullPtr s)
       in
         if !dbg_is_store_g then (
           ignore (printf "Checking (target, NULL) on %a and %a: (%b, %b)\n"
@@ -445,43 +445,43 @@ module DFO = struct
     let transition = match e with
 
       | Lval lv 
-          when (IE.is_equiv_end (Lval lv) !target !current_stmt_id) ->
+          when (IE.is_equiv_start (Lval lv) !target !current_stmt) ->
           (* Unary check to see if item is NOT null.  Continue on with the
            * default action to ensure that the target is stored. *)
           DF.GDefault
 
       | UnOp (LNot, (Lval lv), _) 
-          when (IE.is_equiv_end (Lval lv) !target !current_stmt_id) ->
+          when (IE.is_equiv_start (Lval lv) !target !current_stmt) ->
           (* Unary check to see if item is Null.  Since we know that the target is
            * Null we can abort the check for this branch and directly insert the Null
            * state. *)
           DF.GUse Null
 
       | UnOp (LNot, (UnOp (LNot, (Lval lv), _)), _)
-          when (IE.is_equiv_end (Lval lv) !target !current_stmt_id) ->
+          when (IE.is_equiv_start (Lval lv) !target !current_stmt) ->
           (* Unary check to see if item is NOT Null.  This form results from the
            * elseGuard clause within the dataflow engine. Continue with default
            * action. *)
           DF.GDefault
 
       | BinOp (Ne, e1, e2, _) 
-          when (is_target_and_null e1 e2 !current_stmt_id) ->
+          when (is_target_and_null e1 e2 !current_stmt) ->
           (* Binary check to see if item is NOT null *)
           DF.GDefault
 
       | BinOp (Eq, e1, e2, _)
-          when (is_target_and_null e1 e2 !current_stmt_id) ->
+          when (is_target_and_null e1 e2 !current_stmt) ->
           (* Binary check to see if item is Null *)
           DF.GUse Null
          
       | UnOp (LNot, (BinOp (Ne, e1, e2, _)), _)
-          when (is_target_and_null e1 e2 !current_stmt_id) ->
+          when (is_target_and_null e1 e2 !current_stmt) ->
           (* Binary check to see if item is NOT NOT null.  This form results
            * from the elseGuard clause within the dataflow engine. *)
           DF.GUse Null
 
       | UnOp (LNot, (BinOp (Eq, e1, e2, _)), _)
-          when (is_target_and_null e1 e2 !current_stmt_id) ->
+          when (is_target_and_null e1 e2 !current_stmt) ->
           (* Binary check to see if item is NOT Null.  This form results 
            * from the elseGuard clause within the dataflow engine. *)
           DF.GDefault
@@ -569,7 +569,7 @@ let is_stored_instr
 
   let start_state = match i with
       Set (lv, _, _) 
-    | Call (Some lv, _, _, _) when ((is_equiv_to_field_of (Lval lv) !stores s.sid)) -> 
+    | Call (Some lv, _, _, _) when ((is_equiv_to_field_of (Lval lv) !stores s)) -> 
         Taken
     | _ -> 
         MustTake

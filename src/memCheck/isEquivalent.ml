@@ -168,6 +168,33 @@ module ListSet = struct
 end
 
 
+let set_intersect (s1:equiv_table) (s2:equiv_table): equiv_table =
+  (* For each set in the old state... *)
+  (* Examine each expression within the set... *)
+  (* If that expression is alread in the merged list of sets being generated
+   * ..(from this or previous passes) then do nothing and move to the next
+   * ..expression... *)
+  (* Else, find the intersection of the set containing the expression from
+   * ..the old state and each set in the new state and add this
+   * ..intersection to the merged output. *)
+  List.fold_left
+    (fun merged_list eq ->
+       (EquivSet.fold
+          (fun e tmp_merged_list -> 
+             if ((ListSet.e_mem e merged_list) || 
+                 (ListSet.e_mem e tmp_merged_list)) then 
+               tmp_merged_list
+             else (
+               let new_set = ListSet.intersection e eq s2 in
+                 if EquivSet.is_empty new_set then tmp_merged_list
+                 else new_set::tmp_merged_list
+             )
+          ) eq []
+       ) @ merged_list
+    )
+    [] s1
+;;
+
 
 (*
  ****************************************
@@ -208,35 +235,10 @@ module DFM = struct
       flush stdout;
     );
 
+    
     (* Create a NEW state by merging the two old state.  If the state is
      * different that the old state then continue iterating on the dataflow. *)
-    let state =
-
-      (* For each set in the old state... *)
-      (* Examine each expression within the set... *)
-      (* If that expression is alread in the merged list of sets being generated
-       * ..(from this or previous passes) then do nothing and move to the next
-       * ..expression... *)
-      (* Else, find the intersection of the set containing the expression from
-       * ..the old state and each set in the new state and add this
-       * ..intersection to the merged output. *)
-      List.fold_left
-        (fun merged_list eq ->
-           (EquivSet.fold
-              (fun e tmp_merged_list -> 
-                 if ((ListSet.e_mem e merged_list) || 
-                     (ListSet.e_mem e tmp_merged_list)) then 
-                   tmp_merged_list
-                 else (
-                   let new_set = ListSet.intersection e eq new_state in
-                     if EquivSet.is_empty new_set then tmp_merged_list
-                     else new_set::tmp_merged_list
-                 )
-              ) eq []
-           ) @ merged_list
-        )
-        [] old
-    in
+    let state = set_intersect old new_state in
 
       if (!dbg_is_equiv_c) then (
         ignore (printf "IS_EQUIV COMBINE: Outging state:\n");
@@ -749,17 +751,11 @@ let print_equiv_sets (id:int) =
           table
 ;;
 
-
-(* Helper function to return the items that an expression is equivalent to *)
-let get_equiv_set_end (e:exp) (id:int) : (exp list) =
-
+(* Helper function *)
+let get_equiv_set_helper (e:exp) (state:equiv_table) : (exp list) =
+  
   let e = stripCasts e in
 
-  let state = 
-    try (IH.find DFM.stmtStartData id)
-    with Not_found -> []
-  in
-      
   let direct = 
     try (EquivSet.elements (List.find (fun eq -> EquivSet.mem e eq) state))
     with Not_found -> [e]
@@ -775,8 +771,73 @@ let get_equiv_set_end (e:exp) (id:int) : (exp list) =
       List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) indirect;
       flush stdout;
     );
-
+    
     U.sort_and_uniq (indirect @ direct)
+;;
+
+
+(* Helper function to return the items that an expression is equivalent to *)
+let get_equiv_set_end (e:exp) (id:int) : (exp list) =
+
+  let state = 
+    try (IH.find DFM.stmtStartData id)
+    with Not_found -> []
+  in
+
+    if !dbg_is_equiv_get_equiv_set then (
+      ignore (printf "Equivalent to %a at the end of the statement:\n" d_exp (stripCasts e));
+    );
+    get_equiv_set_helper e state
+      
+;;
+
+
+(* Get equivalent expressions *)
+let get_equiv_set_start (e:exp) (s:stmt) : (exp list) =
+
+  (* Make a list of all the prior states *)
+  let prior_end_states = 
+    List.fold_left
+      (fun grow state ->
+         (try (IH.find DFM.stmtStartData s.sid) with Not_found -> []) :: grow
+      )
+      []
+      s.preds 
+  in
+    
+    
+  (* TODO: START HERE *)
+  (* I am guessing that I am improperly doing this merge and ending up
+   * with a more or less empty start set.  Test via:
+   *
+   * ./memory ../unitMemCheck/isStoredUnit07.c --dbg_is_store_f
+   * --dbg_is_equiv_get_equiv_set --dbg_is_equiv_stmt_summary
+   *
+   * *)
+  
+  let state = 
+    try
+      List.fold_left 
+        (fun grow s ->
+           ignore (printf "Folding:\n");
+           print_equiv_table s;
+           ignore (printf "into:\n");
+           print_equiv_table grow;
+           flush stdout;
+           set_intersect grow s) 
+        (List.hd prior_end_states) 
+        prior_end_states 
+    with Failure _ -> []
+  in
+  
+    ignore (printf "Ending with:\n");
+    print_equiv_table state;
+    flush stdout;
+
+    if !dbg_is_equiv_get_equiv_set then (
+      ignore (printf "Equivalent to %a at the start of the statement:\n" d_exp (stripCasts e));
+    );
+    get_equiv_set_helper e state
 ;;
 
 
@@ -808,7 +869,31 @@ let is_equiv_end (e1:exp) (e2:exp) (id:int) : (bool) =
 ;;
 
 
+let is_equiv_start (e1:exp) (e2:exp) (s:stmt) : (bool) =
 
+  let e1 = 
+    if (isZero e1) then e1
+    else stripCasts e1 
+  in
+
+  let e2 = 
+    if (isZero e2) then e2
+    else stripCasts e2 
+  in
+    
+  let unify_type (e: exp) : exp = match e with   
+      StartOf lv -> 
+        let e_new = Lval (mkMem (mkAddrOf lv) NoOffset) in
+          e_new
+    | _ -> e
+  in
+
+  let results = List.map unify_type (get_equiv_set_start e1 s) in
+  let query = unify_type e2 in
+
+    List.mem query results
+
+;;
 
 
 

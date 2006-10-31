@@ -171,7 +171,7 @@ let var_is_allocated (v: varinfo) (f: fundec) =
     (fun s ->
        let claim_list = IH.find DFF.stmtStartData s.sid in
          List.exists
-           (fun e -> IE.is_equiv_end (Lval (var v)) e s.sid)
+           (fun e -> IE.is_equiv_start (Lval (var v)) e s)
            claim_list
     )
     (U.get_return_statements f)
@@ -189,7 +189,7 @@ let return_is_allocated (f: fundec) : bool =
          Return (Some return, _) ->
              List.exists
                (fun e -> 
-                  IE.is_equiv_end return e s.sid)
+                  IE.is_equiv_start return e s)
                (IH.find DFF.stmtStartData s.sid)
        | _ -> false 
     )
