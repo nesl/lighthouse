@@ -51,17 +51,17 @@ val generate_equiv : Cil.fundec -> Cil.file -> unit;;
 
 (** Query the equivalency information to see if expression e1 is equivalent in
   * value to expression e2 *)
-val is_equiv : Cil.exp -> Cil.exp -> int -> bool;;
+val is_equiv_end : Cil.exp -> Cil.exp -> int -> bool;;
 
 (** Return the set of expressions that an expression is equivalent to at a given
   * point in the program
   *)
-val get_equiv_set : Cil.exp -> int -> Cil.exp list;;
+val get_equiv_set_end : Cil.exp -> int -> Cil.exp list;;
 
-(** Print the equivalency sets at the end of the given statement ID *)
-val print_equiv_sets : int -> unit;;
+(** Print the equivalency sets at the END of the given statement ID *)
+(* val print_equiv_sets : int -> unit;; *)
 
-(** Get  the equivalency sets at the end of the given statement ID *)
-val  get_equiv_sets : int -> Cil.exp list list;;
+(** Get  the equivalency sets at the END of the given statement ID *)
+(* val  get_equiv_sets : int -> Cil.exp list list;; *)
 
                                       

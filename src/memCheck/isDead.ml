@@ -99,7 +99,7 @@ let is_dead_exp (e:exp) : bool =
   let non_null = 
     List.filter 
       (fun e -> 
-         (not (IE.is_equiv e IE.nullPtr !currentStmt.sid)) && 
+         (not (IE.is_equiv_end e IE.nullPtr !currentStmt.sid)) && 
          (not (isZero (stripCasts e)))
       ) 
       sub_exps 

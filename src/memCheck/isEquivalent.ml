@@ -751,7 +751,7 @@ let print_equiv_sets (id:int) =
 
 
 (* Helper function to return the items that an expression is equivalent to *)
-let get_equiv_set (e:exp) (id:int) : (exp list) =
+let get_equiv_set_end (e:exp) (id:int) : (exp list) =
 
   let e = stripCasts e in
 
@@ -782,7 +782,7 @@ let get_equiv_set (e:exp) (id:int) : (exp list) =
 
 (* Retrun true if expression e1 must alias expression e2 *)
 (* TODO: The stripping of type casts is going to require a bit more thought *)
-let is_equiv (e1:exp) (e2:exp) (id:int) : (bool) =
+let is_equiv_end (e1:exp) (e2:exp) (id:int) : (bool) =
 
   let e1 = 
     if (isZero e1) then e1
@@ -801,26 +801,9 @@ let is_equiv (e1:exp) (e2:exp) (id:int) : (bool) =
     | _ -> e
   in
 
-  let results = List.map unify_type (get_equiv_set e1 id) in
+  let results = List.map unify_type (get_equiv_set_end e1 id) in
   let query = unify_type e2 in
 
-   (* 
-    List.iter 
-      (fun e -> 
-         (*  
-         ignore (printf "%a to %a (%a, %a) with %b\n" 
-                     d_exp query d_exp e 
-                     d_type (typeOf query) d_type (typeOf e) 
-                     (query = e));
-          *)
-           ignore (printf "%a to %a with %b\n" 
-                     d_exp query d_exp e 
-                     ((compare query e) = 0)
-           );
-      )
-      results;
-    *)
-    
     List.mem query results
 ;;
 

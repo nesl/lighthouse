@@ -74,7 +74,7 @@ let is_equiv_to_field_of (e: exp) (targets: exp list) (sid: int) : bool =
           let addrs = reduce_expression e in
           let aliases = 
             List.fold_left 
-              (fun l e -> (IE.get_equiv_set e sid) @ l)
+              (fun l e -> (IE.get_equiv_set_end e sid) @ l)
               [] addrs
           in
           let cleaned = U.sort_and_uniq aliases in
@@ -119,10 +119,10 @@ let is_equiv_to_field_of (e: exp) (targets: exp list) (sid: int) : bool =
   let l1 = ref [] in
   let debug = ref 0 in
 
-    l0 := IE.get_equiv_set e sid;
+    l0 := IE.get_equiv_set_end e sid;
     l1 := List.fold_left (fun l e -> (reduce_expression e) @ l) !l0 !l0;
     l1 := U.sort_and_uniq !l1;
-    l1 := List.fold_left (fun l e -> (IE.get_equiv_set e sid) @ l) [] !l1;
+    l1 := List.fold_left (fun l e -> (IE.get_equiv_set_end e sid) @ l) [] !l1;
     l1 := U.sort_and_uniq !l1;
       
     while not ((compare !l0 !l1) = 0) do
@@ -130,7 +130,7 @@ let is_equiv_to_field_of (e: exp) (targets: exp list) (sid: int) : bool =
       l0 := !l1;
       l1 := List.fold_left (fun l e -> (reduce_expression e) @ l) !l0 !l0;
       l1 := U.sort_and_uniq !l1;
-      l1 := List.fold_left (fun l e -> (IE.get_equiv_set e sid) @ l) [] !l1;
+      l1 := List.fold_left (fun l e -> (IE.get_equiv_set_end e sid) @ l) [] !l1;
       l1 := U.sort_and_uniq !l1;
     
     done;
@@ -174,14 +174,14 @@ let instr_stores (i: instr) (sid: int) : instr_status =
   let is_released (i: instr) (id: int) : bool = 
     let released_formals = U.get_released i in
       (List.length released_formals > 0) &&
-      (List.exists (fun release -> IE.is_equiv release !target id) released_formals)
+      (List.exists (fun release -> IE.is_equiv_end release !target id) released_formals)
   in
   
   
   let is_overwritten (i: instr) (id: int) : bool = 
     let claimed_formals = U.get_claim i in
     (List.length (claimed_formals) > 0) &&
-    (List.exists (fun release -> IE.is_equiv release !target id) claimed_formals
+    (List.exists (fun release -> IE.is_equiv_end release !target id) claimed_formals
     )
   in
     
@@ -189,8 +189,8 @@ let instr_stores (i: instr) (sid: int) : instr_status =
   let action = match i with
     (* TODO: These three could be incorrect if the target is also passed as a
      * formal in the expression *)
-    | Set (lv, _, _) when (IE.is_equiv (Lval lv) !target sid) -> IOverWrite
-    | Call (Some lv, _, _, _) when (IE.is_equiv (Lval lv) !target sid) -> IOverWrite
+    | Set (lv, _, _) when (IE.is_equiv_end (Lval lv) !target sid) -> IOverWrite
+    | Call (Some lv, _, _, _) when (IE.is_equiv_end (Lval lv) !target sid) -> IOverWrite
     | Call (_, _, _, _) when (is_overwritten i sid) -> IOverWrite
 
     | Set (lv, e, _) when ( 
@@ -430,10 +430,10 @@ module DFO = struct
      * target expression to a null pointer *)
     let is_target_and_null (e1: exp) (e2: exp) (id: int) : bool =
       let is_target = 
-        (IE.is_equiv e1 !target id) || (IE.is_equiv e2 !target id) 
+        (IE.is_equiv_end e1 !target id) || (IE.is_equiv_end e2 !target id) 
       in
       let is_null = 
-        (IE.is_equiv e1 IE.nullPtr id) || (IE.is_equiv e2 IE.nullPtr id)
+        (IE.is_equiv_end e1 IE.nullPtr id) || (IE.is_equiv_end e2 IE.nullPtr id)
       in
         if !dbg_is_store_g then (
           ignore (printf "Checking (target, NULL) on %a and %a: (%b, %b)\n"
@@ -445,20 +445,20 @@ module DFO = struct
     let transition = match e with
 
       | Lval lv 
-          when (IE.is_equiv (Lval lv) !target !current_stmt_id) ->
+          when (IE.is_equiv_end (Lval lv) !target !current_stmt_id) ->
           (* Unary check to see if item is NOT null.  Continue on with the
            * default action to ensure that the target is stored. *)
           DF.GDefault
 
       | UnOp (LNot, (Lval lv), _) 
-          when (IE.is_equiv (Lval lv) !target !current_stmt_id) ->
+          when (IE.is_equiv_end (Lval lv) !target !current_stmt_id) ->
           (* Unary check to see if item is Null.  Since we know that the target is
            * Null we can abort the check for this branch and directly insert the Null
            * state. *)
           DF.GUse Null
 
       | UnOp (LNot, (UnOp (LNot, (Lval lv), _)), _)
-          when (IE.is_equiv (Lval lv) !target !current_stmt_id) ->
+          when (IE.is_equiv_end (Lval lv) !target !current_stmt_id) ->
           (* Unary check to see if item is NOT Null.  This form results from the
            * elseGuard clause within the dataflow engine. Continue with default
            * action. *)
@@ -589,35 +589,4 @@ let is_stored_instr
 ;;
   
 
-
-
-
-  (* 
-  (* TODO: Should this be looking for field membership? *) 
-  let is_heap (e: exp) (id: int) : bool =
-    List.exists
-      (fun e -> match e with
-
-           Lval (Var v, NoOffset) ->
-             (* Used to cover IsEquivalent transformation *)
-             (Str.string_match (Str.regexp "__heap") v.vname 0)
-
-         | Lval (Mem (Lval (Var v, NoOffset)), NoOffset) ->
-             (* Used to cover SimpleMem transformation *)
-             (Str.string_match (Str.regexp "mem_") v.vname 0)
-
-         | _ -> false
-      )
-      (IE.get_equiv_set e id)
-  in
-   *)
-    (* 
-     else if (
-     (is_heap (Lval lv) sid) && 
-     (is_field_of !target [e] sid) 
-     ) then (
-     ignore (printf "SUCCESS!!!\n");
-     IStore
-     )
-     *)
 
