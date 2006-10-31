@@ -384,16 +384,6 @@ module DFM = struct
         (* Update the checked list *)
         checked := (!checked @ el);
      
-        (* 
-        ignore (printf "+ Direct aliases:\n");
-        List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) direct;
-        ignore (printf "- Indirect aliases:\n");
-        List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) indirect;
-        ignore (printf "* Checked:\n");
-        List.iter (fun e -> ignore (printf "  %a\n" d_exp e)) !checked;
-        flush stdout;
-         *)
-      
         U.sort_and_uniq (direct @ indirect)
     in
 
@@ -806,36 +796,19 @@ let get_equiv_set_start (e:exp) (s:stmt) : (exp list) =
   in
     
     
-  (* TODO: START HERE *)
-  (* I am guessing that I am improperly doing this merge and ending up
-   * with a more or less empty start set.  Test via:
-   *
-   * ./memory ../unitMemCheck/isStoredUnit07.c --dbg_is_store_f
-   * --dbg_is_equiv_get_equiv_set --dbg_is_equiv_stmt_summary
-   *
-   * *)
-  
   let state = 
     try
       List.fold_left 
-        (fun grow s ->
-           ignore (printf "Folding:\n");
-           print_equiv_table s;
-           ignore (printf "into:\n");
-           print_equiv_table grow;
-           flush stdout;
-           set_intersect grow s) 
+        (fun grow s -> set_intersect grow s) 
         (List.hd prior_end_states) 
         prior_end_states 
     with Failure _ -> []
   in
   
-    ignore (printf "Ending with:\n");
-    print_equiv_table state;
-    flush stdout;
-
     if !dbg_is_equiv_get_equiv_set then (
-      ignore (printf "Equivalent to %a at the start of the statement:\n" d_exp (stripCasts e));
+      ignore 
+        (printf "Equivalent to %a at the start of the statement:\n" 
+           d_exp (stripCasts e));
     );
     get_equiv_set_helper e state
 ;;

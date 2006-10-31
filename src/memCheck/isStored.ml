@@ -117,7 +117,6 @@ let is_equiv_to_field_of (e: exp) (targets: exp list) (s: stmt) : bool =
 
   let l0 = ref [] in
   let l1 = ref [] in
-  let debug = ref 0 in
 
     l0 := IE.get_equiv_set_start e s;
     l1 := List.fold_left (fun l e -> (reduce_expression e) @ l) !l0 !l0;
