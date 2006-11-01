@@ -112,12 +112,11 @@ Compiler
 ^^^^^^^^
 
 ----
-2006_02_16_10_13_16: old type = TFun(TNamed(int8_t, TInt(signed char, ), ),
+old type = TFun(TNamed(int8_t, TInt(signed char, ), ),
 ...
-2006_02_16_10_13_16: new type = TFun(TNamed(int8_t, TInt(signed char, ), ),
+new type = TFun(TNamed(int8_t, TInt(signed char, ), ),
 ...
 ----
-
 
 2006_02_07_05_06_10
 ~~~~~~~~~~~~~~~~~~~
@@ -129,28 +128,90 @@ ker_free(st.version_data);
 st.version_data = (msg_version_data_t*) ker_msg_take_data(KER_DFT_LOADER_PID, msg);
 ----
 
-*TODO*: May alias causing problems?  In genereal it should be okay to stare
-into a dead variable.  But may alias expansion may cause problems for this.
+----
+#line 256
+    __cil_tmp59 = (unsigned int )(& st) + 84;
+#line 256
+    __cil_tmp60 = (*((msg_version_data_t **)__cil_tmp59));
+#line 256
+    __cil_tmp61 = (void *)__cil_tmp60;
+#line 256
+    ker_free(__cil_tmp61);
+#line 257
+    __cil_tmp62 = (unsigned int )(& st) + 84;
+#line 257
+    (*((msg_version_data_t **)__cil_tmp62)) = (msg_version_data_t *)ker_msg_take_data((unsigned char)17,
+                                                                                      msg);
+----
 
-Store (255)
+This is a may alias problem.  We free something that may alias `&st` and then
+something that may alias that same `&st` appears on the right hand side of a
+SET expression.
+
+*TODO*: This is probably caused by may alias problems.  Not much we can do to
+fix it.
+
+Store (272)
 ^^^^^^^^^^^
 
 ----
-st.version_data = (msg_version_data_t*) ker_msg_take_data(KER_DFT_LOADER_PID, msg);
+fetcher_state_t *f = (fetcher_state_t*)
+    ker_msg_take_data(KER_DFT_LOADER_PID, msg);
+
+if (f == NULL) return -ENOMEM;
+
+if(is_fetcher_succeed(f)) {
 ----
 
-*TODO*: Argh!!!  I thought this had been cleaned up in my last round of bug
-fixes.  Store into global static variable `st` should not be a problem.  
-
-Store (330)
-^^^^^^^^^^^
+expands to:
 
 ----
-st.version_data = ker_malloc(sizeof(msg_version_data_t), KER_DFT_LOADER_PID);
+#line 274
+  tmp = (fetcher_state_t *)ker_msg_take_data((unsigned char)17, msg);
+#line 274
+  f = tmp;
+  } 
+  {
+  {
+#line 277
+  __cil_tmp8 = (void *)0;
+#line 277 
+  __cil_tmp9 = (unsigned int )__cil_tmp8;
+#line 277 
+  __cil_tmp10 = (unsigned int )f;
+  } 
+#line 277 
+  if (__cil_tmp10 == __cil_tmp9) {
+#line 277
+    return ((signed char)-12);
+  }
+  }
+  {
+#line 279
+  tmp___2 = is_fetcher_succeed(f);
+  }
+#line 279
+  if (tmp___2) {
+    {
+#line 287
+    tmp___0 = fetcher_get_requested_version(f);
+#line 287
+    tmp___1 = fetcher_get_requested_pid(f);
+#line 287
+    codemem_unload_module_not_version(tmp___1, tmp___0);
+#line 290
+    fetcher_commit(f, 1);
+#line 291
+    __cil_tmp11 = (void *)f;
+#line 291
+    ker_free(__cil_tmp11);
 ----
 
-*TODO*: Argh!!!  I thought this had been cleaned up in my last round of bug
-fixes.  Store into global static variable `st` should not be a problem.  
+See description of store problems below in module dated `2005_10_16_19_35_34`.
+
+*TODO*: We could change the assumption about equivalency updates to variables
+passed to functions.  If we change this assumption, we will still need to add
+annotations to the `fetcher_commit` and `fetcher_restart` functions.
 
 
 2005_10_16_19_35_34
@@ -182,9 +243,26 @@ fetcher_state_t *f = (fetcher_state_t*)
     }
 ----
 
-*MISSING ANNOTATION*: This error is (I hope!) caused from missing annotations
-on the various fecher calls `is_fetcher_succeed`, `fetcher_commit` and / or
-`fetcher_restart`.
+This transitions to:
+
+----
+#line 52
+          tmp = (fetcher_state_t *)ker_msg_take_data((unsigned char)18, msg);
+#line 52
+          f = tmp;
+#line 54
+          tmp___3 = is_fetcher_succeed(f);
+----
+
+The problem arrises from the call to `is_fetcher_succeed`.  The analysis
+conservativly assumes that the `is_equiv` information for a variable is lost
+when that variable is passed as a formal to a function.  Thus, the call to
+`is_fetcher_succeed` severs the tie between `f` and the heap data referenced
+by `tmp`.
+
+*TODO*: We could change the assumption about equivalency updates to variables
+passed to functions.  If we change this assumption, we will still need to add
+annotations to the `fetcher_commit` and `fetcher_restart` functions.
 
 
 ////////////////////////////////////////////////////////////
@@ -224,7 +302,8 @@ Store (159)
 s->command = (uint8_t *)ker_malloc(1, ADS7828_ID);
 ----
 
-*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+Need to add annotation for local store `s`.  After adding this annotation the
+problem false positive disapeers.
 
 
 ////////////////////////////////////////////////////////////
@@ -288,18 +367,9 @@ echo_uart
 Store (66)
 ^^^^^^^^^^
 
-----
-buff_to_send = (uint8_t*)ker_msg_take_data(s->pid, msg);
-if (buff_to_send != NULL){
-    LED_DBG(LED_GREEN_TOGGLE);
-    post_net(DFLT_APP_ID0, DFLT_APP_ID0, MSG_MOTE_TO_PC, msg_len, 
-            (void*)buff_to_send, SOS_MSG_RELEASE, UART_ADDRESS);
-}
-----
-
-*OLD API*: Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
+Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
 code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
-the checker.
+the checker.  Changing the define to reflect the current constent fixes this problem.
 
 
 ////////////////////////////////////////////////////////////
@@ -308,66 +378,16 @@ the checker.
 flooding
 --------
 
-2006_05_12_23_07_43
+2005_12_16_16_26_02
 ~~~~~~~~~~~~~~~~~~~
 
-Store (168)
-^^^^^^^^^^^
+Store (80, 90)
+^^^^^^^^^^^^^^
 
-----
-ker_change_own(pktpayload, MOD_FLOODING_PID);
-return post_net(MOD_FLOODING_PID, MOD_FLOODING_PID, 
-        MSG_FLOOD_DATA_PKT, payloadlen, pktpayload, 
-        SOS_MSG_RELEASE, BCAST_ADDRESS);
-----
-
-*TODO*: Hmm... This one should not be causing a problem.  Pehraphs Lighthouse
-is not properly treating `post_net`.
-
-
-2005_12_16_16_26
-~~~~~~~~~~~~~~~~
-
-Store (80)
-^^^^^^^^^^
-
-----
-dupbuff = ker_malloc(msg->len, MOD_FLOODING_PID);
-if (dupbuff == NULL) return SOS_OK;
-for (i = 0; i < msg->len; i++) {
-    dupbuff[i] = msg->data[i];
-}
-post_long(hdr->dst_pid, 
-        MOD_FLOODING_PID, 
-        hdr->dest_msg_type, 
-        msg->len, 
-        dupbuff, 
-        SOS_MSG_RELEASE);
-----
-
-*OLD API*: Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
-code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
-the checker.
-
-
-Store (90)
-^^^^^^^^^^
-
-----
-hdr = (flood_hdr_t*)ker_msg_take_data(MOD_FLOODING_PID, msg);
-if(hdr == NULL) return -ENOMEM;
-post_net(MOD_FLOODING_PID, 
-        MOD_FLOODING_PID, 
-        MSG_FLOOD_DATA_PKT, 
-        l, 
-        hdr, 
-        SOS_MSG_RELEASE, 
-        BCAST_ADDRESS);
-----
-
-*OLD API*: Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
-code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
-the checker.
+Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of code is
+using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into the
+checker.  Changing the define to reflect the current constent fixes both of
+these problems.
 
 
 Store (165)
@@ -380,9 +400,27 @@ return post_net(MOD_FLOODING_PID, MOD_FLOODING_PID,
         SOS_MSG_RELEASE, BCAST_ADDRESS);
 ----
 
-*OLD API*: Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
-code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
-the checker.
+expands to:
+
+----
+#line 165
+  __cil_tmp34 = (void *)pktpayload;
+#line 165
+  ker_change_own(__cil_tmp34, (unsigned char)140);
+#line 166
+  __cil_tmp35 = (void *)pktpayload;
+#line 166
+  tmp___0 = post_net((unsigned char)140, (unsigned char)140, (unsigned char)32, payloadlen,
+                     __cil_tmp35, (unsigned char)4, 65535U);
+----
+
+The problem here arises from `ker_change_own`.  As noted above, the analysis
+conservativly assumes that the `is_equiv` information for a variable is lost
+when that variable is passed as a formal to a function.  This severs the
+relation between the dynamic data stored into `__cil_tmp34` and `pktpayload`.
+
+*TODO*: We could change the assumption about equivalency updates to variables
+passed to functions.  
 
 
 ////////////////////////////////////////////////////////////
@@ -412,26 +450,23 @@ i2c_comm_ping_pong
 2006_02_20_00_18_43
 ~~~~~~~~~~~~~~~~~~~
 
-Store (114)
-^^^^^^^^^^^
+Store (114, 121)
+^^^^^^^^^^^^^^^^
 
 ----
 if ((s->sos_i2c_msg = ker_malloc(sizeof(Message), s->pid)) != NULL) {
 ----
 					
-*MISSING ANNOTATION*: Need to add annotation for local store `s`.
-
-Store (121)
-^^^^^^^^^^^
+and:
 
 ----
 if ((s->sos_i2c_msg->data = ker_malloc(s->msg_len,s->pid)) != NULL) {
 ----
 
-*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+Need to add annotation for local store `s`.  After adding this annotation the
+problem false positive disapeers.
 
-
-Dead (121)
+Dead (132)
 ^^^^^^^^^^
 
 ----
@@ -449,8 +484,12 @@ if (...) {
 s->state = T_I2C_COMM_SEND_SOS_I2C_MSG;
 ----
 
-*TODO*: May alias causing problems?  In genereal it should be okay to stare
-into a dead variable.  But may alias expansion may cause problems for this.
+This is a may alias problem.  We free something that may alias `s` and then
+something that may alias that same `s` appears on the right hand side of a
+SET expression.
+
+*TODO*: This is probably caused by may alias problems.  Not much we can do to
+fix it.
 
 
 ////////////////////////////////////////////////////////////
@@ -463,26 +502,24 @@ i2c_comm_tx
 2006_02_20_00_18_43
 ~~~~~~~~~~~~~~~~~~~
 
-Store (127)
-^^^^^^^^^^^
+Store (127, 134)
+^^^^^^^^^^^^^^^^
 
 ----
 if ((s->sos_i2c_msg = ker_malloc(sizeof(Message), s->pid)) != NULL) {
 ----
 
-*MISSING ANNOTATION*: Need to add annotation for local store `s`.
-
-Store (134)
-^^^^^^^^^^^
+and:
 						
 ----
 if ((s->sos_i2c_msg->data = ker_malloc(s->msg_len,s->pid)) != NULL) {
 ----
 
-*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+Need to add annotation for local store `s`.  After adding this annotation the
+problem false positive disapeers.
 
-Dead (145)
-^^^^^^^^^^
+Dead (145, 191, 254)
+^^^^^^^^^^^^^^^^^^^^
 
 ----
 if (...) {
@@ -499,11 +536,7 @@ if (...) {
 s->state = T_I2C_COMM_SEND_SOS_I2C_MSG;
 ----
 
-*TODO*: May alias causing problems?  In genereal it should be okay to stare
-into a dead variable.  But may alias expansion may cause problems for this.
-
-Dead (191)
-^^^^^^^^^^
+and:
 
 ----
 case MSG_I2C_SEND_DONE:
@@ -519,12 +552,7 @@ case MSG_I2C_SEND_DONE:
 }
 ----
 
-*TODO*: May alias causing problems?  In genereal it should be okay to stare
-into a dead variable.  But may alias expansion may cause problems for this.
-
-
-Dead (254)
-^^^^^^^^^^
+and:
 
 ----
 case MSG_ERROR:
@@ -538,8 +566,8 @@ case MSG_ERROR:
 }
 ----
 
-*TODO*: May alias causing problems?  In genereal it should be okay to stare
-into a dead variable.  But may alias expansion may cause problems for this.
+*TODO*: This is probably caused by may alias problems.  Not much we can do to
+fix it.
 
 
 ////////////////////////////////////////////////////////////
@@ -551,8 +579,8 @@ mag_sensor
 2006_08_30_23_09_58
 ~~~~~~~~~~~~~~~~~~~
 
-store (94)
-^^^^^^^^^^
+store (94, 191)
+^^^^^^^^^^^^^^^
 
 ----
 magnet_sensor_state_t *s = (magnet_sensor_state_t*) ker_get_module_state(MAG_SENSOR_PID);
@@ -560,18 +588,22 @@ magnet_sensor_state_t *s = (magnet_sensor_state_t*) ker_get_module_state(MAG_SEN
 s->i2c_data_ptr = ker_malloc(sizeof(uint16_t), MAG_SENSOR_PID);
 ----
 
-*TODO*: Need annotation for the dynamic creation of a store.  Blah.
+and:
 
-store (191)
-^^^^^^^^^^^
-	
 ----
 magnet_sensor_state_t *s = (magnet_sensor_state_t*) ker_get_module_state(MAG_SENSOR_PID);
 ...
 (s->i2c_data_ptr) = ker_malloc(sizeof(uint16_t), MAG_SENSOR_PID);
 ----
 
-*TODO*: Need annotation for the dynamic creation of a store.  Blah.
+The function `ker_get_module_state` returns a pointer to the specified
+module's persistent state.  In a sense, it dynamically creates a store.  We
+could create a new annotation for functions that create stores.  However, for
+this analysis I simply annotated the `s` variable as being a local store to
+generate the same effect.  This fixes the false positives above.
+
+*TODO*: Need annotation for the dynamic creation of a store.
+
 
 dead (302)
 ^^^^^^^^^^
@@ -591,8 +623,41 @@ else {
 }
 ----
 
-*TODO*: May alias causing problems?  In genereal it should be okay to stare
-into a dead variable.  But may alias expansion may cause problems for this.
+expands to:
+
+----
+#line 302
+__cil_tmp18 = (unsigned int )s;
+#line 302
+__cil_tmp19 = __cil_tmp18 + 8;
+#line 302
+__cil_tmp20 = (*((uint16_t **)__cil_tmp19));
+#line 302
+__cil_tmp21 = (void *)__cil_tmp20;
+#line 302
+ker_free(__cil_tmp21);
+#line 304
+ker_i2c_release_bus((unsigned char)132);
+    {
+#line 306
+        __cil_tmp22 = (unsigned int )s;
+#line 306
+        __cil_tmp23 = __cil_tmp22 + 15;
+#line 306
+        __cil_tmp24 = (*((uint8_t *)__cil_tmp23));
+#line 306
+        __cil_tmp25 = (int )__cil_tmp24;
+    }
+#line 306
+    if (__cil_tmp25 == 0) {
+----
+
+This is a may alias problem.  We free something that may alias `s` and then
+something that may alias that same `s` appears on the right hand side of a
+SET expression.
+
+*TODO*: This is probably caused by may alias problems.  Not much we can do to
+fix it.
 
 
 ////////////////////////////////////////////////////////////
@@ -604,8 +669,8 @@ mag_test_app
 2006_08_30_23_09_58
 ~~~~~~~~~~~~~~~~~~~
 
-Store (79)
-^^^^^^^^^^
+Store (79, 88)
+^^^^^^^^^^^^^^
 
 ----
 temp = ker_malloc(sizeof(uint8_t), MAG_TEST_PID);
@@ -615,11 +680,7 @@ s->state = MAG_TEST_APP_IDLE_0;
 break;
 ----
 
-*ANNOTATION*: Function `ker_sensor_control` either needs an annotation, or
-this is leaking data.
-
-Store (88)
-^^^^^^^^^^
+and:
 
 ----
 temp = ker_malloc(sizeof(uint8_t), MAG_TEST_PID);
@@ -629,72 +690,42 @@ s->state = MAG_TEST_APP_IDLE_1;
 break;
 ----
 
-*ANNOTATION*: Function `ker_sensor_control` either needs an annotation, or
-this is leaking data.
+Function `ker_sensor_control` was not annotated.  Adding this annotation
+eliminates the warnings above, and noted that `ker_sensor_control` does not
+properly store / release incoming data.
 
+*REAL BUG*: Code in module is safe, but the function `ker_sensor_control` fails
+to store / release incoming data.
 
 ////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////
 
-rats
-----
+rats (NEW RESULTS PENDING)
+--------------------------
 
 2006_03_29_19_29_21
 ~~~~~~~~~~~~~~~~~~~
 
-Store (452)
-^^^^^^^^^^^
+Store (452, 455, 456, 576, 580, 581)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ----
 s->ts_list = (timesync_t *)ker_malloc(sizeof(timesync_t), s->pid);
 ----
 
-*MISSING ANNOTATION*: Need to add annotation for local store `s`.
-
-Store (455)
-^^^^^^^^^^^
+and:
 
 ----
 s->ts_list->timestamps = (uint32_t *)ker_malloc(BUFFER_SIZE*sizeof(uint32_t), s->pid);
 ----
 
-*MISSING ANNOTATION*: Need to add annotation for local store `s`.
-
-Store (456)
-^^^^^^^^^^^
+and:
 
 ----
 s->ts_list->my_time = (uint32_t *)ker_malloc(BUFFER_SIZE*sizeof(uint32_t), s->pid);
 ----
 
-*MISSING ANNOTATION*: Need to add annotation for local store `s`.
-
-Store (497)
-^^^^^^^^^^^
-
-----
-float *buffer = (float *)ker_malloc(8*sizeof(float), s->pid);
-...
-post_net(s->pid, s->pid, MSG_DEBUG3, 8*sizeof(float), buffer, SOS_MSG_RELEASE, ROOT_NODE);
-----
-
-*TODO*: Hmm... This one should not be causing a problem.  Pehraphs Lighthouse
-is not properly treating `post_net`.
-
-Store (498)
-^^^^^^^^^^^
-
-----
-float *buffer2 = (float *)ker_malloc(8*sizeof(float), s->pid);
-...
-post_net(s->pid, s->pid, MSG_DEBUG3, 8*sizeof(float), buffer2, SOS_MSG_RELEASE, ROOT_NODE);
-----
-
-*TODO*: Hmm... This one should not be causing a problem.  Pehraphs Lighthouse
-is not properly treating `post_net`.
-
-Store (576)
-^^^^^^^^^^^
+and:
 
 ----
 ts_list_ptr = s->ts_list;
@@ -702,11 +733,7 @@ ts_list_ptr = s->ts_list;
 ts_list_ptr->next = (timesync_t *)ker_malloc(sizeof(timesync_t), s->pid);
 ----
 
-*MISSING ANNOTATION*: Need to add annotation for local store `s`.
-
-
-Store (580)
-^^^^^^^^^^^
+and:
 
 ----
 ts_list_ptr - s->ts_list;
@@ -714,11 +741,7 @@ ts_list_ptr - s->ts_list;
 ts_list_ptr->timestamps - (uint32_t *)ker_malloc(BUFFER_SIZE*sizeof(uint32_t), s->pid);
 ----
 
-
-*MISSING ANNOTATION*: Need to add annotation for local store `s`.
-
-Store (581)
-^^^^^^^^^^^
+and:
 
 ----
 ts_list_ptr - s->ts_list;
@@ -726,8 +749,34 @@ ts_list_ptr - s->ts_list;
 ts_list_ptr->my_time - (uint32_t *)ker_malloc(BUFFER_SIZE*sizeof(uint32_t), s->pid);
 ----
 
-*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+Need to add annotation for local store `s`.  After adding this annotation the
+problem false positive disapeers.
 
+
+Store (497, 498)
+^^^^^^^^^^^^^^^^
+
+----
+float *buffer = (float *)ker_malloc(8*sizeof(float), s->pid);
+...
+post_net(s->pid, s->pid, MSG_DEBUG3, 8*sizeof(float), buffer, SOS_MSG_RELEASE, ROOT_NODE);
+----
+
+and:
+
+----
+float *buffer2 = (float *)ker_malloc(8*sizeof(float), s->pid);
+...
+post_net(s->pid, s->pid, MSG_DEBUG3, 8*sizeof(float), buffer2, SOS_MSG_RELEASE, ROOT_NODE);
+----
+
+The problem arrises from an intervening function call that passes in both
+`buffer` and `buffer2` as formals.  The analysis conservativly assumes that
+the `is_equiv` information for a variable is lost when that variable is passed
+as a formal to a function.
+
+*TODO*: We could change the assumption about equivalency updates to variables
+passed to functions.  
 
 ///////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////
@@ -738,39 +787,22 @@ surge
 2005_10_16_19_35_34
 ~~~~~~~~~~~~~~~~~~~
 
-Store (168)
-^^^^^^^^^^^
-
-----	  
-pkt = (uint8_t*)ker_malloc(hdr_size + sizeof(SurgeMsg), SURGE_MOD_PID);
-if (pkt == NULL) break; 
-...
-post_long(TREE_ROUTING_PID, SURGE_MOD_PID, MSG_SEND_PACKET, hdr_size + sizeof(SurgeMsg), (void*)pkt, SOS_MSG_RELEASE);
-----
-
-*OLD API*: Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
-code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
-the checker.
-
-
 Store (205)
 ^^^^^^^^^^^
 
-----
-uint8_t *payload = ker_msg_take_data(SURGE_MOD_PID, msg); 
-post_net(SURGE_MOD_PID,
-        SURGE_MOD_PID,
-        msg->type,
-        msg->len,
-        payload,
-        SOS_MSG_RELEASE,
-        UART_ADDRESS);
-----
-
-*OLD API*: Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
+Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
 code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
-the checker.
+the checker.  Changing the define to reflect the current constent fixes this problem.
 
+2005_09_02_05_38_33
+~~~~~~~~~~~~~~~~~~~
+
+Store (166)
+^^^^^^^^^^^
+
+Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
+code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
+the checker.  Changing the define to reflect the current constent fixes this problem.
 
 ////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////
@@ -800,8 +832,8 @@ test_taophotosensor
 2005_11_17_12_24_15
 ~~~~~~~~~~~~~~~~~~~~
 
-Store (99)
-^^^^^^^^^^
+Store (99, 121)
+^^^^^^^^^^^^^^^
 
 ----
 buff = ker_malloc(sizeof(test_taosphotosensor_t), DFLT_APP_ID0);
@@ -812,13 +844,7 @@ if (buff != NULL) {
 }
 ----
 
-*OLD API*: Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
-code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
-the checker.
-
-
-Store (121)
-^^^^^^^^^^^
+and:
 
 ----
 buff = ker_malloc(sizeof(test_taosphotosensor_t), DFLT_APP_ID0);
@@ -828,9 +854,45 @@ if (buff != NULL){
 }
 ----
 
-*OLD API*: Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
-code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
-the checker.
+expands to:
+
+----
+buff = (uint8_t *)ker_malloc(4U, (unsigned char)128);
+{
+#line 100
+    __cil_tmp30 = (void *)0;
+#line 100
+    __cil_tmp31 = (unsigned int )__cil_tmp30;
+#line 100
+    __cil_tmp32 = (unsigned int )buff;
+}
+#line 100
+if (__cil_tmp32 != __cil_tmp31) {
+    {
+#line 101
+        memcpy(buff, s, 4U);
+#line 102
+        __cil_tmp33 = (unsigned char )4U;
+#line 102
+        __cil_tmp34 = (void *)buff;
+#line 102
+        post_net((unsigned char)128, (unsigned char)128, (unsigned char)32,
+                __cil_tmp33, __cil_tmp34, (unsigned char)4, 65535U);
+#line 103
+        ker_led((unsigned char)8);
+    }
+}
+----
+
+The current value of the SOS_MSG_RELEASE flag is 0x04.  This version of code
+is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into the
+checker.  Changing this fixes the above false positive.
+
+*TODO*: However, given the expansion listed above, I am suprised that the call
+to `memcpy` is not causing problems.  I would think (as described above) that
+passing `buff` as an lval to this function would remove the is equivalent
+state for `buff`.  This would cause the `post_net` to fail to see the
+relationship between `buff` and the heap data.  Understand this!
 
 
 ////////////////////////////////////////////////////////////
@@ -849,37 +911,37 @@ Store (86)
 s->tpsn_ptr = (tpsn_t *)ker_malloc(sizeof(tpsn_t), s->pid);
 ----
 
-*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+Need to add annotation for local store `s`.  After adding this annotation the
+problem false positive disapeers.
+
 
 ////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////
 
-test_uart_comm_tx
------------------
+test_uart_comm_tx (NEW RESULTS PENDING)
+---------------------------------------
 
 2006_02_02_05_12_45
 ~~~~~~~~~~~~~~~~~~~
 
-Store (125)
-^^^^^^^^^^^
+Store (125, 131)
+^^^^^^^^^^^^^^^^
 					
 ----
 if ((s->sos_uart_msg = ker_malloc(sizeof(Message), s->pid)) != NULL) {
 ----
 
-*MISSING ANNOTATION*: Need to add annotation for local store `s`.
-
-Store (131)
-^^^^^^^^^^^
+and:
 
 ----
 if ((s->sos_uart_msg->data = ker_malloc(s->msg_len,s->pid)) != NULL) {
 ----
 
-*MISSING ANNOTATION*: Need to add annotation for local store `s`.
+Need to add annotation for local store `s`.  After adding this annotation the
+problem false positive disapeers.
 
-Dead (142)
-^^^^^^^^^^
+Dead (142, 186, 201)
+^^^^^^^^^^^^^^^^^^^^
 
 ----
 if (...) {
@@ -896,13 +958,8 @@ if (...) {
 s->state = T_UART_COMM_SEND_SOS_UART_MSG;
 ----
 
-*TODO*: May alias causing problems?  In genereal it should be okay to stare
-into a dead variable.  But may alias expansion may cause problems for this.
+and:
 
-
-Dead (186)
-^^^^^^^^^^
-		
 ----
 case MSG_UART_SEND_DONE:
 {
@@ -917,11 +974,7 @@ case MSG_UART_SEND_DONE:
 }
 ----
 
-*TODO*: May alias causing problems?  In genereal it should be okay to stare
-into a dead variable.  But may alias expansion may cause problems for this.
-
-Dead (201)
-^^^^^^^^^^
+and:
 
 ----
 case MSG_ERROR:
@@ -935,8 +988,8 @@ case MSG_ERROR:
 }
 ----
 
-*TODO*: May alias causing problems?  In genereal it should be okay to stare
-into a dead variable.  But may alias expansion may cause problems for this.
+*TODO*: This is probably caused by may alias problems.  Not much we can do to
+fix it.
 
 ////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////
@@ -944,19 +997,11 @@ into a dead variable.  But may alias expansion may cause problems for this.
 tpsn
 ----
 
-2006_10_21_00_01_19
+2006_03_20_10_17_13
 ~~~~~~~~~~~~~~~~~~~
 
 Compile
 ^^^^^^^
-
-----
-tpsn.c:286: Bug: typeOffset: Field on a non-compound
-Fatal error: exception Errormsg.Error
-----
-
-2006_03_20_15_55_19
-^^^^^^^^^^^^^^^^^^^
 
 ----
 tpsn.c:246: Bug: typeOffset: Field on a non-compound
@@ -975,7 +1020,6 @@ tree_routing
 
 Store (557)
 ^^^^^^^^^^^
-
 ----
 uint8_t msg_len = msg->len;
 tr_hdr_t *hdr = (tr_hdr_t*)
@@ -1031,43 +1075,39 @@ if(dup == false) {
 } 
 ----
 
-*MISSING ANNOTATION*: This error is (I hope!) caused from missing annotation
-for `sys_free`.
-
+Missing the annotation for `sys_free`.  Adding in the annotation fixes this
+false positive.  Pretty complex code to think over!  Note the bug in the
+similar code below.
 
 2005_10_16_19_35_34
 ~~~~~~~~~~~~~~~~~~~
 
-Store (212)
-^^^^^^^^^^^
+Store (212, 536)
+^^^^^^^^^^^^^^^^
 
 ----
 tr_hdr_t *hdr = (tr_hdr_t*)
     ker_msg_take_data(TREE_ROUTING_PID, msg);
-    if(hdr == NULL) return -ENOMEM;
-    bool dup;
-    if(msg->saddr != my_id){
-        update_neighbor(s, msg->saddr, entohs(hdr->seqno), &dup);
-    }
+if(hdr == NULL) return -ENOMEM;
+bool dup;
+if(msg->saddr != my_id){
+    update_neighbor(s, msg->saddr, entohs(hdr->seqno), &dup);
+}
 DEBUG("<TR> src = %d, hop = %d\n", 
         entohs(hdr->originaddr),
         hdr->originhopcount);
 post_long(hdr->dst_pid, TREE_ROUTING_PID, 
         MSG_TR_DATA_PKT, msg->len, msg->data, 	
         SOS_MSG_RELEASE);
-return SOS_OK;
 ----
 
-*REAL BUG*: User claims data into `hdr`, but then (incorrectly) uses
-`msg->data` in the call to `post_long`.
-
-
-Store (536)
-^^^^^^^^^^^
+and:
 
 ----
-tr_hdr_t *hdr = (tr_hdr_t*)
-    ker_msg_take_data(TREE_ROUTING_PID, msg);
+static int8_t tr_send_data(tree_route_state_t *s, Message *msg)
+{
+    tr_hdr_t *hdr = (tr_hdr_t*)
+        ker_msg_take_data(TREE_ROUTING_PID, msg);
     bool dup;
     uint16_t my_id = ker_id();
     if(hdr == NULL) return -ENOMEM;
@@ -1087,46 +1127,50 @@ tr_hdr_t *hdr = (tr_hdr_t*)
             return -EINVAL;
         }
     } 
-if(s->gbCurrentHopCount >= hdr->hopcount) {
-    //Possible cycle??
-    ker_free(hdr);
-    return -EINVAL;
-}
-if(my_id != entohs(hdr->originaddr)) {
-    update_neighbor(s, msg->saddr, entohs(hdr->seqno), &dup);
-} else {
-    dup = false;
-}
-if(dup == false) {
-    hdr->hopcount = s->gbCurrentHopCount;
-    if(my_id != entohs(hdr->originaddr)){
-        hdr->seqno = ehtons(s->gCurrentSeqNo++); 
-    } else {
-        hdr->seqno = ehtons(s->gCurrentSeqNo); 
+    if(s->gbCurrentHopCount >= hdr->hopcount) {
+        //Possible cycle??
+        ker_free(hdr);
+        return -EINVAL;
     }
-    post_net(TREE_ROUTING_PID, TREE_ROUTING_PID,
-            MSG_TR_DATA_PKT, msg->len, msg->data,     
-            SOS_MSG_RELEASE, s->gpCurrentParent->id);
-    DEBUG("<TR> Forward data: %d <-- %d, orig(%d)\n", 
-            s->gpCurrentParent->id, node_address, entohs(hdr->originaddr));
-    return SOS_OK;		
-} else {
-    ker_free(hdr);
-    return -EINVAL;
+    if(my_id != entohs(hdr->originaddr)) {
+        update_neighbor(s, msg->saddr, entohs(hdr->seqno), &dup);
+    } else {
+        dup = false;
+    }
+    if(dup == false) {
+        hdr->hopcount = s->gbCurrentHopCount;
+        if(my_id != entohs(hdr->originaddr)){
+            hdr->seqno = ehtons(s->gCurrentSeqNo++); 
+        } else {
+            hdr->seqno = ehtons(s->gCurrentSeqNo); 
+        }
+        post_net(TREE_ROUTING_PID, TREE_ROUTING_PID,
+                MSG_TR_DATA_PKT, msg->len, msg->data,     
+                SOS_MSG_RELEASE, s->gpCurrentParent->id);
+        DEBUG("<TR> Forward data: %d <-- %d, orig(%d)\n", 
+                s->gpCurrentParent->id, node_address, entohs(hdr->originaddr));
+        return SOS_OK;		
+    } else {
+        ker_free(hdr);
+        return -EINVAL;
+    }
 }
 ----
 
-*REAL BUG*: User again taking data ownership with `ker_msg_take_data` but
-directly (and incorrectly) releasing data pointed to by `msg->data`.
+*REAL BUG*: Heap data stored into `hdr` fails to be freed.  This is due to the
+programmer incorrectly using `ker_msg_take_data` and attempting to use
+`msg->data` directly.
 
-2005_09_06_19_14_28
+
+2005_09_02_04_03_40
 ~~~~~~~~~~~~~~~~~~~
 
-Store (149)
-^^^^^^^^^^^
+Store (132)
+^^^^^^^^^^^		
 
 ----
-neighbor_entry_t *nb = (neighbor_entry_t*) ker_malloc(sizeof(neighbor_entry_t),TREE_ROUTING_PID);
+neighbor_entry_t *nb = (neighbor_entry_t*) 
+    ker_malloc(sizeof(neighbor_entry_t),TREE_ROUTING_PID);
 if(nb != NULL) {
     init_nb(nb, ker_id());
     nb->parent = ker_id();
@@ -1135,57 +1179,30 @@ if(nb != NULL) {
     s->gpCurrentParent = nb;      
     s->gbCurrentHopCount = 0;	
 } else {
-    //! PANIC!!!
-    DEBUG("<TR> NO Memory for tree routing!!!\n");
+    DEBUG("NO Memory for tree routing!!!\n");
 }
 ----
 
 *REAL BUG*: User fails to free data in the `else` clause.
 
-Store (411)
+
+Store (389)
 ^^^^^^^^^^^
-	
+
 ----
 nb = (neighbor_entry_t*) ker_malloc(sizeof(neighbor_entry_t), TREE_ROUTING_PID);
-if(nb == NULL) return NULL;
-init_nb(nb, saddr);
-nb->next = s->nb_list;
-s->nb_list = nb;
-s->nb_cnt++;
-return nb;
 ----
 
-*MISSING ANNOTATION*: Need to add annotation for local store `s`.  Note
-however that we are dealing with a linked list.  While adding the annoation
-for `s` should fix this problem, linked lists in general cause the checker
-grief.
+Need to add annotation for local store `nb`.  After adding this annotation the
+problem false positive disapeers.
 
-Store (486)
+
+Store (464)
 ^^^^^^^^^^^
 
-----
-if(pkt == NULL) return;
-
-//! pack  nb list
-nb = s->nb_list;
-i = 0;
-while(nb != NULL) {
-    pkt->estList[i].id = ehtons(nb->id);
-    pkt->estList[i].receiveEst = nb->receiveEst;
-    nb = nb->next;
-    i++;
-}
-pkt->seqno = ehtons((s->gCurrentSeqNo)++);
-pkt->hopcount = s->gbCurrentHopCount;
-pkt->parent = (s->gpCurrentParent) ? ehtons(s->gpCurrentParent->id) : ehtons(BCAST_ADDRESS);
-pkt->estEntries = s->nb_cnt;
-DEBUG("<TR> Send Beacon seq = %d\n", entohs(pkt->seqno));
-post_net(TREE_ROUTING_PID, TREE_ROUTING_PID, MSG_BEACON_PKT, pkt_size, pkt, SOS_MSG_RELEASE, BCAST_ADDRESS);
-----
-
-*TODO*: Hmm... This one should not be causing a problem.  Pehraphs Lighthouse
-is not properly treating `post_net`.
-
+Current value of the SOS_MSG_RELEASE flag is 0x04.  This version of
+code is using 0x10.  The current value of SOS_MSG_RELEASE is hard coded into
+the checker.  Changing the define to reflect the current constent fixes this problem.
 
 
 ////////////////////////////////////////////////////////////
@@ -1206,8 +1223,8 @@ payload = sys_msg_take_data(msg);
 sys_post_uart(TR_TEST_PID, msg->type, msg_len, payload, SOS_MSG_RELEASE, BCAST_ADDRESS);
 ----
 
-*TODO*: Hmm... This one should not be causing a problem.  Pehraphs Lighthouse
-is not properly treating `post_net`.
+The `sys_post_*` API is not currently handled in the checker.  Changing this
+to the (nearly) identical `post_*` API will fix this problem.
 
 
 ////////////////////////////////////////////////////////////
@@ -1226,8 +1243,8 @@ Store (108)
 s->msgPtrs[i] = ker_malloc(MSG_LEN, UART_SPEED_ID);
 ----
 
-*MISSING ANNOTATION*: Need to add annotation for local store `s`.
-
+Need to add annotation for local store `s`.  After adding this annotation the
+problem false positive disapeers.
 
 
 
