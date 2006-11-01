@@ -143,10 +143,11 @@ sensor-network programmers can make use of the expressiveness of
 dynamic resource management while retaining confidence in the
 reliability of their applications.
 
-We have instantiated our approach as a tool for statically ensuring
+We have instantiated our approach in Lighthouse, a tool for statically ensuring
 proper management of dynamic memory in the SOS operating
-system~\cite{sos}, which employs the C programming language.  We focus
-on SOS memory management initially because of our experience with
+system~\cite{sos}. 
+%which employs the C programming language.  
+We focus on SOS memory management initially because of our experience with
 memory errors as users of SOS, which was our primary motivation.
 However, the underlying dataflow analyses are generic, and our tool is
 parametrized by the API for resource creation, ownership transfer, and

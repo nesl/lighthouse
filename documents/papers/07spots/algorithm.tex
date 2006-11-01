@@ -1,7 +1,9 @@
 \section{Analysis Specification and Implementation}
 \label{sec:alg}
 
-We identify two key properties for proper use of resources.  No
+We now describe Lighthouse, a tool that checks for proper use of resources
+in SOS code.
+Lighthouse checks two key properties relating to resources:  No
 resource should be leaked, and there should be no dangling pointers.
 More precisely:
 
@@ -15,8 +17,8 @@ just allocated.
 states that once a resource has been freed, it is never accessed
 again.
 
-We now explore how these two properties are implemented in the
-Lighthouse tool and some of the resultant limitations.
+We now explain how these two properties are checked using the
+Lighthouse tool, and mention some of the limitations of our implementation.
 
 %
 % NOTE: This was the formal LTL specification that is not very popular
@@ -109,7 +111,6 @@ Lighthouse tool and some of the resultant limitations.
 
 \subsection{Implementation}
 
-
 Our tool checks programs at compile time for violations of the above
 two properties.  The tool performs a static dataflow analysis for each
 property on a program's control-flow graph (CFG), which statically
@@ -121,7 +122,7 @@ ker\_free}.  To identify a module's persistent state in SOS, we
 provide a new attribute {\tt lh\_state} for formal parameters.  For
 example, the {\tt state} argument to a module's event handler would be
 annotated with this attribute.  This is required since SOS modules are
-passed in a reference to their state, rather than directly accessing a
+passed in a reference to their persistent state, rather than directly accessing a
 global variable.
 
 Our dataflow analyses are implemented in the CIL front end for
@@ -134,6 +135,8 @@ conservatively approximate the dynamic conditions that must be
 satisfied.  Two notable issues are the treatment of pointer aliasing
 and of procedure calls, which we discuss in turn.
 
+\smallskip\noindent
+{\bf Pointer Aliasing.}
 First, the invariants described above depend on dynamic alias
 information, which cannot be exactly computed at compile time.
 Instead, two standard approximations are {\em must-alias} analysis and
@@ -175,13 +178,35 @@ This positive result is likely due to the stylized ways in which
 dynamic memory is manipulated in sensor-network applications, which
 our ownership model captures well.  
 
-Second, our simple core language used to specify the resource
-invariants does not contain procedure calls, which must be properly
-handled in our implementation.  As mentioned above, our analyses are
-{\em intraprocedural}, meaning that each procedure is checked in
-isolation.  To make such checking both correct and precise, we rely on
-the ownership attributes {\tt lh\_claim} and {\tt lh\_release}, as
-described in the previous section.
+\smallskip\noindent
+{\bf Interprocedural Analysis.}
+Our analysis is {\em modular}:  each function in a module or component
+is analyzed in isolation.  To make checking of a function body precise
+in the presence of calls to other functions, we employ {\em ownership
+attributes} for function headers that capture the memory-related
+behavior of a called function.  We add two attributes to the C code:
+{\tt lh\_claim} and {\tt lh\_release}.  A formal parameter or return
+value that has the {\tt lh\_claim} attribute indicates that the caller
+must take ownership of the associated memory after a call.  This
+annotation, for example, would be used to annotate a function that
+wraps a call to {\tt ker\_malloc} within SOS, allowing that function's
+callers to be properly checked without access to the function's
+implementation.  Similarly, an {\tt lh\_release} attribute on a formal
+parameter indicates that ownership of the parameter is transferred
+from the caller of the function to the callee.  If a parameter does
+not have an ownership attribute, memory ownership is unchanged.  Our
+tool ensures that these attributes are employed wherever necessary,
+when checking the implementation of each function.  In practice, we
+have found that a small set of annotations is sufficient for precise
+analysis.
+
+%Second, our simple core language used to specify the resource
+%invariants does not contain procedure calls, which must be properly
+%handled in our implementation.  As mentioned above, our analyses are
+%{\em intraprocedural}, meaning that each procedure is checked in
+%isolation.  To make such checking both correct and precise, we rely on
+%the ownership attributes {\tt lh\_claim} and {\tt lh\_release}, as
+%described in the previous section.
 
 Given such attributes, the proper handling of procedure calls becomes
 straightforward.  A procedure call statement is treated logically by
@@ -199,6 +224,7 @@ is particularly important in a system like SOS, in which modules can
 be linked and unlinked dynamically.  In such a setting, the ``rest''
 of the system is a moving target, so it is not really possible to
 consider whole-program analysis.
+
 
 
 \subsection{Limitations}

@@ -7,33 +7,26 @@ TOS_MsgPtr receive(TOS_MsgPtr received, bool fromUART) {
             fromUART ? "UART" : "radio");
     if ((!sendPending) &&
             (received->group == (TOS_AM_GROUP & 0xff))) {
-
         result_t ok;
 
         nextReceiveBuffer = ourBuffer;
         ourBuffer = received;
         dbg(DBG_USR1, "GenericBase forwarding packet to %s\n",
                 fromUART ? "radio" : "UART");
-        if (fromUART)
-        {
+        if (fromUART) {
             call Leds.redToggle();
             ok = call RadioSend.send(received);
-        }
-        else
-        {
+        } else {
             call Leds.greenToggle();
             received->addr = TOS_UART_ADDR;
             ok = call UARTSend.send(received);
         }
-        if (ok != FAIL)
-        {
+        if (ok != FAIL) {
             dbg(DBG_USR1, "GenericBase send pending\n");
             sendPending = TRUE;
-        }
-        else {
+        } else {
             call Leds.yellowToggle();
         }
-
     }
     return nextReceiveBuffer;
 }

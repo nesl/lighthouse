@@ -1,8 +1,9 @@
-\section{Illustrative Examples of Tracking Resource Usage}
+\section{Examples of Resource Tracking}
 \label{sec:example}
 
 We illustrate our technique for static checking of dynamic resources
-through two example applications.  First is the surge application in
+through two example resource usage settings, one in SOS and one in TinyOS.  
+First is the surge application in
 SOS that uses dynamically allocated memory to pass data buffers through
 protocol stacks.  Second is the generic base component from TinyOS
 that uses swapping of statically allocated messages to efficiently
@@ -133,14 +134,17 @@ buffer.  If a message is currently pending, the handler simply ignores
 the message and returns the incoming message buffer to be reused.
 
 A key property demonstrated by this TinyOS component is that of buffer
-swapping.  Buffer swapping is throughout systems when dynamic buffer
-creation is not desired or when dynamic buffer creation is simply not
-allowed and is is a common technique used within TinyOS to allow data
+swapping.  Buffer swapping 
+%is used throughout systems when dynamic buffer
+%creation is not desired or when dynamic buffer creation is simply not
+%allowed and 
+is a common technique used within TinyOS to allow data
 to quickly pass through stacks of components.  Rather than
 dynamically allocating a new buffer, a call stack can simply return a
-free buffer to the caller.  In the the TinyOS environment, handlers
+free buffer (out of a pool of statically allocated buffers)
+to the caller.  In the TinyOS environment, handlers
 that implement buffer swapping have implicit memory ownership
-responsibilities.  The handler can be though of needing to claim the
+responsibilities.  The handler can be thought of needing to claim the
 incoming {\tt TOS\_MsgPtr} and release a buffer to the caller.  Note
 that this can be accomplished by returning the incoming buffer.
 
@@ -177,9 +181,8 @@ sensor network operating systems to provide a protocol governing
 memory management that is sufficient to ensure the absence of memory
 errors.  Our protocol makes explicit a common programming idiom in
 sensor-network systems, whereby data is rarely shared but instead
-follows a producer/consumer model.  We have built a tool that checks
-for violations of this protocol on each SOS module at compile time.
-
+follows a producer/consumer model.  
+%
 Informally, the rules of the protocol can be stated as follows:
 %
 \begin{itemize}
@@ -201,6 +204,8 @@ Because only the owner can manipulate or free its memory, dangling
 pointers are avoided.  Because all memory must be either freed,
 released or persistently stored by its owner, memory leaks are
 avoided.
+In the next section, we shall describe a tool for SOS modules that checks
+for violations of this protocol on each SOS module at compile time.
 
 
 \subsubsection{Applying Ownership Protocol to {\tt surge}}
@@ -236,8 +241,8 @@ or storing the data for which it has taken ownership.
 
 \subsubsection{Applying Ownership Protocol to {\tt GenericBaseM}}
 
-It is also easy to show that the {\tt GenericBaseM} module follows the
-ownership model described above.  Upon entry to the {\tt receive}
+Similarly, the {\tt GenericBaseM} module follows the
+ownership protocol. Upon entry to the {\tt receive}
 event handler the {\tt GenericBaseM} component owns the buffer
 referenced by the global variable {\tt ourBuffer} and gains ownership
 of the {\tt received} buffer passed into the function.  Within the
@@ -245,32 +250,11 @@ body of the function the handler, these are the only two buffers
 accessed, although they are at times accessed via the alias {\tt
 nextReceiveBuffer}.  At the end of the handler the buffer aliased by
 {\tt nextReceiveBuffer} is returned to the calling function.  Note
-that regardless of the path taken through the handler, at the call to
-return the returned buffer is distinct from the buffer persistently
+that regardless of the path taken through the handler, at the 
+return point, the returned buffer (pointed to by {\tt nextReceiveBuffer})
+is distinct from the buffer persistently
 stored in {\tt ourBuffer}.  Thus the returned buffer is not accessed
-by this component after the call to return.
+by this component after the return.
 
-
-\subsection{Function Attributes}
-
-Our analysis is {\em modular}:  each function in a module or component
-is analyzed in isolation.  To make checking of a function body precise
-in the presence of calls to other functions, we employ {\em ownership
-attributes} for function headers that capture the memory-related
-behavior of a called function.  We add two attributes to the C code:
-{\tt lh\_claim} and {\tt lh\_release}.  A formal parameter or return
-value that has the {\tt lh\_claim} attribute indicates that the caller
-must take ownership of the associated memory after a call.  This
-annotation, for example, would be used to annotate a function that
-wraps a call to {\tt ker\_malloc} within SOS, allowing that function's
-callers to be properly checked without access to the function's
-implementation.  Similarly, an {\tt lh\_release} attribute on a formal
-parameter indicates that ownership of the parameter is transferred
-from the caller of the function to the callee.  If a parameter does
-not have an ownership attribute, memory ownership is unchanged.  Our
-tool ensures that these attributes are employed wherever necessary,
-when checking the implementation of each function.  In practice, we
-have found that a small set of annotations is sufficient for precise
-analysis.
 
 
