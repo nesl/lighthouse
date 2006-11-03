@@ -700,14 +700,14 @@ to store / release incoming data.
 ////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////
 
-rats (NEW RESULTS PENDING)
---------------------------
+rats
+----
 
 2006_03_29_19_29_21
 ~~~~~~~~~~~~~~~~~~~
 
-Store (452, 455, 456, 576, 580, 581)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Store (452, 455, 456) 
+^^^^^^^^^^^^^^^^^^^^^
 
 ----
 s->ts_list = (timesync_t *)ker_malloc(sizeof(timesync_t), s->pid);
@@ -725,7 +725,12 @@ and:
 s->ts_list->my_time = (uint32_t *)ker_malloc(BUFFER_SIZE*sizeof(uint32_t), s->pid);
 ----
 
-and:
+Need to add annotation for local store `s`.  After adding this annotation the
+problem false positive disapeers.
+
+
+Store (576, 580, 581)
+^^^^^^^^^^^^^^^^^^^^^
 
 ----
 ts_list_ptr = s->ts_list;
@@ -749,9 +754,11 @@ ts_list_ptr - s->ts_list;
 ts_list_ptr->my_time - (uint32_t *)ker_malloc(BUFFER_SIZE*sizeof(uint32_t), s->pid);
 ----
 
-Need to add annotation for local store `s`.  After adding this annotation the
-problem false positive disapeers.
+These three are stored onto a linked list.  While the head of the linked list
+is realated to the store `s`, iterations through the linked list cause this
+information to be lost before the `ker_malloc` calls listed above.
 
+*TODO*: Not too much we can do with linked data structures.
 
 Store (497, 498)
 ^^^^^^^^^^^^^^^^
@@ -918,8 +925,8 @@ problem false positive disapeers.
 ////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////
 
-test_uart_comm_tx (NEW RESULTS PENDING)
----------------------------------------
+test_uart_comm_tx
+-----------------
 
 2006_02_02_05_12_45
 ~~~~~~~~~~~~~~~~~~~
