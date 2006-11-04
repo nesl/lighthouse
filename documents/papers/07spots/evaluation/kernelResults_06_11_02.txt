@@ -1,0 +1,211 @@
+////////////////////////////////////////
+cc1k_radio.c
+
+Store (521)
+
+Low layer manipulation of data ownership by radio.  Not too much to do to fix
+this.
+
+False Positive.
+
+////////////////////////////////////////
+i2c.c
+
+Dead (217)
+
+May alias bug.
+
+False Positive.
+
+////////////////////////////////////////
+i2c_system.c
+
+Store (340)
+
+Missing annotations on a series of driver specific functions.
+
+
+////////////////////////////////////////
+
+Store (246)
+
+May alias bug.
+
+False Positive.
+
+Double Store (306, 311, 340)
+
+Function `ker_cam_add` conditionally takes data.  Analysis does not handle the
+rare event where `ker_cam_add` fails to take data.  Note that the checker
+currently reports this as a "not stored" type error.
+
+False Positive.
+
+Dead (310)
+
+Error condition from a `ker_cam_add`.  See above.
+
+False Positive.
+
+Dead (333)
+
+Buffer used within a loop.
+
+////////////////////////////////////////
+malloc.c
+
+Store (530)
+
+Base level allocation function.
+
+False Positive.
+
+Store (sys_free)
+
+Base level allocatino function.
+
+False Positive.
+
+////////////////////////////////////////
+message.c
+
+Return (ker_msg_take_data)
+
+Base level allocation function.
+
+False Positive.
+
+Store (169)
+
+Base level allocation function.
+
+False Positive.
+
+Return (sys_msg_take_data)
+
+Base level allocation function.
+
+False Positive.
+
+////////////////////////////////////////
+message_net.c
+
+Return (msg_duplicate)
+
+Missing annotations to kernel specific functions.
+
+Store (87)
+
+Kernel funk.
+
+False Positive.
+
+Store (sos_msg_dispatch)
+
+Base level allocation function.
+
+False Positive.
+
+Store (243)
+
+Kernel funk.
+
+False Positive.
+
+////////////////////////////////////////
+message_queue.c
+
+Store (mq_enqueue)
+
+Linked list.
+
+False Positive.
+
+Dead (371)
+
+May alias.
+
+False Positive.
+
+////////////////////////////////////////
+sensor.c
+
+Store (ker_sensor_control)
+
+Not sure how the checker found that formal should be released.  I must have
+left this in some other random part of the code :-(  Regardless, this one is
+true.
+
+BUG (but need to figure out how we realized the function should release data)
+
+////////////////////////////////////////
+sos_cam.c
+
+Store (ker_cam_add)
+
+Does not store on all paths.
+
+BUG
+
+Store (49)
+
+Linked list badness combined with function generating store.
+
+False Positive.
+
+Dead (91)
+
+May alias problems.
+
+False Positive.
+
+////////////////////////////////////////
+sos_module_fetcher.c
+
+Store (117, fetcher_restart)
+
+Linked list.
+
+False Positive.
+
+Dead (167, 451, 468)
+
+May alias problems.
+
+False positive.
+
+Store (436)
+
+Dynamic store creation.
+
+False Positive.
+
+Dead (669)
+
+Funky error case.
+
+False Positive.
+
+////////////////////////////////////////
+sos_uart.c
+
+Low layer memory manipulation.
+
+False Positive.
+
+////////////////////////////////////////
+uart.c
+
+Store (158, 163, 366, 388, 460)
+
+Hmm...  Combination of an array index on global seems to be causing problems.
+Worth looking into.  TODO.
+
+False Positive.
+
+Dead (370, 531)
+
+May alias problems.
+
+False Positive.
+
