@@ -1,74 +1,22 @@
 \section{Evaluation}
 \label{sec:eval}
 
-
 \subsection{Quantifying Dynamic Memory Usage in SOS}
-
-%% \begin{table}
-%% \begin{small}
-%% \centering 
-%% \begin{tabular}{| l | r | r |} 
-    
-%%     \hline
-
-%%     \textbf{Function} & \textbf{Total uses} & \textbf{Module uses} \\
-%% % & \textbf{of 46371 SLOC} & \textbf{of 12990 SLOC} \\
-
-%%     \hline
-%%     \multicolumn{3}{|c|}{\textbf{Primary operations to allocate memory}} \\
-%%     \hline
-
-%%     ker\_malloc & 135 & 68 \\
-%%     \hline
-%%     ker\_msg\_take\_data & 25 & 23 \\
-%%     \hline
-%%     msg\_create & 15 & 1 \\
-
-%%     \hline
-%%     \multicolumn{3}{|c|}{\textbf{Primary operations to release memory}} \\
-%%     \hline
-
-%%     ker\_free & 124 & 46 \\
-%%     \hline
-%%     SOS\_MSG\_RELEASE & 116 & 66 \\
-
-%%     \hline
-%%     \multicolumn{3}{|c|}{\textbf{Summary of other memory manipulations}} \\
-%%     \hline
-    
-%%     Other memory & 39 & 7 \\
-%%     \hline
-
-%% \end{tabular} 
-%% %
-%% \end{small}
-%% \centering
-%% %
-%% \caption{Memory usage in SOS}
-%% %
-%% \label{tab:alloc}
-%% %
-%% \end{table}
 
 First we performed a study to understand the prevalence of dynamic
 memory operations in the SOS source.  The SOS API includes a number of
-functions that manipulate memory.  These functions include {\tt
-ker\_malloc} and {\tt ker\_free} to allocate and free data, {\tt
-ker\_msg\_take\_data} and {\tt SOS\_MSG\_RELEASE} used to transfer
-data ownership, and a handful of functions that employ these
-primitives to allocate specific kinds of data structures.  Examining
-the SOS CVS head from April 2006 reveals that nearly one memory
-operation appears per 100 source lines of code (SLOC).  Of the 46371
-SLOC examined, 12990 are from modules written by end users to build
-applications, rather than from the implementation of SOS itself and
-associated drivers.  The frequency of memory operations in end-user
-modules is even higher than the overall average, with one such
-operation for every 60 SLOC.  
-%% Table~\ref{tab:alloc} summarizes the use of dynamic memory.
-These findings indicate that memory management is an important part of
-sensor-network programming in SOS.
-%% Further, anecdotal evidence from the developers' mailing list suggests that
-%% memory leaks are an important class of bugs.
+functions that manipulate memory.  These functions are used to allocate, free,
+and transfer ownership of blocks of memory.  To quantify the use of these
+functions within SOS, we examine the frequency of memomory manipulation
+functions by user modules. 
+
+The CVS head from October 2006 reveals 36 modules totaling 5824 lines of
+source code.  Within this sample there are 178 lines of code using a memorey
+manipulation function.  This is about one such function call for every 32
+lines of code.  Similarly, looking at all historic version of all SOS modules
+reveals a similar density of function calls.  These findings indicate that
+memory management has been and continues to be an important part of resource
+management in SOS.
 
 
 \subsection{Validating SOS End-User Modules}
