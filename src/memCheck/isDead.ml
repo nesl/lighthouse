@@ -127,7 +127,8 @@ let safe_instruction (i:instr) : status =
     if (!dbg_is_dead_i) then (
       ignore (printf "IsDead.safe_instruction: Instruction %a\n" d_instr i); 
       if unsafe then (
-        ignore (printf "dereferences dead expression %a\n" d_exp !target)
+        ignore (printf "dereferences dead expression %a via expression %a\n" 
+                  d_exp !target d_exp (List.hd (List.filter is_dead_exp incoming_exps)))
       ) else (
         ignore (printf "is safe with respect to expression %a\n" d_exp !target)
       );
