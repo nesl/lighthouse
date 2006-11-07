@@ -34,9 +34,9 @@ both dynamic memory allocation and thread creation.
 Frameworks built on
 top of sensor network systems also include components that make
 resources dynamically available to other parts of the system.  The
-VanGo framework's buffer pool for
+VanGo~\cite{greenstein05vango} framework's buffer pool for
 TinyOS is an example of this form of dynamic resource 
-management~\cite{greenstein05vango}.
+management.
 
 %
 % NOTE: With the addition of buffer swapping in TinyOS added above, is
@@ -67,7 +67,7 @@ applications.
 For example, consider the architecture of a simple sensor-network
 sense and send application.
 %, shown in Figure~\ref{fig:surge-dataflow}.
-Like many sensor-network applications, this application is
+Like many sensor-network applications, this application can be
 arranged in a dataflow architecture:  raw sensed data captured at the
 sensors moves through various filters
 % (via the {\tt surge} module)
@@ -98,7 +98,8 @@ memory.
 Our key insight is that data transfer between
 modules in sensor-network applications 
 typically does not lead to sharing, but instead follows a
-producer-consumer pattern.  % Therefore, sensor network programmers
+producer-consumer pattern.  
+% Therefore, sensor network programmers
 % typically implement correct and efficient resource management using
 % implicit {\em ownership-based} data access protocols. 
 In this style,
@@ -157,13 +158,13 @@ system~\cite{sos}.
 %which employs the C programming language.  
 We focus on SOS memory management because of our experience with
 memory errors as users of SOS, which was our initial motivation.
-However, the underlying dataflow analyses are generic, and our tool is
+However, the underlying dataflow analyses are generic, and Lighthouse is
 parametrized by the API for resource creation, ownership transfer, and
 resource deletion.  Therefore, we believe that our tool can be easily
 adapted both to statically track ownership for other kinds of
 resources and to handle C-based operating systems other than SOS.
 
-We evaluated our tool on the historic versions of all user modules in
+We evaluated Lighthouse on the historic versions of all user modules in
 the SOS CVS repository, as well as on the SOS kernel.  Overall, we ran
 the checker on about 40,000 lines of code.  The tool identified 25
 suspect memory operations of which eight were actual memory errors in the
