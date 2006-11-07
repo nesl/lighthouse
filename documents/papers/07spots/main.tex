@@ -140,29 +140,51 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+
+% Start of patch for 5 authors
+\def\more-auths{%
+\end{tabular}
+\begin{tabular}{c}}
+% End of patch
+
 \begin{document}
 \title{Static Checking for Dynamic Resource Management \\ in Sensor
   Network Systems}
 
-\numberofauthors{1}
+\numberofauthors{3}
 
 \author{
-\alignauthor Roy Shea \hspace{.125in} Shane Markstrum \hspace{.125in} Todd
-Millstein \hspace{.125in} Rupak Majumdar \hspace{.125in} Mani Srivastava\\
-       \affaddr{Computer Science Department}\\
-       \affaddr{University of California, Los Angeles}\\
-       \email{\{roy, smarkstr, todd, rupak\}@cs.ucla.edu \hspace{.25in} mbs@ucla.edu}
-%\alignauthor Mani Srivastava\\
-%       \affaddr{Electrical Engineering Department}\\
-%       \affaddr{University of California, Los Angeles}\\
-%       \email{mbs@ucla.edu}
-%\alignauthor Todd Millstein\\
-%       \affaddr{UCLA}\\
-%       \email{todd@cs.ucla.edu}
-%\alignauthor Rupak Majumdar\\
-%       \affaddr{UCLA}\\
-%       \email{rupak@cs.ucla.edu}
+\alignauthor Roy Shea\\
+       \affaddr{Dept. Comp. Sci.}\\
+       \affaddr{UCLA}\\
+       \email{roy@cs.ucla.edu}
+\alignauthor Shane Markstrum\\
+       \affaddr{Dept. Comp. Sci.}\\
+       \affaddr{UCLA}\\
+       \email{smarkstr@cs.ucla.edu}
+\alignauthor Todd Millstein\\
+       \affaddr{Dept. Comp. Sci.}\\
+       \affaddr{UCLA}\\
+       \email{todd@cs.ucla.edu}
+\vskip1pc  % optional
+\more-auths
+\alignauthor Rupak Majumdar\\
+       \affaddr{Dept. Comp. Sci.}\\
+       \affaddr{UCLA}\\
+       \email{rupak@cs.ucla.edu}
+\alignauthor Mani Srivastava
+       \affaddr{Dept. Elec. Eng.}\\
+       \affaddr{UCLA}\\
+       \email{mbs@ucla.edu}
 }
+% 
+% 
+\maketitle
+%
+
+
+
+
 
 % \additionalauthors{
 % %
