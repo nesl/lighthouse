@@ -1,7 +1,7 @@
 # Makefile for CAV paper
 LATEX = latex
 
-all: main.dvi main.ps
+all: main.dvi main.ps pdf
 
 TEXSRCS = main.tex related.tex abstract.tex introduction.tex caseExample.tex \
 		  algorithm.tex evaluation.tex conclusion.tex sw.bib
@@ -42,4 +42,4 @@ main.ps: main.dvi
 pdf:	main.ps
 	ps2pdf main.ps
 clean:
-	rm -f *.aux *.log main.ps *.dvi *.blg *.toc
+	rm -f *.aux *.log main.ps *.dvi *.blg *.toc main.pdf
