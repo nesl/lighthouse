@@ -2,24 +2,16 @@
 \label{sec:related}
 
 
-\mynote{I think we should add in a reference or two to John Regehr's
-work.  He is doing some similar work to statically analyze code for
-sensor networks (using CIL for that matter).  For example, "Memory
-Safety and Untrusted Extensions for TinyOS".}
-
-
-As mentioned earlier, the SOS operating system~\cite{sos} includes
-ownership annotations that are used to dynamically track memory
-ownership.  These annotations tell the kernel which module owns each
-block of dynamically allocated memory.  When a module is removed from
-the running system, the kernel automatically deallocates all the
-memory that the module owns.  However, ownership annotations in SOS
-are {\em trusted}.  For example, missing annotations can cause the
-kernel's information to become out of date.  Also, there are no checks
-that owners and nonowners meet their obligations.  For example,
-nothing prevents a module from allocating memory and neglecting to
-eventually free it.  Our work grew out of a desire to prevent these
-kinds of errors from occurring in SOS applications.
+As mentioned earlier, the memory manager in the SOS operating
+system~\cite{sos} includes ownership annotations that are used by the kernel
+to dynamically track memory ownership.  When a module is removed from the
+running system, the kernel automatically deallocates all the memory that the
+module owns.  However, ownership annotations in SOS are {\em trusted}.  For
+example, missing annotations can cause the kernel's information to become out
+of date.  Also, there are no checks that owners and nonowners meet their
+obligations.  For example, nothing prevents a module from allocating memory
+and neglecting to eventually free it.  Our work grew out of a desire to
+prevent these kinds of errors from occurring in SOS applications.
 
 
 Other sensor network platforms have included support for static
@@ -28,7 +20,9 @@ nesC~\cite{nesC} language for sensor networks employs a whole-program
 analysis to statically detect race conditions.  As another example,
 the galsC~\cite{TinyGALS, galsC} language for embedded systems employs
 an analysis to ensure the type safety of connections between
-components.
+components.  More recent work on Safe TinyOS and
+UTOS~\cite{regehr06memory} combines static analysis with run time
+protection of memory within sensor network systems.
 
 
 A complementary approach to improving the reliability of sensor
