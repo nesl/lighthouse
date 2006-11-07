@@ -163,12 +163,11 @@ resource deletion.  Therefore, we believe that our tool can be easily
 adapted both to statically track ownership for other kinds of
 resources and to handle C-based operating systems other than SOS.
 
-\mynote{Update to reflect the current numbers.}
 We evaluated our tool on the historic versions of all user modules in
 the SOS CVS repository, as well as on the SOS kernel.  Overall, we ran
-the checker on about 46,000 lines of code.  The tool identified 88
-suspect memory operations of which 16 were actual memory errors in the
-historic versions of the user modules, as well as 28 suspect memory
+the checker on about 40,000 lines of code.  The tool identified 25
+suspect memory operations of which eight were actual memory errors in the
+historic versions of the user modules, as well as 35 suspect memory
 operations of which two were actual memory errors in the SOS kernel.
 The latter finding is somewhat surprising, since the SOS kernel code
 is relatively mature and was written by systems programming experts.
