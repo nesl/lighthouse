@@ -116,33 +116,33 @@ can cause serrious problems for sensor network applications.
 
 \smallskip\noindent{\bf Potential problems with {\tt GenericBaseM}}
 
-\mynote{Extend this example.  Add line numbers.}
-%
 The \code{recieve} interface implemented in {\tt GenericBaseM}, and in
 other end user components that recive messages, depends on proper use
-of buffer swapping.  Problems arrise if a component attempts to store
-a pointer to the incomming buffer for latter access and then returns a
-pointer to that same buffer.  In this situation two different
+of buffer swapping.  Problems arise if a component attempts to store a
+pointer to the incomming buffer for latter access and then returns a
+pointer to that same buffer, as would be the case if if line 10 were
+left out of figure~\ref{genericbase}.  In this situation two different
 components now have references to a buffer that each component belives
 it has exclusive access to.  Or if a TinyOS component should return a
-fresh buffer and fail to creat a persistent reference to the
-incomming buffer, buffers would be leaked.  Added confusion arrises in
-more complex code such as that in {\tt GenericBaseM} that returns
-different buffers depending on specific conditions. 
+fresh buffer and fail to creat a persistent reference to the incomming
+buffer, buffers would be leaked.  In figure~\ref{genericbase} this
+could happen if line 02 were ommitted.  Added confusion arrises in
+more complex code, such as the \code{if} statement at line 06 in {\tt
+GenericBaseM}, that returns different buffers depending on specific
+conditions. 
 
 
 \smallskip\noindent{\bf Incorrect versions of {\tt surge}}
 
-\mynote{Extend this example.  Add line numbers.}
-%
-SOS's original concept of ownership as described above provides
-developers with a framework for designing modular programs. While this
-can help reduce the complexity of managing dynamic memory, it is not
-sufficient to prevent memory errors such as dangling pointers and
-memory leaks.  For example, nothing prevents a module from freeing
-some memory while another module (or even the same module) still has a
-pointer to that memory.  If that pointer is ever accessed later, an
-invalid dereference will result.  
+SOS development runs into similar difficulties with its dynamic
+memory.  Leaking memory is a problem in all systems that allow dynamic
+memory creation.  This would occure in {\tt surge} if the
+\code{SOS\_MSG\_RELEASE} flag were left out of the call to
+\code{post\_net} on line 23 of figure~\ref{surge}.  Further, tricky
+dangling pointer would result from forgetting to claim ownership of
+the incoming data before it is sent out over the UART at line 20 of
+figure~\ref{surge}.
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
