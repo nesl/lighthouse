@@ -1,11 +1,12 @@
 \section{Analysis Specification and Implementation}
 \label{sec:alg}
 
-We now describe Lighthouse, a tool that checks for proper use of resources
-in SOS code.
-Lighthouse checks two key properties relating to resources:  No
-resource should be leaked, and there should be no dangling pointers.
-More precisely:
+Motivated by the observation that a simple ownership protocol can be
+used to reason about proper resource usage common to sensor networks,
+we developed Lighthouse to look for violations of this protocol within
+SOS code.  Lighthouse checks two key properties relating to resources:
+No resource should be leaked, and there should be no dangling
+pointers.  More precisely:
 
 \smallskip\noindent {\bf No Leaks.} This first property defines the
 absence of resource leaks by enforcing that along every program
