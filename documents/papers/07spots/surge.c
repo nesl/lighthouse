@@ -1,4 +1,4 @@
-\begin{footnotesize}
+\begin{scriptsize}
 \begin{verbatim}
 01 int8_t surge_module(void *state, Message *msg)
 02 {
@@ -32,4 +32,4 @@
 30   return SOS_OK;
 31 }
 \end{verbatim}
-\end{footnotesize}
+\end{scriptsize}

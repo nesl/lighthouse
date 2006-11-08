@@ -1,13 +1,13 @@
-\section{Examples of Resource Tracking}
+\section{Resource Management and Ownership}
 \label{sec:example}
 
-We now explore resource usage within sensor network operating systems using two
-different case examples: buffer swapping within {\tt GenericBaseM} from TinyOS
-and dynamic memory management in {\tt surge} from SOS.
+In this section we illustrate the benefits and pitfalls of dynamic
+resource management for sensor-network applications through two
+examples, from TinyOS and SOS respectively.  We then demonstrate how
+an ownership discipline naturally captures the requirements for proper
+resource management in these systems.
 
-\subsection{Resource usage in Sensor Networks}
-
-\smallskip\noindent{\bf Resource usage in {\tt GenericBaseM}}
+\subsection{Buffer Swapping in TinyOS}
 
 \begin{figure}[t]
 \input{GenericBaseM.c}
@@ -15,50 +15,165 @@ and dynamic memory management in {\tt surge} from SOS.
 interface}\label{fig:genericbase}}
 \end{figure}
 
+\mynote{Make sure all of this is true!}
+Applications in TinyOS typically receive data from the network stack
+by implementing the {\tt receive} event handler from the
+\mynote{INTERFACE} interface.  This handler is passed a
+\code{TOS\_MsgPtr}, which is a pointer to the incoming data, as well
+as a flag describing the data source.  Passing a pointer 
+obviates the need for copying, 
+allowing the receiver to naturally and efficiently access the data.
 
-Figure~\ref{fig:genericbase} shows a portion of the TinyOS component
-that implements the {\tt receive} event handler for {\tt
+To obtain the benefits of passing data by reference without resorting
+to dynamic memory allocation, TinyOS commonly
+employs a {\em buffer-swapping} protocol.  Under this protocol the
+{\tt receive} handler must return a \code{TOS\_MsgPtr} that points to
+a free buffer, thereby replacing the buffer passed to it by the caller.
+In this way, the network layer can pass buffers by reference to its
+clients without running out of memory.
+
+As an example, 
+Figure~\ref{fig:genericbase} shows 
+the {\tt receive} event handler in {\tt
 GenericBaseM}, an application that uses a sensor node as a bridge
-between a base station and the rest of a sensor network.  The
-\code{receive} event handler is passed in a \code{TOS\_MsgPtr}
-pointing to the incoming message and a flag describing the message
-source.  If there are no messages waiting to be sent, the handler
-forwards the message out over the bridged interface and returns a
-pointer to a free message buffer.  If a message is currently pending,
-the handler simply ignores the message and returns the incoming
-message buffer to be reused.
+between a base station and the rest of a sensor network.  
+If there are no messages waiting to be sent (line 6), the handler
+forwards the message out over the bridged interface.  It also sets
+{\tt nextReceiveBuffer}, which is returned at line 29, to a free
+message buffer {\tt ourBuffer}.  If a message is currently pending,
+the handler simply ignores the incoming message.  In that case, {\tt
+  nextReceiveBuffer} points to the incoming buffer (line 02), which
+is therefore returned to the caller to be reused.
 
-A key property demonstrated by this TinyOS component is that of buffer
-swapping.  Buffer swapping is a common technique used within TinyOS to
-allow data to quickly pass through stacks of components.  Rather than
-dynamically allocating a new buffer, a call stack can simply return a
-free buffer (out of a pool of statically allocated buffers) to the
-caller.  In the TinyOS environment, handlers that implement buffer
-swapping have implicit memory ownership responsibilities.  The handler
-can be thought of needing to claim the incoming \code{TOS\_MsgPtr} and
-release a buffer to the caller.  Note that this can be accomplished by
-returning the incoming buffer.
+While the code in Figure~\ref{fig:genericbase} properly implements the
+buffer-swapping protocol, this is not necessarily obvious, due to the
+dependence on which path is taken through the conditional at line 6.  
+Further, small changes to the code can easily violate the
+protocol and cause critical application errors.  For example, suppose
+the programmer failed to update {\tt nextReceiveBuffer} at line 10.
+In that case, the handler would be simultaneously forwarding the
+received message pointer over the bridged interface and returning it to the
+caller for reuse.  If the caller reuses the buffer while it is still
+being accessed by the message receiver, undefined behavior will result.   
 
 
-\smallskip\noindent{\bf Resource usage in {\tt surge}}
+% The \code{receive} interface implemented in {\tt GenericBaseM}, and in
+% other end user components that receive messages, depends on proper use
+% of buffer swapping.  Problems arise if a component attempts to store a
+% pointer to the incoming buffer for latter access and then returns a
+% pointer to that same buffer, as would be the case if if line 10 were
+% left out of figure~\ref{genericbase}.  In this situation two different
+% components now have references to a buffer that each component believes
+% it has exclusive access to.  Or if a TinyOS component should return a
+% fresh buffer and fail to create a persistent reference to the incoming
+% buffer, buffers would be leaked.  In figure~\ref{genericbase} this
+% could happen if line 02 were omitted.  Added confusion arises in
+% more complex code, such as the \code{if} statement at line 06 in {\tt
+% GenericBaseM}, that returns different buffers depending on specific
+% conditions. 
+
+
+% A key property demonstrated by this TinyOS component is that of buffer
+% swapping.  Buffer swapping is a common technique used within TinyOS to
+% allow data to quickly pass through stacks of components.  Rather than
+% dynamically allocating a new buffer, a call stack can simply return a
+% free buffer (out of a pool of statically allocated buffers) to the
+% caller.  In the TinyOS environment, handlers that implement buffer
+% swapping have implicit memory ownership responsibilities.  The handler
+% can be thought of needing to claim the incoming \code{TOS\_MsgPtr} and
+% release a buffer to the caller.  Note that this can be accomplished by
+% returning the incoming buffer.
+
+
+\subsection{Dynamic Memory Allocation in SOS}
 
 \begin{figure}[t]
 \input{surge.c}
 \caption{SOS implementation of {\tt surge}\label{fig:surge}}
 \end{figure}
 
-Figure~\ref{fig:surge} shows a portion of the SOS module that
-implements {\tt surge}, a simple sensor network application that takes
+SOS is an operating system for sensor networks that 
+supports dynamically loaded and unloaded software modules.
+The SOS kernel provides an API for these modules to dynamically
+allocate memory, which can simplify applications and allow them to
+make more efficient usage of memory.
+%As shown in Figure~\ref{fig:surge}, 
+The SOS functions \code{ker\_malloc} and \code{ker\_free} are similar
+to their C namesakes, respectively
+allocating and disposing of memory.  
+
+As in C, programmers are responsible for manually managing memory.  
+Because this can be tedious and error prone, the
+SOS kernel tracks memory {\em ownership} in order to provide a simple
+form of garbage collection.  A module acquires initial
+ownership of memory that it allocates via \code{ker\_malloc}.  The SOS
+kernel also provides an API that allows modules to release ownership
+of data that it sends and take ownership of data that it receives.
+The kernel automatically garbage-collects all memory owned by a module when that
+module is unloaded, as well as all memory whose ownership is 
+released by a sender but not
+taken by the corresponding receiver.  
+
+As an example, Figure~\ref{fig:surge} shows a portion of the SOS module that
+implements {\tt surge}, a simple application that takes
 sensor readings and sends the readings over a multihop network to a
-base station~\cite{nesC}.  The module's persistent state and an
+base station~\cite{nesC}.  SOS modules employ an event-driven style.  
+The {\tt surge} module's persistent state (which is maintained by the
+kernel) and an
 incoming message are passed to the \code{surge\_module} function,
-which uses a \code{switch} statement to dispatch the message to a
-specific handler.  The \code{MSG\_DATA\_READY} handler causes a new
-message to be created with the most recent sensor data, encapsulated,
-and sent out via a tree routing mechanism.  The
-\code{MSG\_TR\_DATA\_PKT} handler is executed at the root of a data
-routing tree when a data message arrives, and takes control of the
-incoming encapsulated message so that it can be forwarded over a UART.
+which is the module's top-level event handler.  The handler
+uses a \code{switch} statement to dispatch based on the kind of
+message received.  
+When sensor data becomes available at a node
+(\code{MSG\_DATA\_READY}), the handler allocates a new message (line
+9) to hold the data and sends it out via a tree-routing mechanism
+(line 12).  The \code{SOS\_MSG\_RELEASE} flag on this
+\code{post\_long} call indicates that the current module releases
+ownership of \code{pkt}.  When the data arrives at the root of the
+routing tree
+(\code{MSG\_TR\_Data\_PKT}), the module takes ownership of the data
+via the kernel call \code{ker\_msg\_take\_data}.  (If the sender did
+not release ownership, then the kernel allocates a new copy of the
+data for the receiver.)  It then forwards the
+data over the network, releasing ownership in the process.
+
+The code in Figure~\ref{fig:surge} properly manages dynamic memory via the
+SOS kernel's API.  However, this fact is
+not at all obvious, as it depends on a complex relationship between the code's 
+uses of
+\code{ker\_malloc} and \code{ker\_msg\_take\_data} for acquiring memory
+and its uses of \code{ker\_free} and \code{SOS\_MSG\_RELEASE} for
+releasing memory.  As in the TinyOS example above, small changes to
+the code can cause critical errors.  For example, suppose the
+programmer fails to take ownership of the incoming data at line 20.
+Assuming the data was released by the sender, the SOS kernel will then
+automatically free this memory when the handler returns, causing a
+dangling pointer access when the data is sent through the network
+layer.  Similarly, a dangling pointer error is possible by 
+accessing memory after releasing it (e.g., accessing \code{pkt} after
+\code{post\_long} in line 12), since the memory may have been freed by
+the kernel or the new owner.
+Finally, omitting the \code{SOS\_MSG\_RELEASE} flag at line 14 will
+cause a memory leak, since the receiving module will attempt to take
+ownership and thereby acquire a new copy of the message.
+ 
+% SOS development runs into similar difficulties with its dynamic
+% memory.  Leaking memory is a problem in all systems that allow dynamic
+% memory creation.  This would occur in {\tt surge} if the
+% \code{SOS\_MSG\_RELEASE} flag were left out of the call to
+% \code{post\_net} on line 23 of figure~\ref{surge}.  Further, tricky
+% dangling pointer would result from forgetting to claim ownership of
+% the incoming data before it is sent out over the UART at line 20 of
+% figure~\ref{surge}.
+
+% The message receiver can explicitly take
+% ownership via a kernel call \code{ker\_msg\_take\_data}; otherwise the
+% kernel will free the memory after the 
+% message to be created with the most recent sensor data, encapsulated,
+% and sent out via a tree routing mechanism.  The
+% \code{MSG\_TR\_DATA\_PKT} handler is executed at the root of a data
+% routing tree when a data message arrives, and takes control of the
+% incoming encapsulated message so that it can be forwarded over a UART.
 
 %%
 % ROY: 11/7/06 I condensed the following three paragarphs into the
@@ -92,56 +207,48 @@ incoming encapsulated message so that it can be forwarded over a UART.
 % the data to the UART driver via an asynchronous message send ({\tt
 % post\_net}).
 
-The SOS kernel provides an API for programmers to manage dynamic
-memory.  
-%As shown in Figure~\ref{fig:surge}, 
-Functions such as \code{ker\_malloc} and \code{ker\_free} are used to
-dynamically create and destroy data memory buffers.  Additionally,
-ownership of dynamic memory can be transferred between modules using
-the \code{post\_*} and \code{ker\_msg\_take\_data} interfaces.
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-\subsection{Improper Resource Management}
+% \subsection{Improper Resource Management}
 
-The ability to manipulate resources demonstrated above results in
-small and efficient programs well suited for the embedded processors
-used within sensor networks.  However, improper resource management
-can cause serious problems for sensor network applications.
-
-
-\smallskip\noindent{\bf Potential problems with {\tt GenericBaseM}}
-
-The \code{receive} interface implemented in {\tt GenericBaseM}, and in
-other end user components that receive messages, depends on proper use
-of buffer swapping.  Problems arise if a component attempts to store a
-pointer to the incoming buffer for latter access and then returns a
-pointer to that same buffer, as would be the case if if line 10 were
-left out of figure~\ref{genericbase}.  In this situation two different
-components now have references to a buffer that each component believes
-it has exclusive access to.  Or if a TinyOS component should return a
-fresh buffer and fail to create a persistent reference to the incoming
-buffer, buffers would be leaked.  In figure~\ref{genericbase} this
-could happen if line 02 were omitted.  Added confusion arises in
-more complex code, such as the \code{if} statement at line 06 in {\tt
-GenericBaseM}, that returns different buffers depending on specific
-conditions. 
+% The ability to manipulate resources demonstrated above results in
+% small and efficient programs well suited for the embedded processors
+% used within sensor networks.  However, improper resource management
+% can cause serious problems for sensor network applications.
 
 
-\smallskip\noindent{\bf Incorrect versions of {\tt surge}}
+% \smallskip\noindent{\bf Potential problems with {\tt GenericBaseM}}
 
-SOS development runs into similar difficulties with its dynamic
-memory.  Leaking memory is a problem in all systems that allow dynamic
-memory creation.  This would occur in {\tt surge} if the
-\code{SOS\_MSG\_RELEASE} flag were left out of the call to
-\code{post\_net} on line 23 of figure~\ref{surge}.  Further, tricky
-dangling pointer would result from forgetting to claim ownership of
-the incoming data before it is sent out over the UART at line 20 of
-figure~\ref{surge}.
+% The \code{receive} interface implemented in {\tt GenericBaseM}, and in
+% other end user components that receive messages, depends on proper use
+% of buffer swapping.  Problems arise if a component attempts to store a
+% pointer to the incoming buffer for latter access and then returns a
+% pointer to that same buffer, as would be the case if if line 10 were
+% left out of figure~\ref{genericbase}.  In this situation two different
+% components now have references to a buffer that each component believes
+% it has exclusive access to.  Or if a TinyOS component should return a
+% fresh buffer and fail to create a persistent reference to the incoming
+% buffer, buffers would be leaked.  In figure~\ref{genericbase} this
+% could happen if line 02 were omitted.  Added confusion arises in
+% more complex code, such as the \code{if} statement at line 06 in {\tt
+% GenericBaseM}, that returns different buffers depending on specific
+% conditions. 
+
+
+% \smallskip\noindent{\bf Incorrect versions of {\tt surge}}
+
+% SOS development runs into similar difficulties with its dynamic
+% memory.  Leaking memory is a problem in all systems that allow dynamic
+% memory creation.  This would occur in {\tt surge} if the
+% \code{SOS\_MSG\_RELEASE} flag were left out of the call to
+% \code{post\_net} on line 23 of figure~\ref{surge}.  Further, tricky
+% dangling pointer would result from forgetting to claim ownership of
+% the incoming data before it is sent out over the UART at line 20 of
+% figure~\ref{surge}.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

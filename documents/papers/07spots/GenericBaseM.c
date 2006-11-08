@@ -1,4 +1,4 @@
-\begin{footnotesize}
+\begin{scriptsize}
 \begin{verbatim}
 01 TOS_MsgPtr receive(TOS_MsgPtr received, bool fromUART) {
 02     TOS_MsgPtr nextReceiveBuffer = received;
@@ -31,4 +31,4 @@
 29     return nextReceiveBuffer;
 30 }
 \end{verbatim}
-\end{footnotesize}
+\end{scriptsize}
