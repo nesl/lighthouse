@@ -4,7 +4,7 @@
 This evaluation examines to what extent this type of tool is needed
 within the sensor network community and how effective it is at
 isolating problems within sensor network systems.  Our evaluation
-focused on the SOS operating system, using the public CVS archives to
+focuses on the SOS operating system, using the public CVS archives to
 supply programs for analysis.  SOS applications are made up of small
 user modules that can be combined into larger programs.  These modules
 run on top of a well defined kernel and are developed using an API
@@ -53,7 +53,7 @@ To address these questions we ran our tool on all versions of all SOS
 end-user modules contained within the CVS repository to demonstrate
 how it would fit into an everyday development cycle.  For this
 analysis, we only consider the first occurrence of a particular bug
-withing a program, even if the bug lasts through multiple consecutive
+within a program, even if the bug lasts through multiple consecutive
 versions of a particular module.  We applied the checker to every
 historic version of each user module included in the SOS CVS
 repository that would compile for the \code{mica2} target.  The 48
@@ -145,23 +145,28 @@ more general domains.
 \end{table}
 
 
-We ran a similar experiment on all code required to build the core the
+We ran a similar experiment on all code required to build the core 
 SOS kernel for the \code{mica2} target.  This configuration consists
 of approximately 9000 lines of source code and required analyzing 40
 source files, of which 35 generated warnings.  A detailed breakdown of
 these warnings is provided in table~\ref{tab:kernel}.
 
-\mynote{ROY: This paragraph is very awkward.  It needs to be
-rephrased.} 
-%
 The two actual memory leaks represent an interesting type of error.
 These leaks resulted from functions that released a formal parameter,
-except in exceptional cases where an error code is returned to the
-user.  It is more accurate to say that these functions do not leak
+except 
+%
+%in exceptional cases where 
+%
+under specific conditions in which 
+%
+an error code is returned to the use.
+%
+It is more accurate to say that these functions do not leak
 memory, but rather conditionally release memory.  However user code
-treats these functions as unconditional releases, not bothering to
-check the return values.  Since changing these two functions would
-result in a number of errors in user code, we assumed that the two
+treats these functions as unconditional releases, without checking
+the return values.  Since analyzing these functions as conditionally 
+releasing memory would 
+result in a number of errors in user code, we assume that the two
 kernel functions are incorrect.
 
 A second point of interest is the different rates of false positives
@@ -180,8 +185,6 @@ no such memory is returned.  This is because the function directly
 accesses the internal data structures of the SOS memory manager to
 return a pointer to dynamically allocated data, rather than using an
 annotated interface such as \code{ker\_malloc}.
-%
-\mynote{ROY: What is the point of this paragraph?}
 
 
 % ROY (11/04/06):
@@ -199,7 +202,7 @@ annotated interface such as \code{ker\_malloc}.
 \label{ss:tale}
 
 \begin{figure}[tp]
-\begin{footnotesize}
+\begin{scriptsize}
 \begin{verbatim}
 mod_op = (sos_module_op_t*) ker_msg_take_data(msg);
 if(mod_op == NULL) return -ENOMEM;
@@ -229,7 +232,7 @@ if(mod_op->op == MODULE_OP_INSMOD) {
 }
 return SOS_OK;
 \end{verbatim}
-\end{footnotesize}
+\end{scriptsize}
 \label{fig:leak}
 \caption{A memory leak in an SOS module.}
 \end{figure}
@@ -247,19 +250,21 @@ leak into the loader.  All paths through this block of code leak the
 {\tt ker\_msg\_take\_data}.  This code results in the following
 warning from the checker:
 
-\begin{footnotesize}
+\begin{scriptsize}
 \begin{verbatim}
-Error: Expression mod_op is not stored after instruction #line 125
-mod_op = (sos_module_op_t *)ker_msg_take_data((unsigned char)18, msg);
+Error: Expression mod_op is not stored after 
+        instruction #line 125
+mod_op = (sos_module_op_t *)
+        ker_msg_take_data((unsigned char)18, msg);
 \end{verbatim}
-\end{footnotesize}
+\end{scriptsize}
 
 After three additional revisions that do not significantly modify or
 fix the memory leak, a fourth revision was made in mid-December 2005.
 This revision expands the functionality of {\tt loader.c} and breaks
 the code up into smaller functions:
 
-\begin{footnotesize}
+\begin{scriptsize}
 \begin{verbatim}
 sos_module_op_t *mod_op;
 if (msg->saddr == ker_id() || s->pend) {
@@ -275,16 +280,18 @@ case MODULE_OP_RMMOD:
 }
 return SOS_OK;
 \end{verbatim}
-\end{footnotesize}
+\end{scriptsize}
 
 This code again causes our checker to warn about the memory leak:
 
-\begin{footnotesize}
+\begin{scriptsize}
 \begin{verbatim}
-Error: Expression mod_op is not stored after instruction #line 186
-mod_op = (sos_module_op_t *)ker_msg_take_data((unsigned char)18, msg);
+Error: Expression mod_op is not stored after 
+        instruction #line 186
+mod_op = (sos_module_op_t *)
+        ker_msg_take_data((unsigned char)18, msg);
 \end{verbatim}
-\end{footnotesize}
+\end{scriptsize}
 
 Clearly {\tt mod\_op} is still being leaked if {\tt mod\_op->op} does
 not find a matching case in the {\tt switch} statement.  Further,
@@ -296,7 +303,7 @@ leak {\tt mod\_op}!
 A day later, eight weeks after the memory leaks were first introduced,
 these memory leaks were found and fixed:
 
-\begin{footnotesize}
+\begin{scriptsize}
 \begin{verbatim}
 sos_module_op_t *mod_op;
 if (msg->saddr == ker_id() || s->pend) {
@@ -313,7 +320,7 @@ case MODULE_OP_RMMOD:
 ker_free(mod_op);
 return SOS_OK;
 \end{verbatim}
-\end{footnotesize}
+\end{scriptsize}
 
 As shown above, a call to {\tt ker\_free} has been added before the
 final {\tt return}, in order to properly dispose of {\tt mod\_op}.

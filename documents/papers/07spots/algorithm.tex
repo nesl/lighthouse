@@ -131,7 +131,7 @@ C~\cite{CIL}, which parses C code into a simple intermediate format
 and provides a framework for performing analyses on the intermediate
 code.  Each analysis is {\em modular}, considering each module
 independently and analyzing the CFG for each procedure within the
-module in isolation.  Care must be taken for our static checker to
+module in isolation.  Care must be taken that our static checker
 conservatively approximate the dynamic conditions that must be
 satisfied.  Two notable issues are the treatment of pointer aliasing
 and of procedure calls, which we discuss in turn.
@@ -163,21 +163,14 @@ information with may-alias information.
 
 Our implementation currently uses a simple flow-sensitive must-alias
 analysis.  For the may-alias analysis, we use a fast flow-insensitive
-alias analysis provided by the CIL framework.  Static alias analysis
-can be quite imprecise in the presence of complex pointer
+alias analysis provided by the CIL framework.  It should be noted that 
+static alias analysis
+can be imprecise in the presence of complex pointer
 manipulations and pointer structures.  For example, CIL's may-alias
 analysis does not distinguish among the fields of a structure, instead
-considering them to always potentially alias one another.  However,
-our experimental results indicate that these limitations do not result
-in an inordinate number of false positives for the checker.  
-%
-\mynote{I am no longer convinced that this is true.  It looks like a
-good number of our current false positives result from the conflation
-of structure fields in the may alias analysis.}  
-%
-This positive result is likely due to the stylized ways in which
-dynamic memory is manipulated in sensor-network applications, which
-our ownership model captures well.  
+considering them to always potentially alias one another.  This does not
+effect the correctness of our tool, but rather causes an overly 
+conservative analysis in some situations.
 
 \smallskip\noindent
 {\bf Interprocedural Analysis.}
@@ -233,7 +226,7 @@ consider whole-program analysis.
 As we demonstrate in the next section, our checker is useful for
 detecting violations of the ownership protocol on real sensor-network
 code.  However, the checker is not guaranteed to find all such
-violations.  Said another way, the checker can be used for finding
+violations.  In other words, the checker can be used for finding
 memory errors but not for guaranteeing the absence of all memory
 errors.  We discuss three limitations of the checker in this regard.
 
@@ -260,10 +253,6 @@ false positives but also potentially missing errors.  The checker
 still ensures that a handler does not access a resource that has
 earlier been freed or released.
 
-\mynote{This may be expanded if we have time to produce results for
-the event handler.  But, as discussed on Tuesday, this will probably be
-all that we have ready to go.}
-%
 Finally, our modular checker does not consider the overall order in
 which messages will be received.  However, there may be
 application-level protocols that determine how events are generated in
@@ -290,8 +279,12 @@ our assumptions provide a practical point in the design space that
 allows each event handler to be usefully checked for local violations
 of the ownership protocol.
 %
-It will be interesting to extend our system with additional interface
-annotations about application-level protocols in the
-future~\cite{AlurPOPL05,HJM05}.
+Handling these inter-module relationships and application-level
+protocols is something we are interested to include in our future
+work~\cite{AlurPOPL05,HJM05}.
+%
+%It will be interesting to extend our system with additional interface
+%annotations about application-level protocols in the
+%future~\cite{AlurPOPL05,HJM05}.
 
 

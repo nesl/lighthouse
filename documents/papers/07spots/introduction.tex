@@ -33,10 +33,11 @@ allocation of memory, while MANTIS OS~\cite{abrach03mantis} supports
 both dynamic memory allocation and thread creation.
 Frameworks built on
 top of sensor network systems also include components that make
-resources dynamically available to other parts of the system.  The
+resources dynamically available to other parts of the system.  
+An example of this form of dynamic resource 
+management is the
 VanGo~\cite{greenstein05vango} framework's buffer pool for
-TinyOS is an example of this form of dynamic resource 
-management.
+TinyOS. 
 
 %
 % NOTE: With the addition of buffer swapping in TinyOS added above, is
@@ -68,21 +69,25 @@ For example, consider the architecture of a simple sensor-network
 sense and send application.
 %, shown in Figure~\ref{fig:surge-dataflow}.
 Like many sensor-network applications, this application can be
-arranged in a dataflow architecture:  raw sensed data captured at the
+arranged for a dataflow architecture:  raw sensed data captured at the
 sensors moves through various filters
 % (via the {\tt surge} module)
 before being forwarded to a base station.
 % (via the {\tt tree routing} module).  
 In order to naturally and efficiently implement the message passing,
-data buffers are %  dynamically allocated as necessary and 
+data buffers are 
+%  dynamically allocated as necessary and 
 passed by
-reference between system modules rather than by copying.
+reference between system modules.
+% rather than by copying.
 
 If incorrectly implemented, this style of data sharing can lead to
 serious errors.  First, a module may access a (dangling) reference to
 data that has been passed on and possibly freed downstream. 
 %
-The low-end processor hardware used in current sensor nodes does not
+This is dangerous because
+%
+the low-end processor hardware used in current sensor nodes does not
 have a memory management unit.  Thus existing sensor node operating
 systems for these platforms, like TinyOS~\cite{TinyOS} and
 SOS~\cite{sos}, do not support virtual memory, and a bad dereference
