@@ -339,8 +339,10 @@ it may no longer access the memory.
 %
 \end{itemize}
 
-Static checking is necessarily an approximation of the runtime
-requirements for proper resource management.  As described in the next
+Our rules are necessarily an approximation of the runtime
+requirements for proper resource management, due to the modular nature
+of the rules and the fundamental limitations of static analysis.  
+As described in the next
 section, the rules above can lead to both false positives and false
 negatives.  However, our experimental results indicate that the rules
 are a practical approach for detecting resource management errors in
