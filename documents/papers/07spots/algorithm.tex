@@ -21,94 +21,6 @@ again.
 We now explain how these two properties are checked using the
 Lighthouse tool, and mention some of the limitations of our implementation.
 
-%
-% NOTE: This was the formal LTL specification that is not very popular
-% with the reviewers.
-%
-% \subsection{Specification}
-% 
-% We now formalize the logical specification of our ownership-based
-% resource management protocol.  For simplicity, we specify the protocol
-% on an idealized imperative language that includes the fundamental
-% operations for resource management.  The language's atomic statements
-% are as follows, where {\tt x} and {\tt y} range over {\em resource
-% handle names}:
-% %
-% \[
-% %
-% y := x\mid \mathrm{alloc}\ x \mid \mathrm{free} \ x \mid \mathrm{get}\
-% x \mid \mathrm{store}\ x 
-% %
-% \]
-% %
-% Programs are constructed by sequencing statements of the above form,
-% and we assume the presence of standard control-flow constructs
-% including conditionals and loops.
-% 
-% Our language's statements abstractly capture resource-related program
-% operations and have the following informal semantics.  An assignment
-% $y :=  x$ assigns the resource referenced by handle $x$ to the handle
-% $y$.  The operation $\mathrm{alloc}\ x$ allocates a new resource and
-% returns a handle $x$ to the resource.  The operation $\mathrm{free}\
-% x$ frees the resource referenced by the handle $x$.  In addition, we
-% assume the presence of a persistent store that holds a single
-% resource.  The operation $\mathrm{store}\ x$ puts the resource
-% referenced by handle $x$ into the store, and the operation
-% $\mathrm{get}\ x$ assigns the resource contained in the persistent
-% store to $x$.
-% 
-% Given this core language, we formally specify rules for proper
-% resource usage as invariants on each dynamic program execution.  A
-% natural formalism for these invariants is {\em linear temporal logic}
-% (LTL)~\cite{Emerson90,MannaPnueli92vol1}, which we briefly review.  An
-% LTL formula is constructed from atomic predicates using boolean
-% operations and the {\em temporal operators} $\Box$, $\Diamond$, and
-% $\Next$.  An LTL formula is evaluated at a given execution state with
-% respect to a fixed execution path through the program.  The formula
-% $\Box f$ holds at state $s$ if the formula $f$ holds on $s$ and each
-% subsequent state in the path.  The formula $\Diamond f$ holds at state
-% $s$ if the formula $f$ holds on $s$ or some subsequent state in the
-% path.  The formula $\Next f$ holds at state $s$ if the formula $f$
-% holds on the successor state of $s$ along the path.
-% 
-% 
-% For a handle $x$, we write $\access(x)$ for any operation that
-% syntactically accesses the resource referenced by $x$, that is, one of
-% $\mathrm{free}\ x$, $\mathrm{store}\ x$, or an assignment with $x$ on
-% the right-hand side.  We also introduce a relation $\alias(x,y)$ on
-% pairs of handles: $\alias(x,y)$ holds at an execution state iff
-% handles $x$ and $y$ refer to the same resource in that state.  We now
-% define two key correctness invariants for proper resource management. 
-% 
-% 
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% \smallskip\noindent
-% {\bf No Leaks.} The first property formalizes the absence of resource
-% leaks by enforcing that along every program execution path, every
-% allocation $\mathrm{alloc}\ x$ is necessarily followed by either a
-% free or a store of a handle that refers to the same resource as $x$:
-% %
-% \[
-% %
-% \Box \left( (\mathrm{alloc}\ x) \rightarrow
-% %
-%     \Diamond \left( (\mathrm{free}\ y \vee \mathrm{store}\ y) \wedge
-% \alias(x,y) \right) \right)
-% %
-% \]
-% 
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% \smallskip\noindent
-% {\bf No Dangling Pointers.} The second property states that once a
-% resource has been freed, it is never accessed again:
-% %
-% \[
-% %
-% \Box ( \mathrm{free}\ x \rightarrow \Next (\Box (\lnot (\access(y)
-% \wedge \alias(x,y))))) 
-% %
-% \]
-
 
 \subsection{Implementation}
 
@@ -173,7 +85,9 @@ effect the correctness of the analysis in Lighthouse, but rather causes an overl
 conservative analysis that may trigger false positives in some situations.
 
 \smallskip\noindent
-{\bf Interprocedural Analysis.}
+%
+{\bf Modular Analysis.}
+%
 Our analysis is {\em modular}:  each function in a module or component
 is analyzed in isolation.  To make checking of a function body precise
 in the presence of calls to other functions, we employ {\em ownership
@@ -187,20 +101,18 @@ wraps a call to {\tt ker\_malloc} within SOS, allowing that function's
 callers to be properly checked without access to the function's
 implementation.  Similarly, an {\tt lh\_release} attribute on a formal
 parameter indicates that ownership of the parameter is transferred
-from the caller of the function to the callee.  If a parameter does
-not have an ownership attribute, memory ownership is unchanged.  Lighthouse
-ensures that these attributes are employed wherever necessary,
-when checking the implementation of each function.  In practice, we
-have found that a small set of annotations is sufficient for precise
-analysis.
-
-%Second, our simple core language used to specify the resource
-%invariants does not contain procedure calls, which must be properly
-%handled in our implementation.  As mentioned above, our analyses are
-%{\em intraprocedural}, meaning that each procedure is checked in
-%isolation.  To make such checking both correct and precise, we rely on
-%the ownership attributes {\tt lh\_claim} and {\tt lh\_release}, as
-%described in the previous section.
+from the caller of the function to the callee.  
+%
+% If a parameter does not have an ownership attribute, memory
+% ownership is unchanged.  Lighthouse ensures that these attributes
+% are employed wherever necessary, when checking the implementation of
+% each function.  
+%
+Lighthouse ensures that parameters with these attributes properly
+follow the ownership protocol within the body of the function.
+%
+In practice, we have found that a small set of annotations is
+sufficient for precise analysis.
 
 Given such attributes, the proper handling of procedure calls becomes
 straightforward.  A procedure call statement is treated logically by
@@ -243,33 +155,45 @@ Second, there is a design choice about how to treat resources that a
 handler does not explicitly acquire through an interface that is
 annotated with {\tt lh\_claim} and {\tt lh\_release}.  Technically the
 ownership protocol disallows these resources from being accessed at
-all, since the receiving module is not the owner.  However, enforcing
-this requirement can cause spurious errors for patterns of resource
-sharing that are in fact safe, for example when a module temporarily
-``borrows'' data from another module within a bounded scope.
-Therefore, our checker does not currently enforce the requirement that
-a module only access a resource that it owns, reducing the number of
-false positives but also potentially missing errors.  The checker
-still ensures that a handler does not access a resource that has
-earlier been freed or released.
+all, since the receiving module is not the owner.  
+%
+Lighthouse does not currently enforce this requirement that a module
+only access a resource that it owns.
+% 
+This allows new systems using Lighthouse to incrementally add
+annotations to iterativly refine the quality of the analysis without
+suffering from excessive numbers of false positives.
+%
+Further, this provides a mechanism for allowing patterns of resource
+sharing that are in fact safe but not allowed by the ownership
+disciplin, for example when a module temporarily ``borrows'' data from
+another module within a bounded scope.
+%
+But it does introduce the potential of missing real errors due to
+missing annotations.
+%
+Regardless, the checker still ensures that a handler does not access a
+resource that has earlier been freed or released.
+
 
 Finally, our modular checker does not consider the overall order in
 which messages will be received.  However, there may be
 application-level protocols that determine how events are generated in
 the system, and these protocols can affect the correctness of
-ownership tracking.
+ownership tracking when a resource is placed in or accessed from a
+persistent store.
 %
 For example, imagine a module that responds to three events: $\create$
 causes the module to allocate a block $b$ and store it into the
 module's persistent store, $\access$ causes the module to access block
 $b$ via the  store, and $\delete$ causes the module to deallocate
-block $b$ via the store.  The module properly manages block $b$ as
+block $b$ in the store.  The module properly manages block $b$ as
 long as the temporal sequence of events follows the regular expression:
 $($ $\alloc$ $\access^*$ $\delete$ $)^*$.  This ordering ensures that the system
 never accesses the block before it is allocated and always eventually
 deletes the block.
-
-Lighthouse currently only tracks data locally within each event handler.
+%
+However, Lighthouse currently only tracks data locally within each event handler.
 When performing this tracking, the tool assumes on entry that all data
 in the persistent store is owned by the module.  The tool similarly
 considers a resource to be properly released when it is placed in the
@@ -278,13 +202,7 @@ an $\access$ event ever occurs before the $\alloc$ event.  However,
 our assumptions provide a practical point in the design space that
 allows each event handler to be usefully checked for local violations
 of the ownership protocol.
-%
 Handling these inter-module relationships and application-level
 protocols is something we are interested to include in our future
 work~\cite{AlurPOPL05,HJM05}.
-%
-%It will be interesting to extend our system with additional interface
-%annotations about application-level protocols in the
-%future~\cite{AlurPOPL05,HJM05}.
-
 
