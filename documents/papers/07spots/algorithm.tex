@@ -170,7 +170,7 @@ manipulations and pointer structures.  For example, CIL's may-alias
 analysis does not distinguish among the fields of a structure, instead
 considering them to always potentially alias one another.  This does not
 effect the correctness of the analysis in Lighthouse, but rather causes an overly 
-conservative analysis in some situations.
+conservative analysis that may trigger false positives in some situations.
 
 \smallskip\noindent
 {\bf Interprocedural Analysis.}
@@ -224,7 +224,7 @@ consider whole-program analysis.
 \subsection{Limitations}
 
 As we demonstrate in the next section, our checker is useful for
-detecting violations of the ownership protocol on real sensor-network
+detecting violations of the ownership protocol on real sensor network
 code.  However, the checker is not guaranteed to find all such
 violations.  In other words, the checker can be used for finding
 memory errors but not for guaranteeing the absence of all memory
@@ -265,7 +265,7 @@ module's persistent store, $\access$ causes the module to access block
 $b$ via the  store, and $\delete$ causes the module to deallocate
 block $b$ via the store.  The module properly manages block $b$ as
 long as the temporal sequence of events follows the regular expression:
-$\alloc$ $\access^*$ $\delete$.  This ordering ensures that the system
+$($ $\alloc$ $\access^*$ $\delete$ $)^*$.  This ordering ensures that the system
 never accesses the block before it is allocated and always eventually
 deletes the block.
 

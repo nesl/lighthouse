@@ -14,7 +14,7 @@ supplied by this kernel.
 \subsection{Quantifying Dynamic Memory Usage in SOS}
 
 Of interest is the prevalence of dynamic resource management within
-sensor network systems.  TinyOS displays this through buffer swapping
+sensor network systems.  This is seen in TinyOS through buffer swapping
 within messaging stacks and more general message queues.  Within SOS
 this is seen through memory buffer management.  
 
@@ -27,7 +27,7 @@ of memory.
 The CVS head from October 2006 reveals 36 modules totaling 5824 lines
 of source code.  Within this sample there are 178 lines of code
 calling a function that manipulates memory, or one such function call
-for every 32 lines of code.  Looking at all historic version of all
+for every 32 lines of code.  A look at all historic version of all
 SOS modules reveals that this frequency has not changed significantly
 over time.  These findings indicate that memory management has been
 and continues to be an important part of resource management in SOS.
@@ -110,14 +110,14 @@ assumes that functions can change what data is referenced by a formal
 parameter.  This results in required must alias information being lost
 in these cases.  The analysis can easily rank these as probable false
 positives if the end user wishes to see more likely errors first.  The
-other three memory leaks are the result of linked list data structures
+other three memory leaks were the result of linked list data structures
 that the must alias analysis is unable to properly reason about.  
 
 \smallskip\noindent{\bf Dangling pointer false positives.}
 
 The nine dangling pointer false positives result from limitations of
-the flow-insensitive and field-insensitive may analysis.  Elimination
-of these false positives would require a more accurate may analysis.
+the flow-insensitive and field-insensitive may alias analysis.  Elimination
+of these false positives would require a more accurate may alias analysis.
 Modern sensor network applications are made of small components that
 effectively limit the scope of variables.  This opens the door to using
 context sensitive analysis that suffer from scaling limitations in
@@ -168,8 +168,9 @@ treats these functions as unconditional releases, without checking
 the return values.  Since analyzing these functions as conditionally 
 releasing memory 
 results in more errors in user code,
-% would result in a number of errors in user code, 
-we assume that the two kernel functions are incorrect.
+% we assume that the two kernel functions are incorrect.
+we decided to minimize the total number of system errors and 
+treat the two kernel functions an incorrect.
 
 A second point of interest is the different rates of false positives
 reported for user modules and for the kernel.  User modules resulted
@@ -177,7 +178,7 @@ in approximately one false positive for every 1650 lines of source
 code.  The kernel saw a much higher frequency at approximately one 
 false positive for every 270 lines of source code.  
 
-A large contributor to this increased rate of false positives within
+Primary contributors to this increased rate of false positives within
 the kernel are the bottom layer functions implementing management of
 memory in SOS.  These functions manipulate memory in a manner that
 does not conform to the model assumed for the analysis.  For example,
@@ -239,8 +240,8 @@ return SOS_OK;
 \caption{A memory leak in an SOS module.}
 \end{figure}
 
-This section examines the SOS loader, a core part of SOS that allows
-users to dynamically add modules to a running system and that is
+This section examines the SOS loader, a core part of SOS allowing
+users to dynamically add modules to a running system, which is
 known to have caused stability problems for developers in the past.
 We used the checker to see if such a tool could have eased development
 pains.

@@ -2,7 +2,7 @@
 \label{sec:example}
 
 In this section we illustrate the benefits and pitfalls of dynamic
-resource management for sensor-network applications through two
+resource management for sensor network applications through two
 examples, from TinyOS and SOS respectively.  We then demonstrate how
 an ownership discipline naturally captures the requirements for proper
 resource management in these systems.
@@ -276,10 +276,10 @@ result, since the network layer may have already freed the buffer.
 
 \subsection{Memory Ownership}
 
-Examination of the sensor-network applications 
+Examination of the sensor network applications 
 presented above reveals an underlying
 theme.  In both examples, resources are shared dynamically across multiple
-software components, to support simple and efficient access to these
+software components to support simple and efficient access to these
 resources.  However, only one component requires access to a given
 resource at any point in time.  
 In other words, proper resource management
@@ -294,7 +294,7 @@ component.
 % In this work, we augment these implicit
 % ownership directives to provide a protocol governing memory management
 % that is sufficient to ensure the absence of memory errors.  Our
-% protocol makes explicit the common programming idiom in sensor-network
+% protocol makes explicit the common programming idiom in sensor network
 % systems, whereby data is rarely shared but instead follows a
 % producer/consumer model.  
 % %
@@ -308,9 +308,29 @@ component.
 %
 
 In this paper, we describe an approach for statically enforcing an
-ownership discipline on sensor-network applications.  Lightweight
-annotations allow programmers to specify the ownership transfer
-requirements of each function.  For example, in
+ownership discipline on sensor network applications.  Informally, our
+static ownership discipline enforces the following rules:
+%
+\begin{itemize}
+%
+\item Each function may only refer to dynamic memory that it owns.
+This includes memory allocated in the function, memory in the
+surrounding component's persistent store, and any formal parameters
+annotated as having their ownership transferred to the component.
+%
+\item Each function that allocates or obtains ownership of a block of
+dynamic memory must eventually free that memory, transfer its
+ownership to another component, or store the memory in a persistent
+location.
+%
+\item After a function frees or releases memory that it owns, it may
+no longer access the memory.
+%
+\end{itemize}
+
+
+Lightweight annotations allow programmers to specify the ownership
+transfer requirements of each function.  For example, in
 Figure~\ref{fig:genericbase} the \code{receive} function would be
 annotated to indicate that ownership of the \code{received} parameter
 is being transferred from the caller to the callee, and that ownership
@@ -319,25 +339,6 @@ caller.  Given these annotations, we define a static checker that can
 analyze each function of a component in isolation, providing early and
 modular feedback on the potential for resource management errors.
 
-Informally, our static ownership discipline
-enforces the following rules:
-%
-\begin{itemize}
-%
-\item Each function may only refer to dynamic memory that it owns.  This
-  includes memory allocated in the function, memory in the surrounding
-  component's persistent store, and any formal parameters annotated as
-  having their ownership transferred to the component.
-%
-\item Each function that allocates or obtains ownership of a block of
-  dynamic memory 
-must eventually free that memory, transfer its ownership to another 
-component, or store the memory in a persistent location.
-%
-\item After a function frees or releases memory that it owns, 
-it may no longer access the memory.
-%
-\end{itemize}
 
 Our rules are necessarily an approximation of the runtime
 requirements for proper resource management, due to the modular nature
@@ -346,7 +347,7 @@ As described in the next
 section, the rules above can lead to both false positives and false
 negatives.  However, our experimental results indicate that the rules
 are a practical approach for detecting resource management errors in
-real sensor-network software.
+real sensor network software.
 
 
 % \smallskip\noindent{\bf Applying Ownership Protocol to {\tt GenericBaseM}}

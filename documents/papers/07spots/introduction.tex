@@ -65,10 +65,10 @@ double-edged sword.  Improper management of resources can lead to
 subtle errors that can affect both the correctness and efficiency of
 applications.
 
-For example, consider the architecture of a simple sensor-network
+For example, consider the architecture of a simple sensor network
 sense and send application.
 %, shown in Figure~\ref{fig:surge-dataflow}.
-Like many sensor-network applications, this application can be
+Like many sensor network applications, this application can be
 arranged for a dataflow architecture:  raw sensed data captured at the
 sensors moves through various filters
 % (via the {\tt surge} module)
@@ -101,7 +101,7 @@ memory.
 
 
 Our key insight is that data transfer between
-modules in sensor-network applications 
+modules in sensor network applications 
 typically does not lead to sharing, but instead follows a
 producer-consumer pattern.  
 % Therefore, sensor network programmers
@@ -131,7 +131,7 @@ dangling resources nor resource leaks.
 
 
 
-Current sensor-network systems do not help programmers to ensure that
+Current sensor network systems do not help programmers to ensure that
 this ownership protocol is properly obeyed.  In most systems, this
 protocol is completely implicit and can be expressed only informally
 through programming conventions and comments.  The SOS operating
@@ -143,7 +143,7 @@ programmers often make subtle mistakes in ownership,
 leading to critical and difficult-to-track errors.  
 
 In this paper, we present an approach for automated validation of dynamic
-resource management in sensor-network software.  Programmers employ an
+resource management in sensor network software.  Programmers employ an
 explicit API along with lightweight program annotations to express
 ownership intentions for resources.  An automated program checker employs these
 annotations to analyze each module {\em
@@ -153,11 +153,11 @@ errors.  The checker requires a novel suite of dataflow analyses to ensure
 the key ownership invariants:  each resource has a unique owner; each
 resource is only manipulated by its owner; and each resource is either
 freed by its owner or transferred to another owner.  With our approach,
-sensor-network programmers can make use of the expressiveness of
+sensor network programmers can make use of the expressiveness of
 dynamic resource management while retaining confidence in the
 reliability of their applications.
 
-We have instantiated our approach in Lighthouse, a tool for statically ensuring
+We have instantiated these ideas in Lighthouse, a tool for statically ensuring
 proper management of dynamic memory in the SOS operating
 system~\cite{sos}. 
 %which employs the C programming language.  
@@ -179,7 +179,7 @@ The latter finding is somewhat surprising, since the SOS kernel code
 is relatively mature and was written by experienced systems programmers.
 In summary, our experiments illustrate the practicality of our
 approach for providing early feedback about memory errors in real
-sensor-network software.
+sensor network software.
 
 The rest of the paper is structured as follows.
 Section~\ref{sec:example} illustrates the problems for resource
