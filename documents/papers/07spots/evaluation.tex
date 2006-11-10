@@ -4,8 +4,8 @@
 This evaluation examines to what extent this type of tool is needed
 within the sensor network community and how effective it is at
 isolating problems within sensor network systems.  Our evaluation
-focuses on the SOS operating system, using the public CVS archives to
-supply programs for analysis.  SOS applications are made up of small
+uses code from the public CVS archive of the SOS operating system.
+SOS applications are made up of small
 user modules that can be combined into larger programs.  These modules
 run on top of a well defined kernel and are developed using an API
 supplied by this kernel.
@@ -44,13 +44,14 @@ questions are:
 \item Do programmers have problems properly using the resource
 management?
 %
-\item Would the analysis described in this paper help with
+\item Does the analysis described in this paper help with
 those problems?
 %
 \end{itemize}
 
-To address these questions we ran our tool on all versions of all SOS
-end-user modules contained within the CVS repository to demonstrate
+To address these questions we ran our tool on 
+end-user modules from SOS
+to demonstrate
 how it would fit into an everyday development cycle.  For this
 analysis, we only consider the first occurrence of a particular bug
 within a program, even if the bug lasts through multiple consecutive
@@ -92,7 +93,7 @@ total of 25 warnings.
 Each warning was examined by hand and classified as an actual error or
 a false positive; the results are presented in Table~\ref{tab:module}.  
 %
-Eight of the warnings turned out to be real memory leaks in the code.
+Eight of the warnings were real memory leaks in the code.
 This is impressive since the CVS is meant to house tested and stable
 applications.
 %
@@ -159,15 +160,16 @@ except
 %
 under specific conditions in which 
 %
-an error code is returned to the use.
+an error code is returned to the user.
 %
 It is more accurate to say that these functions do not leak
 memory, but rather conditionally release memory.  However user code
 treats these functions as unconditional releases, without checking
 the return values.  Since analyzing these functions as conditionally 
-releasing memory would 
-result in a number of errors in user code, we assume that the two
-kernel functions are incorrect.
+releasing memory 
+results in more errors in user code,
+% would result in a number of errors in user code, 
+we assume that the two kernel functions are incorrect.
 
 A second point of interest is the different rates of false positives
 reported for user modules and for the kernel.  User modules resulted
@@ -298,7 +300,7 @@ not find a matching case in the {\tt switch} statement.  Further,
 adding the {\tt sos\_release} attribute to the third formal parameter
 of the functions {\tt module\_op\_insmod} and {\tt module\_op\_rmmod}
 and rerunning the checker reveals that both of these functions also
-leak {\tt mod\_op}!
+leak {\tt mod\_op}.
 
 A day later, eight weeks after the memory leaks were first introduced,
 these memory leaks were found and fixed:
@@ -325,8 +327,8 @@ return SOS_OK;
 As shown above, a call to {\tt ker\_free} has been added before the
 final {\tt return}, in order to properly dispose of {\tt mod\_op}.
 The functions {\tt module\_op\_insmod} and {\tt module\_op\_rmmod}
-similarly free their third argument.  The CVS log message simply reads
-``fixed another memory leak.''
+similarly free their third argument.  The CVS log message simply
+reads, ``Fixed another memory leak.''
 
 
 

@@ -112,7 +112,7 @@ Lighthouse tool, and mention some of the limitations of our implementation.
 
 \subsection{Implementation}
 
-Our tool checks programs at compile time for violations of the above
+Lighthouse checks programs at compile time for violations of the above
 two properties.  The tool performs a static dataflow analysis for each
 property on a program's control-flow graph (CFG), which statically
 represents all possible execution paths.  
@@ -120,7 +120,7 @@ represents all possible execution paths.
 For the SOS instantiation the $\mathrm{alloc}$ and $\mathrm{free}$
 operations are respectively represented by {\tt ker\_malloc} and {\tt
 ker\_free}.  To identify a module's persistent state in SOS, we
-provide a new attribute {\tt lh\_state} for formal parameters.  For
+provide a new attribute {\tt lh\_store} for formal parameters.  For
 example, the {\tt state} argument to a module's event handler would be
 annotated with this attribute.  This is required since SOS modules are
 passed in a reference to their persistent state, rather than directly accessing a
@@ -169,7 +169,7 @@ can be imprecise in the presence of complex pointer
 manipulations and pointer structures.  For example, CIL's may-alias
 analysis does not distinguish among the fields of a structure, instead
 considering them to always potentially alias one another.  This does not
-effect the correctness of our tool, but rather causes an overly 
+effect the correctness of the analysis in Lighthouse, but rather causes an overly 
 conservative analysis in some situations.
 
 \smallskip\noindent
@@ -188,8 +188,8 @@ callers to be properly checked without access to the function's
 implementation.  Similarly, an {\tt lh\_release} attribute on a formal
 parameter indicates that ownership of the parameter is transferred
 from the caller of the function to the callee.  If a parameter does
-not have an ownership attribute, memory ownership is unchanged.  Our
-tool ensures that these attributes are employed wherever necessary,
+not have an ownership attribute, memory ownership is unchanged.  Lighthouse
+ensures that these attributes are employed wherever necessary,
 when checking the implementation of each function.  In practice, we
 have found that a small set of annotations is sufficient for precise
 analysis.
@@ -264,12 +264,12 @@ causes the module to allocate a block $b$ and store it into the
 module's persistent store, $\access$ causes the module to access block
 $b$ via the  store, and $\delete$ causes the module to deallocate
 block $b$ via the store.  The module properly manages block $b$ as
-long as the temporal sequence of events follows the regular expression
+long as the temporal sequence of events follows the regular expression:
 $\alloc$ $\access^*$ $\delete$.  This ordering ensures that the system
 never accesses the block before it is allocated and always eventually
 deletes the block.
 
-Our tool currently only tracks data locally within each event handler.
+Lighthouse currently only tracks data locally within each event handler.
 When performing this tracking, the tool assumes on entry that all data
 in the persistent store is owned by the module.  The tool similarly
 considers a resource to be properly released when it is placed in the

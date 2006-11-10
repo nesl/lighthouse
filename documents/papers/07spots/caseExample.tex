@@ -15,10 +15,9 @@ resource management in these systems.
 interface}\label{fig:genericbase}}
 \end{figure}
 
-\mynote{Make sure all of this is true!}
 Applications in TinyOS typically receive data from the network stack
 by implementing the {\tt receive} event handler from the
-\mynote{INTERFACE} interface.  This handler is passed a
+\code{GenericComm} interface.  This handler is passed a
 \code{TOS\_MsgPtr}, which is a pointer to the incoming data, as well
 as a flag describing the data source.  Passing a pointer 
 obviates the need for copying, 
@@ -38,11 +37,11 @@ the {\tt receive} event handler in {\tt
 GenericBaseM}, an application that uses a sensor node as a bridge
 between a base station and the rest of a sensor network.  
 If there are no messages waiting to be sent (line 6), the handler
-forwards the message out over the bridged interface.  It also sets
+forwards the incoming message out over the bridged interface.  It also sets
 {\tt nextReceiveBuffer}, which is returned at line 29, to a free
 message buffer {\tt ourBuffer}.  If a message is currently pending,
 the handler simply ignores the incoming message.  In that case, {\tt
-  nextReceiveBuffer} points to the incoming buffer (line 02), which
+  nextReceiveBuffer} points to the incoming buffer (line 2), which
 is therefore returned to the caller to be reused.
 
 While the code in Figure~\ref{fig:genericbase} properly implements the
@@ -66,11 +65,11 @@ branch is taken, the \code{received} buffer would be leaked.
 % of buffer swapping.  Problems arise if a component attempts to store a
 % pointer to the incoming buffer for latter access and then returns a
 % pointer to that same buffer, as would be the case if if line 10 were
-% left out of figure~\ref{genericbase}.  In this situation two different
+% left out of Figure~\ref{genericbase}.  In this situation two different
 % components now have references to a buffer that each component believes
 % it has exclusive access to.  Or if a TinyOS component should return a
 % fresh buffer and fail to create a persistent reference to the incoming
-% buffer, buffers would be leaked.  In figure~\ref{genericbase} this
+% buffer, buffers would be leaked.  In Figure~\ref{genericbase} this
 % could happen if line 02 were omitted.  Added confusion arises in
 % more complex code, such as the \code{if} statement at line 06 in {\tt
 % GenericBaseM}, that returns different buffers depending on specific
@@ -137,9 +136,10 @@ message over the network.
 The code in Figure~\ref{fig:surge} properly manages dynamic memory via the
 SOS kernel's API.  However, this fact is
 not at all obvious.  For example, the module depends on
-the assumption that the memory
-allocated on line 9 will eventually be freed downstream by the network layer,
-which is passed the memory at line 21.  \mynote{Is that true?}  
+% ROY: This is a little weak.  But it is the best that I can come up with.
+proper use of flags within the calls to \code{post\_long} (line 12) and 
+\code{post\_net} (line 21)
+to properly release dynamic data.
 As with the earlier TinyOS example, small
 changes to this module can also cause critical errors.  For example,
 the programmer must be sure not to access \code{payload} after it is sent
@@ -180,10 +180,10 @@ result, since the network layer may have already freed the buffer.
 % memory.  Leaking memory is a problem in all systems that allow dynamic
 % memory creation.  This would occur in {\tt surge} if the
 % \code{SOS\_MSG\_RELEASE} flag were left out of the call to
-% \code{post\_net} on line 23 of figure~\ref{surge}.  Further, tricky
+% \code{post\_net} on line 23 of Figure~\ref{surge}.  Further, tricky
 % dangling pointer would result from forgetting to claim ownership of
 % the incoming data before it is sent out over the UART at line 20 of
-% figure~\ref{surge}.
+% Figure~\ref{surge}.
 
 % The message receiver can explicitly take
 % ownership via a kernel call \code{ker\_msg\_take\_data}; otherwise the
@@ -247,11 +247,11 @@ result, since the network layer may have already freed the buffer.
 % of buffer swapping.  Problems arise if a component attempts to store a
 % pointer to the incoming buffer for latter access and then returns a
 % pointer to that same buffer, as would be the case if if line 10 were
-% left out of figure~\ref{genericbase}.  In this situation two different
+% left out of Figure~\ref{genericbase}.  In this situation two different
 % components now have references to a buffer that each component believes
 % it has exclusive access to.  Or if a TinyOS component should return a
 % fresh buffer and fail to create a persistent reference to the incoming
-% buffer, buffers would be leaked.  In figure~\ref{genericbase} this
+% buffer, buffers would be leaked.  In Figure~\ref{genericbase} this
 % could happen if line 02 were omitted.  Added confusion arises in
 % more complex code, such as the \code{if} statement at line 06 in {\tt
 % GenericBaseM}, that returns different buffers depending on specific
@@ -264,10 +264,10 @@ result, since the network layer may have already freed the buffer.
 % memory.  Leaking memory is a problem in all systems that allow dynamic
 % memory creation.  This would occur in {\tt surge} if the
 % \code{SOS\_MSG\_RELEASE} flag were left out of the call to
-% \code{post\_net} on line 23 of figure~\ref{surge}.  Further, tricky
+% \code{post\_net} on line 23 of Figure~\ref{surge}.  Further, tricky
 % dangling pointer would result from forgetting to claim ownership of
 % the incoming data before it is sent out over the UART at line 20 of
-% figure~\ref{surge}.
+% Figure~\ref{surge}.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -286,7 +286,7 @@ In other words, proper resource management
 naturally obeys an {\em ownership} discipline.  In this
 style, each resource has a unique owning component (or {\em owner}), 
 who has the sole
-capability to access the resource.  The owner also the responsibility to
+capability to access the resource.  The owner also has the responsibility to
 eventually dispose of the resource or explicitly {\em transfer} 
 ownership to another
 component.
@@ -358,7 +358,7 @@ real sensor-network software.
 
 \subsection{TinyOS and SOS, Revisited}
 
-The \code{reserve}
+The \code{receive}
 implementation in Figure~\ref{fig:genericbase} obeys our static ownership
 discipline, assuming the annotations described above. 
 Upon entry to the
@@ -374,28 +374,50 @@ it in \code{ourBuffer}.
 If the message is unable to be sent, the function
 returns the \code{received} buffer, thereby giving up ownership and
 all references to the buffer.
-\mynote{Seems like we need to say something about the send calls.  If
-  ownership is not transferred, our rules would not allow the
-  recipient to access the sent buffer!  So what's the deal?}
+%\mynote{Seems like we need to say something about the send calls.  If
+%  ownership is not transferred, our rules would not allow the
+%  recipient to access the sent buffer!  So what's the deal?}
+% ROY: 11/9/06 I am leaning towards skimming over this one.  Here is the full
+% deal:
+% - send could take ownership
+% - this means we can no longer access the ptr via ownBuffer
+% - at some later point in time a sendDone event "allocates" data that we can
+%   now access via ownBuffer
+% A more accurate protrayl is:
+% - send lends ownership
+% - lended data can ONLY be read
+% - lender can not access lended data until sendDone event is received
+% We do not currently handle either of these cases.  But I do not seem them as
+% causing any signifcant problems.  Especially for the modular case, where we
+% do not track the state of global variables between subsiquent events. 
 
 The ownership discipline also catches the potential errors that can be
-introduced into \code{GenericBaseM}, as described earlier.  For
-example, suppose the programmer failed to update \code{nextReceiveBuffer}
-at line 10, so that \code{received} is returned to the caller even
-when it is sent over the bridged interface.  In this case, the
-\code{receive} function must not manipulate \code{received} after the
-return, since the function transfers ownership to the caller at that
-point.  This rule is violated by the asynchronous \code{send} calls,
-which may not execute until after the \code{receive} function has
-completed.  \mynote{Not clear that our checker catches this.}
-Suppose instead that the programmer failed to update \code{ourBuffer}
+introduced into \code{GenericBaseM}, as described earlier.  
+%
+% ROY: 11/09/06 Our analysis would not catch this.  Remember.  It is fine to
+% create as many aliases as we want of dynamiclly allocated data.  We just can
+% not use them after we release the data.  As described above, we would need
+% to extend our analysis to understand "lending" or really have sendDone
+% "allocate" data.
+%
+% For
+% example, suppose the programmer failed to update \code{nextReceiveBuffer}
+% at line 10, so that \code{received} is returned to the caller even
+% when it is sent over the bridged interface.  In this case, the
+% \code{receive} function must not manipulate \code{received} after the
+% return, since the function transfers ownership to the caller at that
+% point.  This rule is violated by the asynchronous \code{send} calls,
+% which may not execute until after the \code{receive} function has
+% completed.  \mynote{Not clear that our checker catches this.}
+%
+Suppose that the programmer failed to update \code{ourBuffer}
 at line 11, leading to a memory leak.  In this case, the
 \code{receive} function fails to either free, transfer, or
 persistently store \code{received}, violating our second rule above.
  
 % protocol helps us to reason about potential bugs that
 % could be introduced into \code{GenericBaseM}.  As noted above, omitting
-% line 11 from the implementation in figure~\ref{genericbase} results in
+% line 11 from the implementation in Figure~\ref{genericbase} results in
 % a resource leak.  However, this violates the resource ownership
 % protocol.  Since the \code{receive} interface owns the data referenced
 % by the formal variable \code{received}, a violation results since that
@@ -421,9 +443,9 @@ ensure adherence to the implicit ownership protocol associated with
 the API.  Our work makes this protocol explicit and provides static
 checking for conformance.
 
-Given this API, the {\tt surge} module in figure~\ref{fig:surge} can be seen to
+Given this API, the {\tt surge} module in Figure~\ref{fig:surge} can be seen to
 adhere to our static ownership discipline.  
-The \code{MSG\_DATA\_RDY} message handler allocates \code{pkt},
+The \code{MSG\_DATA\_READY} message handler allocates \code{pkt},
 thereby taking initial 
 ownership. This pointer is then dereferenced in order to provide the
 sensor data to be sent up the routing tree.  This pointer manipulation
