@@ -275,6 +275,7 @@ result, since the network layer may have already freed the buffer.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \subsection{Memory Ownership}
+\label{subsec:owner}
 
 Examination of the sensor network applications 
 presented above reveals an underlying
@@ -322,7 +323,7 @@ modular feedback on the potential for resource management errors.
 Informally, our
 static ownership discipline enforces the following rules:
 %
-\begin{itemize}
+\begin{enumerate}
 %
 \item Each function may only refer to dynamic memory that its component owns.
 This includes memory allocated in the function, memory in the
@@ -337,7 +338,7 @@ location.
 \item After a function frees or releases memory that it owns, it may
 no longer access the memory.
 %
-\end{itemize}
+\end{enumerate}
 
 
 

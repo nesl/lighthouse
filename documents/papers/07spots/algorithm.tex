@@ -1,72 +1,101 @@
-\section{Analysis Specification and Implementation}
+\section{The Lighthouse Tool}
 \label{sec:alg}
 
-Motivated by the observation that a simple ownership protocol can be
-used to reason about proper resource usage common to sensor networks,
-we developed Lighthouse to look for violations of this protocol within
-SOS source code.  
+We have instantiated our approach to static checking of dynamic
+resource management in Lighthouse, a tool for ensuring proper
+ownership of dynamic memory in SOS programs.  The tool employs a suite
+of dataflow analyses to enforce the three rules described in
+Section~\ref{subsec:owner} on each function.  
+This section overviews the usage and implementation of Lighthouse.
+
+% Motivated by the observation that a simple ownership protocol can be
+% used to reason about proper resource usage common to sensor networks,
+% we developed Lighthouse to look for violations of this protocol within
+% SOS source code.  
+% %
+% Lighthouse checks two key ownership properties properties
+% relating to resources: No resource should be leaked, and there should
+% be no dangling pointers.  
+% %
+% More precisely:
+
+% \smallskip\noindent {\bf No Leaks.} This first property defines the
+% absence of resource leaks by enforcing that along every program
+% execution path, every allocation is necessarily followed by either a
+% free or a store of a handle that refers to the same resource that was
+% just allocated.
+
+% \smallskip\noindent {\bf No Dangling Pointers.} The second property
+% states that once a resource has been freed, it is never accessed
+% again.
+
+
+\subsection{Ownership Annotations}
+
+Lighthouse depends on programmer-specified 
+{\em ownership annotations} to specify when ownership of a block of
+memory should transfer from one component to another.
 %
-Lighthouse checks two key ownership properties properties
-relating to resources: No resource should be leaked, and there should
-be no dangling pointers.  
-%
-More precisely:
+These annotations provide a ``spec'' for each function,
+indicating its preconditions and postconditions with respect to memory
+ownership.  This spec then enables precise modular checking of functions.  Each
+function body is checked to ensure the postconditions on exit, under the
+assumption that the preconditions hold on entry.  The function is also
+checked to obey the three rules constituting the ownership discipline,
+defined earlier.  Each
+caller is separately checked to ensure the callee's preconditions
+before the call, and
+it may assume the callee's postconditions after the call.
 
-\smallskip\noindent {\bf No Leaks.} This first property defines the
-absence of resource leaks by enforcing that along every program
-execution path, every allocation is necessarily followed by either a
-free or a store of a handle that refers to the same resource that was
-just allocated.
-
-\smallskip\noindent {\bf No Dangling Pointers.} The second property
-states that once a resource has been freed, it is never accessed
-again.
-
-
-\subsection{Annotations}
-
-Lighthouse uses {\em ownership annotations} to reason about the source
-code that it analyzes.  
-%
-These annotations are specified by a programmer to describe how
-functions should manipulate memory ownership.
-
-
-Two annotations are used to describe changes of memory ownership
+Two ownership annotations are used to describe changes of memory ownership
 resulting from function calls: {\tt lh\_claim} and {\tt lh\_release}.
 %
 The {\tt lh\_claim} annotation states that the caller of the function
-gains ownership of the memory pointed to by the the annotated formal
-parameter or annotated return value, which must have been released by
-the callee.  
+will take ownership of the memory pointed to by the annotated formal
+parameter or annotated return value, and therefore that the function
+body must release it.
+For example, the SOS kernel's
+\code{ker\_malloc} function has the {\tt lh\_claim} annotation on its
+return value, to indicate that it returns dynamically allocated memory
+that the caller will own.
 %
 Conversely, the {\tt lh\_release} annotation states that the caller of
-the function is releasing the data pointed to by the formal parameter
-to the function callee.  
+the function will release ownership of 
+the memory pointed to by the annotated formal parameter,
+and therefore that the function body must take ownership of this memory.
+For example, the formal parameter of the SOS kernel's \code{ker\_free}
+function has the {\tt lh\_release} annotation.
 %
-For example, the base allocation function used in SOS is
-\code{ker\_malloc} and has the {\tt lh\_claim} annotation on its
-return value to indicate that it returns dynamically allocated memory
-that the caller will own.
 
-
-A {\tt store} is a variable used by a function to persistently store a
-reference to dynamically allocated data between invocations of the
-function.
+Our ownership discipline defined earlier relies 
+on the notion of a {\em persistent
+store}:  each component is assumed to own the data in its persistent
+store and can properly ``release'' owned data into this store.
 %
-All global and static variables are assumed by the analysis to be {\tt
-stores}.
+All global and static variables declared with a component 
+are assumed by the analysis to be part
+of the component's persistent store.
 %
-A third annotation, {\tt lh\_store} is used to denote formal
-parameters of functions that behave as {\tt stores}.
+A third and final annotation, {\tt lh\_store}, is used to denote formal
+parameters of functions that can also be considered part of the
+persistent store.
 %
-An example usage of this annotation is the \code{state} parameter
-annotated with {\tt lh\_store} within a module's message handler in
-SOS.  
+An example usage of {\tt lh\_store} is to annotate 
+the \code{state} parameter of a
+module's message handler in SOS.
 %
-This parameter points to the persistent {\tt store} allocated and
+As described earlier, 
+this parameter points to the persistent store allocated and
 maintained by the SOS kernel for a module.
 
+% Given such annotations, the proper handling of procedure calls becomes
+% straightforward.  A procedure call statement is treated logically by
+% the checker as an assignment from actuals to formals, followed by an
+% assignment from the return value of the call to the left-hand-side
+% variable (if any).  A formal parameter annotated with the {\tt
+% lh\_claim} annotation is treated as an allocation site, just as is {\tt
+% ker\_malloc}.  A formal parameter annotated with the {\tt lh\_release}
+% annotation is treated as a disposal site, just as is {\tt ker\_free}.
 
 Annotations typically reside in an external configuration file listing
 a function name and the corresponding annotations for the return value
@@ -78,125 +107,13 @@ this configuration file.
 Annotations can also be included directly in the source code as GCC
 attributes decorating the prototype of a function.
 %
-Lighthouse ensures that each parameter with an annotation properly
-follows the ownership protocol within the body of the function.
+% Lighthouse ensures that each parameter with an annotation properly
+% follows the ownership protocol within the body of the function.
 %
 In practice we have found that a small set of annotations, 26 for the
-complete evaluation of SOS, is sufficient for precise analysis.
-
-
-\subsection{Core Analysis}
-
-Lighthouse checks programs at compile time for violations of the above
-two ownership properties.  
-%
-Our analysis is implemented in the CIL front end for C~\cite{CIL},
-which parses C code into a simple intermediate format and provides a
-framework for performing analysis on the intermediate code. 
-%
-Lighthouse takes as input a preprocessed C file and prints out error
-messages similar to those produced by the C preprocessor when suspect
-code is identified.
-%
-The analysis does not modify the preprocessed code, and can be
-trivially called from a makefile between the preprocessing and object
-creation stages of compilation.
-
-
-The Lighthouse analysis traverses a program's control-flow graph
-(CFG), which statically represents all possible execution paths.  
-%
-States that change the ownership of memory, resulting from calling
-functions with ownership annotations, trigger data flow analyses to
-check that the memory in question is properly handled.
-
-
-\mynote{ROY: I was not happy with how the per-data flow description fit
-into this section.  I felt that it took up a lot of space without
-providing much insight into the analysis.  Perhaps because the
-data flows are not particularly novel.  Or because I have been using
-them too long.  I have included a commented out summary of the core
-data flows used within Lighthouse if someone else wants to take a
-swing at adding them to the paper.}
-% %
-% Two core components make up the analysis performed by Lighthouse:
-% %
-% \begin{description}
-% %
-% \item[Search for Memory Leaks]  This dataflow analysis is triggered
-% whenever a CFG state is visited that results in memory that must be
-% claimed.  This dataflow verifies that the memory in question is stored
-% or released exactly once on each subsiquent path within the CFG.
-% %
-% \item[Search for Dereferenced Dangling Pointers] This dataflow is
-% triggered whenever a CFG state is visited that results in memory being
-% released.  This dataflow verifies that the released data is not
-% accessed directly or inderctly through an alias on any of the
-% subsequent paths in the function.
-% %
-% \item[Must Alias] This dataflow generates a flow-sensitive must-alias
-% information for use by other parts of the analysis.
-% %
-% \item[May Alias] This dataflow is included with the CIL distrobution
-% and is a fast flow-insensitive may analysis used by othe parts of the
-% analysis.
-% %
-% \end{description}
-
-
-\subsection{Pointer Aliasing}
-
-The analysis described above depends on dynamic alias
-information, which cannot be exactly computed at compile time.
-Instead, two standard approximations are {\em must-alias} analysis and
-{\em may-alias} analysis.  A must-alias analysis underapproximates the
-dynamic alias relations:  if a must-alias analysis determines that $x$
-and $y$ alias at a particular program point, then $\alias(x,y)$
-definitely holds at any run-time execution state corresponding to that
-program point.  A may-alias analysis overapproximates the dynamic
-alias relations:  if a may-alias analysis determines that $x$ and $y$
-{\em cannot} alias at a particular program point, then $\alias(x,y)$
-definitely does not hold at any run-time execution state corresponding
-to that program point.
-
-Our checker requires both kinds of static alias approximations.  In
-the first property described above, alias information is used to
-ensure that something definitely happens, namely that an allocated
-resource is eventually freed.  Therefore, in this case we approximate
-the true alias information with must-alias information.  In the second
-property described above, alias information is used to ensure that
-something definitely does not happen, namely an access to a freed
-resource.  Therefore, in this case we approximate the true alias
-information with may-alias information.
-
-Our implementation currently uses a simple flow-sensitive must-alias
-analysis.  For the may-alias analysis, we use a fast flow-insensitive
-alias analysis provided by the CIL framework.  It should be noted that 
-static alias analysis
-can be imprecise in the presence of complex pointer
-manipulations and pointer structures.  For example, CIL's may-alias
-analysis does not distinguish among the fields of a structure, instead
-considering them to always potentially alias one another.  This does not
-effect the correctness of the analysis in Lighthouse, but rather causes an overly 
-conservative analysis that may trigger false positives in some situations.
-
-\subsection{Modular Analysis}
-
-Our analysis is {\em modular}:  each function in a module or component
-is analyzed in isolation.  To make checking of a function body precise
-in the presence of calls to other functions, we employ the {\em ownership
-annotations} described above for function headers that capture the memory-related
-behavior of a called function.
-
-
-Given such annotations, the proper handling of procedure calls becomes
-straightforward.  A procedure call statement is treated logically by
-the checker as an assignment from actuals to formals, followed by an
-assignment from the return value of the call to the left-hand-side
-variable (if any).  A formal parameter annotated with the {\tt
-lh\_claim} annotation is treated as an allocation site, just as is {\tt
-ker\_malloc}.  A formal parameter annotated with the {\tt lh\_release}
-annotation is treated as a disposal site, just as is {\tt ker\_free}.
+complete evaluation of SOS, is sufficient for precise
+analysis. \mynote{Make sure this number is consistent with what it says
+  in section 4, which seems to be slightly more.}
 
 The ability to perform checking modularly allows application writers
 to obtain early feedback about the correctness of their resource
@@ -204,7 +121,94 @@ management, without requiring access to the rest of the system.  This
 is particularly important in a system like SOS, in which modules can
 be linked and unlinked dynamically.  In such a setting, the ``rest''
 of the system is a moving target, so it is not really possible to
-consider whole-program analysis.
+consider an approach based on whole-program analysis.
+
+
+\subsection{Implementation Overview}
+
+%
+Lighthouse is implemented in the CIL front end for C~\cite{CIL},
+which parses C code into a simple intermediate format and provides a
+framework for performing analyses on the intermediate code. 
+%
+Lighthouse takes as input a preprocessed C file and prints out error
+messages similar to those produced by a C compiler when suspect
+code is identified.
+%
+The analysis does not modify the preprocessed code and can be
+trivially called from a makefile between the preprocessing and code
+generation stages of compilation.
+
+
+The Lighthouse analysis traverses each function's control-flow graph
+(CFG) in isolation, which conservatively represents all possible execution
+paths through the function.  During this traversal, Lighthouse
+triggers two major dataflow analyses to detect potential errors:
+
+\begin{itemize}
+\item Whenever a node in the graph is
+encountered that allocates or takes ownership of a block of memory,
+Lighthouse invokes a dataflow analysis to ensure that every path from
+this node to the function exit frees, stores, or releases ownership
+of the memory exactly once.  If this property is not satisfied,
+Lighthouse reports a possible memory leak.
+
+\item Whenever a node in the graph is encountered that frees or
+  releases ownership of a block of memory, Lighthouse invokes a
+  dataflow analysis to ensure that no path from this node to the
+  function exit accesses the memory.  If this property is not
+  satisfied, Lighthouse reports a possible dangling pointer error.
+\end{itemize}
+
+\mynote{Check that this is true!}
+These two analyses also serve to check that a function meets its
+spec.  For the purpose of the Lighthouse traversal over a function's CFG,
+the function's entry node is considered
+an allocation point for all parameters with the {\tt lh\_release}
+annotation, and the function's exit node is considered a release point
+for all parameters and return values with the {\tt lh\_claim}
+annotation.  
+
+
+\subsection{Pointer Aliasing}
+
+The analysis described above requires knowledge of the memory
+pointed to by a function's pointers.  As usual, this is
+statically approximated by an {\em alias analysis}, which determines
+whether two different pointers store the same memory location at a
+given program point.  
+ Two standard approximations to the true dynamic alias information 
+are {\em must-alias} analysis and
+{\em may-alias} analysis.  A must-alias analysis underapproximates the
+dynamic alias relations:  if a must-alias analysis determines that $x$
+and $y$ alias at a particular program point, then they
+definitely alias at that point in 
+any program execution.  A may-alias analysis overapproximates the dynamic
+alias relations:  if a may-alias analysis determines that $x$ and $y$
+{\em cannot} alias at a particular program point, then they
+definitely do not alias at that point in any program execution.
+
+Lighthouse requires both kinds of static alias approximations.  In
+the first dataflow analysis described above, alias information is used to
+ensure that something definitely happens, namely that an allocated
+resource is eventually released.  Therefore, in this case we approximate
+the true alias information with must-alias information.  In the second
+dataflow analysis described above, alias information is used to ensure that
+something definitely does not happen, namely an access to a released
+resource.  Therefore, in this case we approximate the true alias
+information with may-alias information.
+
+We have built a simple flow-sensitive must-alias analysis for use by
+Lighthouse.  
+For the may-alias analysis, we use a fast flow-insensitive
+analysis provided by the CIL framework.  
+Obtaining precise
+alias information at compile time is notoriously difficult, and this
+limitation is the principal cause of false positives for our analysis.
+For example, CIL's may-alias
+analysis does not distinguish among the fields of a structure, instead
+considering them to always potentially alias one another.  Both alias
+analyses can be imprecise in the presence of linked data structures.
 
 
 \subsection{Limitations}
@@ -214,7 +218,7 @@ detecting violations of the ownership protocol on real sensor network
 code.  However, the checker is not guaranteed to find all such
 violations.  In other words, the checker can be used for finding
 memory errors but not for guaranteeing the absence of all memory
-errors.  We discuss three limitations of the checker in this regard.
+errors.  The checker's false negatives come from three sources.
 
 First, the checker does not precisely handle all of the unsafe
 features of the C programming language.  For example, pointer
@@ -223,54 +227,55 @@ form $p+i$, where $p$ is a pointer and $i$ is an integer, is simply
 treated as if it refers to the same block of memory as $p$.  If $p+i$
 in fact overflows to another block of memory at run time, the
 checker's assumption can cause it to miss errors.  These kinds of
-limitations are standard for C-based program analyses.
+{\em memory safety} assumptions are standard for C-based program analyses.
 
-Second, there is a design choice about how to treat resources that a
-handler does not explicitly acquire through an interface that is
-annotated with {\tt lh\_claim} and {\tt lh\_release}.  Technically the
+Second, there is a design choice about how to treat resource
+parameters that are not
+annotated with {\tt lh\_release}.  Technically the
 ownership protocol disallows these resources from being accessed at
 all, since the receiving module is not the owner.  
 %
-Lighthouse does not currently enforce this requirement that a module
+Lighthouse does not currently enforce the requirement that a module
 only access a resource that it owns.
 % 
-This allows new systems using Lighthouse to incrementally add
-annotations to iteratively refine the quality of the analysis without
+This design decision provides a seamless adoption path for Lighthouse
+on existing systems.  Programmers can incrementally add
+annotations to refine the quality of the analysis without
 suffering from excessive numbers of false positives.
 %
-Further, this provides a mechanism for allowing patterns of resource
-sharing that are in fact safe but not allowed by the ownership
+This decision also provides a mechanism for allowing patterns of resource
+sharing that are in fact safe but not supported by the ownership
 discipline, for example when a module temporarily ``borrows'' data from
 another module within a bounded scope.
 %
-But it does introduce the potential of missing real errors due to
-missing annotations.
+The cost of this flexibility is the potential to miss real resource
+management errors.
 %
-Regardless, the checker still ensures that a handler does not access a
-resource that has earlier been freed or released.
-
+However, the checker still ensures that a function does not access a
+resource that has earlier been released by the function, thereby
+detecting memory leaks.
 
 Third, our modular checker does not consider the overall order in
-which messages will be received.  
+which messages will be received by a component.  
 %
-However, application-level protocols assuming specific event orderings
+However, event orderings
 can affect the correctness of ownership tracking when a resource is
-placed in or accessed via a persistent store.
+accessed via the persistent store.
 %
-For example, imagine a module that responds to three events: $\create$
+For example, consider a module that responds to three events: $\create$
 causes the module to allocate a block $b$ and store it into the
 module's persistent store, $\access$ causes the module to access block
-$b$ via the  store, and $\delete$ causes the module to deallocate
+$b$ via the store, and $\delete$ causes the module to deallocate
 block $b$ in the store.  
 %
-The module properly manages block $b$ as long as the temporal sequence
-of events follows the regular expression: $($ $\alloc$ $\access^*$
+The module avoids dangling accesses to $b$ and leaks of $b$ 
+as long as the temporal sequence
+of events follows the regular expression $($ $\alloc$ $\access^*$
 $\delete$ $)^*$.  
 %
-This ordering ensures that the system never accesses the block before
-it is allocated and always eventually deletes the block.
 %
-However, Lighthouse currently only tracks data locally within each
+
+Lighthouse currently only tracks data locally within each
 event handler.  
 %
 When performing this tracking, the tool assumes on entry that all data
@@ -279,14 +284,17 @@ in the persistent store is owned by the module.
 The tool similarly considers a resource to be properly released when
 it is placed in the persistent store.  
 %
-These assumptions can miss errors, for example if an $\access$ event
+These assumptions allow each of the three event handlers in our
+example to pass all checks.  Nonetheless, dynamic memory errors can still happen, 
+for example if an $\access$ event
 ever occurs before the $\alloc$ event.  
 %
-However, our assumptions provide a practical point in the design space
+Our assumptions provide a practical point in the design space
 that allows each event handler to be usefully checked for local
 violations of the ownership protocol.  
 %
-Handling these inter-module relationships and application-level
-protocols is something we are interested to include in our future
-work~\cite{AlurPOPL05,HJM05}.
+Handling inter-module relationships and application-level
+protocols is something we plan to pursue in the future, leveraging
+recent work on {\em interface synthesis} 
+for software components~\cite{AlurPOPL05,HJM05}.
 
