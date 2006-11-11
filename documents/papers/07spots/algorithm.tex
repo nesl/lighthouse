@@ -110,10 +110,9 @@ attributes decorating the prototype of a function.
 % Lighthouse ensures that each parameter with an annotation properly
 % follows the ownership protocol within the body of the function.
 %
-In practice we have found that a small set of annotations, 26 for the
+In practice we have found that a small set of annotations, \numannote for the
 complete evaluation of SOS, is sufficient for precise
-analysis. \mynote{Make sure this number is consistent with what it says
-  in section 4, which seems to be slightly more.}
+analysis. 
 
 The ability to perform checking modularly allows application writers
 to obtain early feedback about the correctness of their resource
@@ -160,7 +159,6 @@ Lighthouse reports a possible memory leak.
   satisfied, Lighthouse reports a possible dangling pointer error.
 \end{itemize}
 
-\mynote{Check that this is true!}
 These two analyses also serve to check that a function meets its
 spec.  For the purpose of the Lighthouse traversal over a function's CFG,
 the function's entry node is considered
