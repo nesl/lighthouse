@@ -4,9 +4,13 @@
 Motivated by the observation that a simple ownership protocol can be
 used to reason about proper resource usage common to sensor networks,
 we developed Lighthouse to look for violations of this protocol within
-SOS code.  Lighthouse checks two key properties relating to resources:
-No resource should be leaked, and there should be no dangling
-pointers.  More precisely:
+SOS source code.  
+%
+Lighthouse checks two key ownership properties properties
+relating to resources: No resource should be leaked, and there should
+be no dangling pointers.  
+%
+More precisely:
 
 \smallskip\noindent {\bf No Leaks.} This first property defines the
 absence of resource leaks by enforcing that along every program
@@ -18,39 +22,131 @@ just allocated.
 states that once a resource has been freed, it is never accessed
 again.
 
-We now explain how these two properties are checked using the
-Lighthouse tool, and mention some of the limitations of our implementation.
+
+\subsection{Annotations}
+
+Lighthouse uses {\em ownership annotations} to reason about the source
+code that it analyzes.  
+%
+These annotations are specified by a programmer to describe how
+functions should manipulate memory ownership.
 
 
-\subsection{Implementation}
+Two annotations are used to describe changes of memory ownership
+resulting from function calls: {\tt lh\_claim} and {\tt lh\_release}.
+%
+The {\tt lh\_claim} annotation states that the caller of the function
+gains ownership of the memory pointed to by the the annotated formal
+parameter or annotated return value, which must have been released by
+the callee.  
+%
+Conversely, the {\tt lh\_release} annotation states that the caller of
+the function is releasing the data pointed to by the formal parameter
+to the function callee.  
+%
+For example, the base allocation function used in SOS is
+\code{ker\_malloc} and has the {\tt lh\_claim} annotation on its
+return value to indicate that it returns dynamically allocated memory
+that the caller will own.
+
+
+A {\tt store} is a variable used by a function to persistently store a
+reference to dynamically allocated data between invocations of the
+function.
+%
+All global and static variables are assumed by the analysis to be {\tt
+stores}.
+%
+A third annotation, {\tt lh\_store} is used to denote formal
+parameters of functions that behave as {\tt stores}.
+%
+An example usage of this annotation is the \code{state} parameter
+annotated with {\tt lh\_store} within a module's message handler in
+SOS.  
+%
+This parameter points to the persistent {\tt store} allocated and
+maintained by the SOS kernel for a module.
+
+
+Annotations typically reside in an external configuration file listing
+a function name and the corresponding annotations for the return value
+and formal parameters.
+%
+Only functions that require annotations need to be included within
+this configuration file.
+%
+Annotations can also be included directly in the source code as GCC
+attributes decorating the prototype of a function.
+%
+Lighthouse ensures that each parameter with an annotation properly
+follows the ownership protocol within the body of the function.
+%
+In practice we have found that a small set of annotations, 26 for the
+complete evaluation of SOS, is sufficient for precise analysis.
+
+
+\subsection{Core Analysis}
 
 Lighthouse checks programs at compile time for violations of the above
-two properties.  The tool performs a static dataflow analysis for each
-property on a program's control-flow graph (CFG), which statically
-represents all possible execution paths.  
+two ownership properties.  
+%
+Our analysis is implemented in the CIL front end for C~\cite{CIL},
+which parses C code into a simple intermediate format and provides a
+framework for performing analysis on the intermediate code. 
+%
+Lighthouse takes as input a preprocessed C file and prints out error
+messages similar to those produced by the C preprocessor when suspect
+code is identified.
+%
+The analysis does not modify the preprocessed code, and can be
+trivially called from a makefile between the preprocessing and object
+creation stages of compilation.
 
-For the SOS instantiation the $\mathrm{alloc}$ and $\mathrm{free}$
-operations are respectively represented by {\tt ker\_malloc} and {\tt
-ker\_free}.  To identify a module's persistent state in SOS, we
-provide a new attribute {\tt lh\_store} for formal parameters.  For
-example, the {\tt state} argument to a module's event handler would be
-annotated with this attribute.  This is required since SOS modules are
-passed in a reference to their persistent state, rather than directly accessing a
-global variable.
 
-Our dataflow analyses are implemented in the CIL front end for
-C~\cite{CIL}, which parses C code into a simple intermediate format
-and provides a framework for performing analyses on the intermediate
-code.  Each analysis is {\em modular}, considering each module
-independently and analyzing the CFG for each procedure within the
-module in isolation.  Care must be taken that our static checker
-conservatively approximate the dynamic conditions that must be
-satisfied.  Two notable issues are the treatment of pointer aliasing
-and of procedure calls, which we discuss in turn.
+The Lighthouse analysis traverses a program's control-flow graph
+(CFG), which statically represents all possible execution paths.  
+%
+States that change the ownership of memory, resulting from calling
+functions with ownership annotations, trigger data flow analyses to
+check that the memory in question is properly handled.
 
-\smallskip\noindent
-{\bf Pointer Aliasing.}
-First, the invariants described above depend on dynamic alias
+
+\mynote{ROY: I was not happy with how the per-data flow description fit
+into this section.  I felt that it took up a lot of space without
+providing much insight into the analysis.  Perhaps because the
+data flows are not particularly novel.  Or because I have been using
+them too long.  I have included a commented out summary of the core
+data flows used within Lighthouse if someone else wants to take a
+swing at adding them to the paper.}
+% %
+% Two core components make up the analysis performed by Lighthouse:
+% %
+% \begin{description}
+% %
+% \item[Search for Memory Leaks]  This dataflow analysis is triggered
+% whenever a CFG state is visited that results in memory that must be
+% claimed.  This dataflow verifies that the memory in question is stored
+% or released exactly once on each subsiquent path within the CFG.
+% %
+% \item[Search for Dereferenced Dangling Pointers] This dataflow is
+% triggered whenever a CFG state is visited that results in memory being
+% released.  This dataflow verifies that the released data is not
+% accessed directly or inderctly through an alias on any of the
+% subsequent paths in the function.
+% %
+% \item[Must Alias] This dataflow generates a flow-sensitive must-alias
+% information for use by other parts of the analysis.
+% %
+% \item[May Alias] This dataflow is included with the CIL distrobution
+% and is a fast flow-insensitive may analysis used by othe parts of the
+% analysis.
+% %
+% \end{description}
+
+
+\subsection{Pointer Aliasing}
+
+The analysis described above depends on dynamic alias
 information, which cannot be exactly computed at compile time.
 Instead, two standard approximations are {\em must-alias} analysis and
 {\em may-alias} analysis.  A must-alias analysis underapproximates the
@@ -84,44 +180,23 @@ considering them to always potentially alias one another.  This does not
 effect the correctness of the analysis in Lighthouse, but rather causes an overly 
 conservative analysis that may trigger false positives in some situations.
 
-\smallskip\noindent
-%
-{\bf Modular Analysis.}
-%
+\subsection{Modular Analysis}
+
 Our analysis is {\em modular}:  each function in a module or component
 is analyzed in isolation.  To make checking of a function body precise
-in the presence of calls to other functions, we employ {\em ownership
-attributes} for function headers that capture the memory-related
-behavior of a called function.  We add two attributes to the C code:
-{\tt lh\_claim} and {\tt lh\_release}.  A formal parameter or return
-value that has the {\tt lh\_claim} attribute indicates that the caller
-must take ownership of the associated memory after a call.  This
-annotation, for example, would be used to annotate a function that
-wraps a call to {\tt ker\_malloc} within SOS, allowing that function's
-callers to be properly checked without access to the function's
-implementation.  Similarly, an {\tt lh\_release} attribute on a formal
-parameter indicates that ownership of the parameter is transferred
-from the caller of the function to the callee.  
-%
-% If a parameter does not have an ownership attribute, memory
-% ownership is unchanged.  Lighthouse ensures that these attributes
-% are employed wherever necessary, when checking the implementation of
-% each function.  
-%
-Lighthouse ensures that parameters with these attributes properly
-follow the ownership protocol within the body of the function.
-%
-In practice, we have found that a small set of annotations is
-sufficient for precise analysis.
+in the presence of calls to other functions, we employ the {\em ownership
+annotations} described above for function headers that capture the memory-related
+behavior of a called function.
 
-Given such attributes, the proper handling of procedure calls becomes
+
+Given such annotations, the proper handling of procedure calls becomes
 straightforward.  A procedure call statement is treated logically by
 the checker as an assignment from actuals to formals, followed by an
 assignment from the return value of the call to the left-hand-side
 variable (if any).  A formal parameter annotated with the {\tt
-lh\_claim} attribute is treated as an allocation site, just as is {\tt
+lh\_claim} annotation is treated as an allocation site, just as is {\tt
 ker\_malloc}.  A formal parameter annotated with the {\tt lh\_release}
-attribute is treated as a disposal site, just as is {\tt ker\_free}.
+annotation is treated as a disposal site, just as is {\tt ker\_free}.
 
 The ability to perform checking modularly allows application writers
 to obtain early feedback about the correctness of their resource
@@ -130,7 +205,6 @@ is particularly important in a system like SOS, in which modules can
 be linked and unlinked dynamically.  In such a setting, the ``rest''
 of the system is a moving target, so it is not really possible to
 consider whole-program analysis.
-
 
 
 \subsection{Limitations}
@@ -161,12 +235,12 @@ Lighthouse does not currently enforce this requirement that a module
 only access a resource that it owns.
 % 
 This allows new systems using Lighthouse to incrementally add
-annotations to iterativly refine the quality of the analysis without
+annotations to iteratively refine the quality of the analysis without
 suffering from excessive numbers of false positives.
 %
 Further, this provides a mechanism for allowing patterns of resource
 sharing that are in fact safe but not allowed by the ownership
-disciplin, for example when a module temporarily ``borrows'' data from
+discipline, for example when a module temporarily ``borrows'' data from
 another module within a bounded scope.
 %
 But it does introduce the potential of missing real errors due to
@@ -176,32 +250,42 @@ Regardless, the checker still ensures that a handler does not access a
 resource that has earlier been freed or released.
 
 
-Finally, our modular checker does not consider the overall order in
-which messages will be received.  However, there may be
-application-level protocols that determine how events are generated in
-the system, and these protocols can affect the correctness of
-ownership tracking when a resource is placed in or accessed from a
-persistent store.
+Third, our modular checker does not consider the overall order in
+which messages will be received.  
+%
+However, application-level protocols assuming specific event orderings
+can affect the correctness of ownership tracking when a resource is
+placed in or accessed via a persistent store.
 %
 For example, imagine a module that responds to three events: $\create$
 causes the module to allocate a block $b$ and store it into the
 module's persistent store, $\access$ causes the module to access block
 $b$ via the  store, and $\delete$ causes the module to deallocate
-block $b$ in the store.  The module properly manages block $b$ as
-long as the temporal sequence of events follows the regular expression:
-$($ $\alloc$ $\access^*$ $\delete$ $)^*$.  This ordering ensures that the system
-never accesses the block before it is allocated and always eventually
-deletes the block.
+block $b$ in the store.  
 %
-However, Lighthouse currently only tracks data locally within each event handler.
+The module properly manages block $b$ as long as the temporal sequence
+of events follows the regular expression: $($ $\alloc$ $\access^*$
+$\delete$ $)^*$.  
+%
+This ordering ensures that the system never accesses the block before
+it is allocated and always eventually deletes the block.
+%
+However, Lighthouse currently only tracks data locally within each
+event handler.  
+%
 When performing this tracking, the tool assumes on entry that all data
-in the persistent store is owned by the module.  The tool similarly
-considers a resource to be properly released when it is placed in the
-persistent store.  These assumptions can miss errors, for example if
-an $\access$ event ever occurs before the $\alloc$ event.  However,
-our assumptions provide a practical point in the design space that
-allows each event handler to be usefully checked for local violations
-of the ownership protocol.
+in the persistent store is owned by the module.
+%
+The tool similarly considers a resource to be properly released when
+it is placed in the persistent store.  
+%
+These assumptions can miss errors, for example if an $\access$ event
+ever occurs before the $\alloc$ event.  
+%
+However, our assumptions provide a practical point in the design space
+that allows each event handler to be usefully checked for local
+violations of the ownership protocol.  
+%
 Handling these inter-module relationships and application-level
 protocols is something we are interested to include in our future
 work~\cite{AlurPOPL05,HJM05}.
