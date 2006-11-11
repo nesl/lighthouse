@@ -308,14 +308,25 @@ component.
 %
 
 In this paper, we describe an approach for statically enforcing an
-ownership discipline on sensor network applications.  Informally, our
+ownership discipline on sensor network applications.  
+Lightweight annotations allow programmers to specify the ownership
+transfer requirements of each function.  For example, in
+Figure~\ref{fig:genericbase} the \code{receive} function would be
+annotated to indicate that ownership of the \code{received} parameter
+is being transferred from the caller to the callee, and that ownership
+of the return value is being transferred from the callee to the
+caller.  Given these annotations, we define a static checker that can
+analyze each function of a component in isolation, providing early and
+modular feedback on the potential for resource management errors.
+
+Informally, our
 static ownership discipline enforces the following rules:
 %
 \begin{itemize}
 %
-\item Each function may only refer to dynamic memory that it owns.
+\item Each function may only refer to dynamic memory that its component owns.
 This includes memory allocated in the function, memory in the
-surrounding component's persistent store, and any formal parameters
+component's persistent store, and any formal parameters
 annotated as having their ownership transferred to the component.
 %
 \item Each function that allocates or obtains ownership of a block of
@@ -329,19 +340,10 @@ no longer access the memory.
 \end{itemize}
 
 
-Lightweight annotations allow programmers to specify the ownership
-transfer requirements of each function.  For example, in
-Figure~\ref{fig:genericbase} the \code{receive} function would be
-annotated to indicate that ownership of the \code{received} parameter
-is being transferred from the caller to the callee, and that ownership
-of the return value is being transferred from the callee to the
-caller.  Given these annotations, we define a static checker that can
-analyze each function of a component in isolation, providing early and
-modular feedback on the potential for resource management errors.
 
 
 Our rules are necessarily an approximation of the runtime
-requirements for proper resource management, due to the modular nature
+requirements for proper resource ownership, due to the modular nature
 of the rules and the fundamental limitations of static analysis.  
 As described in the next
 section, the rules above can lead to both false positives and false
@@ -471,7 +473,7 @@ post\_long}, thereby retaining ownership but leaking the memory.
 In this case,
 the code fails to either free, transfer, or
 persistently store \code{pkt}, violating our second rule above.  On
-the other hand, if the \code{SOS\_MSG\_RELEASE} flat is set but the
+the other hand, if the \code{SOS\_MSG\_RELEASE} flag is set but the
 code accesses \code{pkt} after the call to \code{post\_long}, then the
 dangling access is caught by our third rule.
  
