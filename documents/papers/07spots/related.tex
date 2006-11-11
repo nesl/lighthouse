@@ -40,6 +40,18 @@ interesting to explore ways to leverage specialized language
 constructs to improve the tool's effectiveness.
 
 
+Current systems work is combining language support with static
+analysis to create robust ownership frameworks.  A notable example is
+the Singularity operating system~\cite{fahndrich06language}.
+Singularity allows processes to transfer ownership of data buffers
+using well defined channels.  A strict channel definition is combined
+with static analysis to show that processes in such a system obey
+nearly the same ownership invariants as those described in this paper.
+Where Singularity creates a provably safe environment on top of custom
+language, Lighthouse aims to push as much protection as possible onto
+standard C code.
+
+
 Recent work in the programming languages community has explored the
 concept of {\em ownership
 types}~\cite{ownership,ownership2,BoyapatiEtAl02,aliasjava} for
@@ -75,7 +87,7 @@ and verification framework.
 
 Finally, there have been several proposals for a form of {\em unique}
 or {\em linear}
-pointer~\cite{Boyland:2001:ABU,aliasjava,Wad90:linear,adoption-focus},
+pointer~\cite{Boyland:2001:ABU,aliasjava,Wad90:linear,adoption-focus,Vault},
 which is guaranteed to be the only reference to its referent.  These
 systems typically include a form of transfer of uniqueness from one
 pointer to another.  For example, a {\tt unique} pointer in
