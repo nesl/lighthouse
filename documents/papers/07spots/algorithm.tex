@@ -130,11 +130,11 @@ Lighthouse is implemented in the CIL front end for C~\cite{CIL},
 which parses C code into a simple intermediate format and provides a
 framework for performing analyses on the intermediate code. 
 %
-Lighthouse takes as input a preprocessed C file and prints out error
+Lighthouse takes as input a preprocessed C file and prints out warning
 messages similar to those produced by a C compiler when suspect
 code is identified.
 %
-The analysis does not modify the preprocessed code and can be
+The analysis does not modify the preprocessed code, so it can be
 trivially called from a makefile between the preprocessing and code
 generation stages of compilation.
 

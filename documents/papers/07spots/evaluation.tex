@@ -1,69 +1,73 @@
 \section{Evaluation}
 \label{sec:eval}
 
-This evaluation examines to what extent this type of tool is needed
-within the sensor network community and how effective it is at
-isolating problems within sensor network systems.  Our evaluation
-uses code from the public CVS archive of the SOS operating system.
+In this section we evaluate the need for static checking of resource
+management and the practical utility of our
+approach for statically detecting resource management errors in
+sensor-network software.  Our evaluation uses all code in the
+public CVS archive of the SOS operating system.
 SOS applications are made up of small
 user modules that can be combined into larger programs.  These modules
-run on top of a well defined kernel and are developed using an API
+run on top of the SOS kernel and are developed using an API
 supplied by this kernel.
 
 
 \subsection{Quantifying Dynamic Memory Usage in SOS}
 
-Of interest is the prevalence of dynamic resource management within
-sensor network systems.  This is seen in TinyOS through buffer swapping
-within messaging stacks and more general message queues.  Within SOS
-this is seen through memory buffer management.  
+First we measure the prevalence of dynamic resource management within
+sensor network systems.  As we have seen, in TinyOS this 
+corresponds to the buffer swapping protocol
+within messaging stacks, and in SOS
+this corresponds to dynamic memory management.
+Focusing on SOS, we quantify the usage in SOS modules of the kernel's API for
+memory manipulation.
+This includes the 
+functions used to allocate ({\tt ker\_malloc}), free ({\tt
+  ker\_free}), 
+and transfer ownership ({\tt SOS\_MSG\_RELEASE} and {\tt
+  ker\_msg\_take\_data}) of blocks
+of memory.  \mynote{I wanted to explicitly list the functions we
+  count.  Did I get them all?}
 
-Focusing on SOS, we quantify the usage of operations that manipulate
-memory ownership within the SOS operating system.  The SOS API
-includes a number of functions that manipulate memory.  These
-functions are used to allocate, free, and transfer ownership of blocks
-of memory.  
-
-The CVS head from October 2006 reveals 36 modules totaling 5824 lines
+The SOS CVS head from October 2006 contains 36 modules totaling 5824 lines
 of source code.  Within this sample there are 178 lines of code
-calling a function that manipulates memory, or one such function call
+calling a kernel function that manipulates memory, or one such function call
 for every 32 lines of code.  A look at all historic version of all
 SOS modules reveals that this frequency has not changed significantly
-over time.  These findings indicate that memory management has been
-and continues to be an important part of resource management in SOS.
+over time.  These findings indicate that dynamic memory management has been
+and continues to be an important part of SOS applications.
 
 
 \subsection{Validating SOS End-User Modules}
 
-Two additional questions arise as a result of the observation that
-memory is frequently manipulated as a resource in SOS.  These
-questions are:
+Given that
+memory is frequently manipulated as a resource in SOS programs, our
+next study aimed to answer the following questions:
 %
 \begin{itemize}
 %
-\item Do programmers have problems properly using the resource
-management?
+\item Do programmers have problems properly managing dynamic memory in SOS?
 %
-\item Does the analysis described in this paper help with
+\item Does the analysis and associated checker described in this paper
+  help statically identify
 those problems?
 %
 \end{itemize}
 
-To address these questions we ran our tool on 
-end-user modules from SOS
+To address these questions we ran Lighthouse on 
+all end-user modules from SOS
 to demonstrate
-how it would fit into an everyday development cycle.  For this
-analysis, we only consider the first occurrence of a particular bug
-within a program, even if the bug lasts through multiple consecutive
-versions of a particular module.  We applied the checker to every
+how it would fit into the ordinary SOS development cycle.  
+We applied the checker to every
 historic version of each user module included in the SOS CVS
 repository that would compile for the \code{mica2} target.  The 48
 available modules resulted in a total of 213 unique versions.
 %
-An external configuration of \numannote function annotations was used for this
-analysis.  
+An external configuration of 26 function annotations was used for this
+analysis.  \mynote{are these just claims and releases?  should say so
+  if so.}
 %
-Additionally, local store annotations were added to 9 module versions
+Additionally, {\tt lh\_store} annotations were added to 9 module versions,
 and a change to the core SOS API from the summer of 2006 required
 changing the value of a constant in 6 module versions.
 
@@ -87,28 +91,35 @@ changing the value of a constant in 6 module versions.
 %
 \end{table}
 
-Of the 213 modules analyzed, 13 of the modules generated warnings for a
+Of the 213 modules analyzed, 13 of the modules generated Lighthouse 
+warnings for a
 total of 25 warnings.
+For this
+analysis, we only consider the first occurrence of a particular warning
+within a module, even if the warning lasts through multiple consecutive
+versions of the module.  
 %
 Each warning was examined by hand and classified as an actual error or
 a false positive; the results are presented in Table~\ref{tab:module}.  
 %
 Eight of the warnings were real memory leaks in the code.
-This is impressive since the CVS is meant to house tested and stable
+This is impressive since the CVS repository houses well-tested and stable
 applications.
 %
 The 17 remaining warnings were further classified to better understand
-the sources of imprecision in the current implementation of the
-checker.  
+the sources of imprecision in Lighthouse.  
 
 \smallskip\noindent{\bf Memory leak false positives.}
 
-False positives from memory leaks came from two different sources.
-Five of the false positives resulted from a conservative assumption
-made by the must alias analysis used within the checker.  The analysis
-assumes that functions can change what data is referenced by a formal
-parameter.  This results in required must alias information being lost
-in these cases.  The analysis can easily rank these as probable false
+False positives from memory leaks came from two different sources of
+imprecision in our must-alias analysis.
+First, the analysis is intraprocedural, so it must
+conservatively
+assume that procedure calls can change the contents of pointers passed
+as actual arguments.  Therefore, any must-alias information for these
+pointers is invalidated across procedure calls, leading to five false
+positives.
+The analysis can easily rank these as probable false
 positives if the end user wishes to see more likely errors first.  The
 other three memory leaks were the result of linked list data structures
 that the must alias analysis is unable to properly reason about.  
