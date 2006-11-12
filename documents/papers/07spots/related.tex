@@ -3,14 +3,17 @@
 
 
 As mentioned earlier, the memory manager in the SOS operating
-system~\cite{sos} includes ownership annotations that are used by the kernel
+system~\cite{sos} includes an API that allows the kernel
 to dynamically track memory ownership.  When a module is removed from the
 running system, the kernel automatically deallocates all the memory that the
-module owns.  However, ownership annotations in SOS are {\em trusted}.  For
-example, missing annotations can cause the kernel's information to become out
-of date.  Also, there are no checks that owners and nonowners meet their
-obligations.  For example, nothing prevents a module from allocating memory
-and neglecting to eventually free it.  Our work grew out of a desire to
+module owns.  However, the burden is entirely on the programmer to
+ensure that this API is properly used.  For
+example, nothing prevents a
+module from releasing ownership of some memory and later accessing
+that memory.  
+Similarly, nothing prevents a module from allocating memory
+and neglecting to eventually free it.  
+Our work grew out of a desire to
 prevent these kinds of errors from occurring in SOS applications.
 
 
@@ -21,9 +24,8 @@ analysis to statically detect race conditions.  As another example,
 the galsC~\cite{TinyGALS, galsC} language for embedded systems employs
 an analysis to ensure the type safety of connections between
 components.  More recent work on Safe TinyOS and
-UTOS~\cite{regehr06memory} combines static analysis with run time
-protection of memory within sensor network systems.
-
+UTOS~\cite{regehr06memory} uses static analysis to insert run-time
+checks that ensure memory protection for sensor-network systems.
 
 A complementary approach to improving the reliability of sensor
 network software is through new language abstractions.  For example,
@@ -38,18 +40,6 @@ static checking.  Our tool currently analyzes ordinary C programs,
 since that is the language that SOS employs, but it would be
 interesting to explore ways to leverage specialized language
 constructs to improve the tool's effectiveness.
-
-
-Current systems work is combining language support with static
-analysis to create robust ownership frameworks.  A notable example is
-the Singularity operating system~\cite{fahndrich06language}.
-Singularity allows processes to transfer ownership of data buffers
-using well defined channels.  A strict channel definition is combined
-with static analysis to show that processes in such a system obey
-nearly the same ownership invariants as those described in this paper.
-Where Singularity creates a provably safe environment on top of custom
-language, Lighthouse aims to push as much protection as possible onto
-standard C code.
 
 
 Recent work in the programming languages community has explored the
@@ -85,17 +75,44 @@ assertions are proven as part of a more general program specification
 and verification framework.
 
 
-Finally, there have been several proposals for a form of {\em unique}
+There have been several proposals for a form of {\em unique}
 or {\em linear}
-pointer~\cite{Boyland:2001:ABU,aliasjava,Wad90:linear,adoption-focus,Vault},
+pointer~\cite{Boyland:2001:ABU,aliasjava,Wad90:linear},
 which is guaranteed to be the only reference to its referent.  These
-systems typically include a form of transfer of uniqueness from one
+systems sometimes include a form of transfer of uniqueness from one
 pointer to another.  For example, a {\tt unique} pointer in
 AliasJava~\cite{aliasjava} can be transferred as long as a dataflow
 analysis shows that the original pointer is no longer accessed after
-the transfer.  Our tool allows a resource to have any number of
-aliases from within its owner, which is less restrictive than the
-uniqueness requirement.  At the same time, transfer is still allowed
-safely, as long as none of these aliases are accessed after the
+the transfer.  Our tool does not enforce a uniqueness requirement.
+Instead, a resource may have any number of
+aliases from within its owning component, which is less restrictive
+and sometimes necessary in practice (the {\tt nextReceiveBuffer} alias
+in Figure~\ref{fig:genericbase} is a good example).  
+At the same time, transfer is still safely 
+allowed, as long as none of these aliases are accessed after the
 transfer.
+
+Finally, a language extension to C\#
+called Sing\# provides a {\em channel} construct
+for message-based communication, and
+the Singularity operating system uses Sing\# channels for communication among
+processes~\cite{fahndrich06language}.  
+Sing\#
+employs a 
+type system for channels based on the 
+Vault language~\cite{Vault,adoption-focus}, which provides a
+sophisticated form of linear types, in order to enforce ownership
+invariants on data buffers passed among processes.  This includes the
+use of programmer-defined channel {\em contracts} to specify and check
+ownership transfer.
+Lighthouse enforces a similar ownership discipline on dynamic memory
+in SOS, but at a very different point in the design space.  Rather
+than devising a new 
+language and type system, our approach works seamlessly with
+standard languages and toolchains for sensor-network programming in
+a lightweight manner.  Of course, a language solution like Sing\# has
+the potential to be more expressive and to provide stronger
+guarantees, by enforcing a stylized programming model.
+
+
 
