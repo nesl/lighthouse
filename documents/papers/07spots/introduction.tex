@@ -71,18 +71,18 @@ sense and send application.
 Like many sensor network applications, this application can be
 arranged for a dataflow architecture:  raw sensed data captured at the
 sensors moves through various filters
-% (via the {\tt surge} module)
+% (via the {\tt surge} component)
 before being forwarded to a base station.
-% (via the {\tt tree routing} module).  
+% (via the {\tt tree routing} component).  
 In order to naturally and efficiently implement the message passing,
 data buffers are 
 %  dynamically allocated as necessary and 
 passed by
-reference between system modules.
+reference between system components.
 % rather than by copying.
 
 If incorrectly implemented, this style of data sharing can lead to
-serious errors.  First, a module may access a (dangling) reference to
+serious errors.  First, a component may access a (dangling) reference to
 data that has been passed on and possibly freed downstream. 
 %
 This is dangerous because
@@ -93,7 +93,7 @@ systems for these platforms, like TinyOS~\cite{TinyOS} and
 SOS~\cite{sos}, do not support virtual memory, and a bad dereference
 can crash the system. 
 %
-Second, a module may get a data buffer from an upstream module but
+Second, a component may get a data buffer from an upstream component but
 forget to either dispose it or pass it on to the next stage for
 processing.  Since expensive garbage-collection mechanisms are not
 available, such resource leaks will very soon exhaust available
@@ -101,15 +101,15 @@ memory.
 
 
 Our key insight is that data transfer between
-modules in sensor network applications 
+components in sensor network applications 
 typically does not lead to sharing, but instead follows a
 producer-consumer pattern.  
 % Therefore, sensor network programmers
 % typically implement correct and efficient resource management using
 % implicit {\em ownership-based} data access protocols. 
 In this style,
-every resource has exactly one {\em owner} module at any point.  The
-module that creates the resource (dynamically 
+every resource has exactly one {\em owner} component at any point.  The
+component that creates the resource (dynamically 
 through a kernel call or statically
 through a variable declaration) assumes initial ownership.
 % Ownership of a resource is explicitly transferred through kernel calls
@@ -117,16 +117,16 @@ through a variable declaration) assumes initial ownership.
 % %
 % \mynote{ROY: This is a little awkward.  I added the notion of
 % ``static'' resource allocation above.  Here I am trying to explain
-% that it is valid for a module to simply ``remember'' a resource (ie.
-% not leak it).  In the prior version we simply said that a module must
+% that it is valid for a component to simply ``remember'' a resource (ie.
+% not leak it).  In the prior version we simply said that a component must
 % free or transfer ownership of data.}
 % %
-Each module has the right to access the resources that it owns but
+Each component has the right to access the resources that it owns but
 also the responsibility to eventually either free the resource or transfer
-ownership to another module.  
+ownership to another component.  
 %
-A module may not manipulate resources that it does not own.  If all
-modules obey this protocol, then there can be neither accesses to
+A component may not manipulate resources that it does not own.  If all
+components obey this protocol, then there can be neither accesses to
 dangling resources nor resource leaks.
 
 
@@ -146,7 +146,7 @@ In this paper, we present an approach for automated validation of dynamic
 resource management in sensor network software.  Programmers employ an
 explicit API along with lightweight program annotations to express
 ownership intentions for resources.  An automated program checker employs these
-annotations to analyze each module {\em
+annotations to analyze each component {\em
 at compile time} for violations of the ownership protocol, providing
 early feedback to programmers about the potential for dynamic resource
 errors.  The checker requires a novel suite of dataflow analyses to ensure

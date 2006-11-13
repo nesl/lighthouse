@@ -231,9 +231,9 @@ Second, there is a design choice about how to treat resource
 parameters that are not
 annotated with {\tt lh\_release}.  Technically the
 ownership protocol disallows these resources from being accessed at
-all, since the receiving module is not the owner.  
+all, since the receiving component is not the owner.  
 %
-Lighthouse does not currently enforce the requirement that a module
+Lighthouse does not currently enforce the requirement that a component
 only access a resource that it owns.
 % 
 This design decision provides a seamless adoption path for Lighthouse
@@ -243,8 +243,8 @@ suffering from excessive numbers of false positives.
 %
 This decision also provides a mechanism for allowing patterns of resource
 sharing that are in fact safe but not supported by the ownership
-discipline, for example when a module temporarily ``borrows'' data from
-another module within a bounded scope.
+discipline, for example when a component temporarily ``borrows'' data from
+another component within a bounded scope.
 %
 The cost of this flexibility is the potential to miss real resource
 management errors.
@@ -260,13 +260,13 @@ However, event orderings
 can affect the correctness of ownership tracking when a resource is
 accessed via the persistent store.
 %
-For example, consider a module that responds to three events: $\create$
-causes the module to allocate a block $b$ and store it into the
-module's persistent store, $\access$ causes the module to access block
-$b$ via the store, and $\delete$ causes the module to deallocate
-block $b$ in the store.  
+For example, consider a component that responds to three events: $\create$
+causes the component to allocate a block $b$ and store it into the
+component's persistent store, $\access$ causes the component to access block
+$b$ via the store, and $\delete$ causes the component to deallocate
+block $b$ from the store.  
 %
-The module avoids dangling accesses to $b$ and leaks of $b$ 
+The component avoids dangling accesses to $b$ and leaks of $b$ 
 as long as the temporal sequence
 of events follows the regular expression $($ $\alloc$ $\access^*$
 $\delete$ $)^*$.  
@@ -277,7 +277,7 @@ Lighthouse currently only tracks data locally within each
 event handler.  
 %
 When performing this tracking, the tool assumes on entry that all data
-in the persistent store is owned by the module.
+in the persistent store is owned by the component.
 %
 The tool similarly considers a resource to be properly released when
 it is placed in the persistent store.  
@@ -291,7 +291,7 @@ Our assumptions provide a practical point in the design space
 that allows each event handler to be usefully checked for local
 violations of the ownership protocol.  
 %
-Handling inter-module relationships and application-level
+Handling inter-component relationships and application-level
 protocols is something we plan to pursue in the future, leveraging
 recent work on {\em interface synthesis} 
 for software components~\cite{AlurPOPL05,HJM05}.

@@ -6,8 +6,8 @@ management and the practical utility of our
 approach for statically detecting resource management errors in
 sensor-network software.  Our evaluation uses all code in the
 public CVS archive of the SOS operating system.
-SOS applications are made up of small
-user modules that can be combined into larger programs.  These modules
+SOS applications are made up of small user written components called
+modules that can be combined into larger programs.  These modules
 run on top of the SOS kernel and are developed using an API
 supplied by this kernel.
 
@@ -32,7 +32,7 @@ of memory.
 The SOS CVS head from October 2006 contains 36 modules totaling 5824 source 
 lines of code.  Within this sample there are 178 lines of code
 calling a kernel function that manipulates memory, or one such function call
-for every 32 source lines of code.  A look at all historic version of all
+for every 33 source lines of code.  A look at all historic version of all
 SOS modules reveals that this frequency has not changed significantly
 over time.  These findings indicate that dynamic memory management has been
 and continues to be an important part of SOS applications.
@@ -159,7 +159,7 @@ be able to leverage these sophisticated techniques in a practical manner.
 \end{table}
 
 
-We ran a similar experiment on all code that comprises the SOS kernel
+We ran a similar experiment on all code that comprises the current SOS kernel
 for the \code{mica2} target.  This configuration consists of 9223
 source lines of code and required analyzing 40 source files.  Of these
 13 files generated at least one warning for a total of 35 warnings.  A
