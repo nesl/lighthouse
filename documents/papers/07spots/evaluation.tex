@@ -26,13 +26,13 @@ functions used to allocate ({\tt ker\_malloc}), free ({\tt
   ker\_free}), 
 and transfer ownership ({\tt SOS\_MSG\_RELEASE} and {\tt
   ker\_msg\_take\_data}) of blocks
-of memory.  \mynote{I wanted to explicitly list the functions we
-  count.  Did I get them all?}
+of memory.
 
-The SOS CVS head from October 2006 contains 36 modules totaling 5824 lines
-of source code.  Within this sample there are 178 lines of code
+
+The SOS CVS head from October 2006 contains 36 modules totaling 5824 source 
+lines of code.  Within this sample there are 178 lines of code
 calling a kernel function that manipulates memory, or one such function call
-for every 32 lines of code.  A look at all historic version of all
+for every 32 source lines of code.  A look at all historic version of all
 SOS modules reveals that this frequency has not changed significantly
 over time.  These findings indicate that dynamic memory management has been
 and continues to be an important part of SOS applications.
@@ -61,8 +61,8 @@ how it would fit into the ordinary SOS development cycle.
 We applied the checker to every
 historic version of each user module included in the SOS CVS
 repository that would compile for the \code{mica2} target.  The 48
-available modules resulted in a total of 213 unique versions.
-\mynote{how many lines of code?}
+available modules resulted in a total of 213 unique versions totaling 28042
+source lines of code.
 %
 An external configuration of 26 function annotations was used for this
 analysis.
@@ -159,12 +159,12 @@ be able to leverage these sophisticated techniques in a practical manner.
 \end{table}
 
 
-We ran a similar experiment on all code that comprises the 
-SOS kernel for the \code{mica2} target.  This configuration consists
-of approximately 9000 lines of source code and required analyzing 40
-source files, of which 35 generated warnings.  \mynote{Not broken down
-  into number of modules, like the previous study?}  A detailed breakdown of
-these warnings is provided in Table~\ref{tab:kernel}.
+We ran a similar experiment on all code that comprises the SOS kernel
+for the \code{mica2} target.  This configuration consists of 9223
+source lines of code and required analyzing 40 source files.  Of these
+13 files generated at least one warning for a total of 35 warnings.  A
+detailed breakdown of these warnings is provided in
+Table~\ref{tab:kernel}.
 
 The two actual errors occurred in
 functions that released ownership of some memory to the
@@ -189,9 +189,9 @@ require each caller to check the error code before assuming that it owns
 the memory pointed to by the parameter.
 
 While the user modules studied above resulted 
-in approximately one false positive for every 1650 lines of source
+in approximately one false positive for every 1650 source lines of 
 code, the SOS kernel had approximately one
-false positive for every 270 lines of source code.  
+false positive for every 270 source lines of code.  
 This increase in the rate of false positives is to be expected, since
 the kernel includes a significant amount of low-level code that does
 not conform to the ownership discipline meant to be obeyed by user
@@ -262,10 +262,9 @@ users to dynamically add modules to a running system.  The loader is
 known to have caused stability problems for developers in the past.
 We did an experiment to understand whether Lighthouse 
 could have eased development pains by detecting these problems as they
-were introduced into the code. \mynote{Was the loader part of the
-  experiments described above, or is this a separate thing?  If so,
-  say so.  Is this one of the conditional memory leaks described for
-  the SOS kernel?  Doesn't seem like it exactly.}
+were introduced into the code.  Since the loader is part of the kernel, 
+the historic versions examined in this section were not included in the
+analysis of the kernel presented above.
 
 In mid-October 2005 the block of code shown in Figure~\ref{fig:leak}
 was checked into CVS as part of {\tt loader.c} and introduced a memory
@@ -349,13 +348,9 @@ return SOS_OK;
 As shown above, a call to {\tt ker\_free} has been added before the
 final {\tt return}, in order to properly dispose of {\tt mod\_op}.
 The functions {\tt module\_op\_insmod} and {\tt module\_op\_rmmod}
-were similarly updated to free their third argument.  The CVS log message simply
-reads, ``Fixed another memory leak.''  \mynote{Presumably now
-  Lighthouse doesn't signal a warning any more?  If so, please say
-  this.}
-
-
-
+were similarly updated to free their third argument.  This corrected
+code passes through the checker without any warnings.  The CVS log
+message simply reads, ``Fixed another memory leak.''  
 
 
 
