@@ -1,0 +1,114 @@
+Assumptions:
+------------
+
+At this point I am assuming that two stores will not alias a single
+heap location.  Actually, I am making the more general assumptions that
+we do not have aliases at all.
+
+I also assume that we do not pass aliases to the same heap data into a
+function.  This allows me to break a function call up (as far as its
+effect on stores and labels to heap data) into a distinct 'call e' for
+each formal expression e.   This will probably make more sense when
+you look at the description of 'call' below.
+
+As noted when discussing the transfer function, I am not yet dealing
+with loops or conditionals.  I guess loops should just fall into place
+when the data flow runs.  Conditionals should also be handled by the
+dataflow.  I currently plan to have the dataflow raise an error at
+merge points if the states of each incoming point are not identical.
+I think...
+
+
+State:
+------
+
+Set of stores S.  Each store can be in the state Full or Empty.
+
+Set of labels to head data L.  I am pretty sure that we only track the
+heap data not referenced by a store.  Thus, labels are unique
+references to heap data that is not covered by the store.
+
+
+Transfer Function:
+------------------
+
+A program is made up of instructions.  Instructions effect the program
+state.  Instructions are applied sequentially to an initial incoming
+state of a function.  The following is the list of instructions types
+and corresponding transfer functions (ignoring conditionals and loops
+for now):
+
+
+e <- malloc
+~~~~~~~~~~~
+
+Expression e references new heap data.  
+
+- Expression e may be a store, in which case the store MUST be Empty
+and transitions to Full.
+
+- Otherwise, expression e becomes a label l for the heap data.  The
+label l must not already be in the set of labels L (this would
+override an old label to heap data resulting in a leak).  The
+transition adds label l to the set L.
+
+
+free e
+~~~~~~
+
+Release the heap data referenced by expression e.  
+
+- Expression e may be a store, in which case the store MUST be Full
+  and transitions to Empty.
+
+- Expression e may be a label l in L, and the transition removes label
+  l from L.
+
+- Otherwise, this is an error.
+
+
+s <- l
+~~~~~~
+
+Store s now references the heap data with label l.
+
+- Store s MUST be Empty and transitions to Full.
+
+- Label l MUST be in L and the transition removes l from L.
+
+
+access e
+~~~~~~~~
+
+General access of data via expression e.
+
+- Expression e may be a store, in which case the store MUST be Full.
+No transition.
+
+- Expression e may be a label l in L.  No transition.
+
+- Otherwise, expression e is independent of heap data so we do not
+care about it.  No transition.
+
+
+call e
+~~~~~~
+
+Pass expression e to a function.  Behavior depends on how the function
+treats e.  For now this information is contained in annotations on the
+formal parameter.
+
+- If formal is annotated with claim, treat the call as 'e <- malloc'.
+
+- If the formal is annotated with free, treat the call as 'free e'.
+
+- If the formal is not annotated, treat the call as 'access e'.
+
+
+return
+~~~~~~
+
+End of a function.
+
+- The set L must be empty.
+
