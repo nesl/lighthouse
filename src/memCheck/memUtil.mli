@@ -18,6 +18,10 @@ val get_return_statements: Cil.fundec -> Cil.stmt list;;
 
 val get_claim: Cil.instr -> Cil.exp list;;
 
+val get_claim_formals: Cil.instr -> Cil.exp list;;
+
+val returns_alloc: Cil.instr -> bool;;
+
 val get_released: Cil.instr -> Cil.exp list;;
 
 val get_alloc_funcs: Cil.file -> (string * int) list;;

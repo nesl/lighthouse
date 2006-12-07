@@ -94,13 +94,7 @@ let get_return_statements (f: fundec) : stmt list =
 ;;
 
 
-(* Takes an instruction and the name of an attribute.  This function checks to
- * so if the instruction is a Call and returns the empty list if it is not.  If
- * the instruction is a Call, then the function prototype is used to find if any
- * of the formals or return value of the attribute named [s] set.  For each such
- * formal or return value, the corresponding expressions from the instruction
- * are returned. *)
-let get_fun_exps_with_attribute (i:instr) (attr_name:string): exp list =
+let get_return_exp_with_attribute (i:instr) (attr_name:string): exp list =
 
   match i with
   
@@ -124,6 +118,44 @@ let get_fun_exps_with_attribute (i:instr) (attr_name:string): exp list =
                   [Lval lv] 
               | _ -> []
             in
+              
+              return_exp
+          )
+    
+    (* Catch for functions (such as function pointers) that we are unable to
+     * handle. *)
+    | Call (_, _, _, _) ->
+        if !verbose then (
+          ignore (E.warn "MemUtil.get_formal_exps_with_attribute:"); 
+          ignore (E.warn "Unable to understand function call %a.  Skipping.\n" d_instr i);
+        );
+        []
+       
+    | _ -> []
+;;
+
+
+(* Takes an instruction and the name of an attribute.  This function checks to
+ * so if the instruction is a Call and returns the empty list if it is not.  If
+ * the instruction is a Call, then the function prototype is used to find if any
+ * of the formals or return value of the attribute named [s] set.  For each such
+ * formal or return value, the corresponding expressions from the instruction
+ * are returned. *)
+let get_formal_exps_with_attribute (i:instr) (attr_name:string): exp list =
+
+  match i with
+  
+      Call (lop, Lval((Var vi), NoOffset), formal_list, _) ->
+      
+        let (return_type, formals_op, is_vararg, attributes) = 
+          splitFunctionType vi.vtype
+        in
+
+          (* For simplicity skip over variable argument functions. *)
+          if is_vararg then (
+            ignore (E.warn "MemUtil.get_own: Skipping variable argument function\n");
+            []
+          ) else (
 
 
             (* TODO: Is formal_attrs the same as (typeAttrs formal_type) in the
@@ -142,14 +174,14 @@ let get_fun_exps_with_attribute (i:instr) (attr_name:string): exp list =
               | None -> []
             in
 
-              return_exp @ formal_exps
+              formal_exps
           )
     
     (* Catch for functions (such as function pointers) that we are unable to
      * handle. *)
     | Call (_, _, _, _) ->
         if !verbose then (
-          ignore (E.warn "MemUtil.get_fun_exps_with_attribute:"); 
+          ignore (E.warn "MemUtil.get_formal_exps_with_attribute:"); 
           ignore (E.warn "Unable to understand function call %a.  Skipping.\n" d_instr i);
         );
         []
@@ -161,16 +193,24 @@ let get_fun_exps_with_attribute (i:instr) (attr_name:string): exp list =
 (* Return list of expressions in function call that have the "sos_claim"
  * attribute set *)
 let get_claim (i:instr): exp list =
-  get_fun_exps_with_attribute i "sos_claim"
+  (get_return_exp_with_attribute i "sos_claim") @ (get_formal_exps_with_attribute i "sos_claim")
 ;;
 
+
+let get_claim_formals (i:instr): exp list =
+  (get_formal_exps_with_attribute i "sos_claim")
+;;
+
+let returns_alloc (i: instr): bool = 
+  (List.length (get_return_exp_with_attribute i "sos_claim")) > 0
+;;
 
 (* Given an instruction return a list of expressions corresponding to
  * foramal paramaters that have the 'sos_release' flag set, or that have the
  * 'sos_may_release' flag set and pass a may release test. *)
 let get_released (i:instr): exp list =
 
-  let must_release = get_fun_exps_with_attribute i "sos_release" in
+  let must_release = get_formal_exps_with_attribute i "sos_release" in
  
 
   (* ======================================== *) 
@@ -197,16 +237,16 @@ let get_released (i:instr): exp list =
               vi.vname = "post_spi" ||
               vi.vname = "post_auto") ->
         if check_release_flag (List.nth formal_list 5) then
-          get_fun_exps_with_attribute i "sos_may_release"
+          get_formal_exps_with_attribute i "sos_may_release"
         else []
 
     | Call (_, Lval((Var vi), NoOffset), formal_list, _) when (List.length formal_list) > 0 ->
         if check_release_flag (List.nth formal_list ((List.length formal_list) -1)) then
-          get_fun_exps_with_attribute i "sos_may_release"
+          get_formal_exps_with_attribute i "sos_may_release"
         else []
     
     | Call (_, _, _, _) ->
-        if (List.length (get_fun_exps_with_attribute i "sos_may_release") > 0) then
+        if (List.length (get_formal_exps_with_attribute i "sos_may_release") > 0) then
           E.s (E.error "MemCheck.get_released: Incorrect set of sos_may_release in %a\n"
                 d_instr i)
         else []
