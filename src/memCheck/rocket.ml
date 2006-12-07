@@ -23,15 +23,25 @@ let get_global_stores (f: file): Apollo.store_data list =
 
 
 let get_local_stores (f: fundec): Apollo.store_data list = 
-  List.map 
-    (fun v -> (Apollo.Unknown, (Lval (var v))))
-    (List.filter 
-       (fun v -> 
-          (hasAttribute "sos_store" v.vattr) 
-           || (hasAttribute "sos_claim" v.vattr)
-       ) 
-       (f.slocals @ f.sformals)
-    )
+  let stores = 
+    List.map 
+      (fun v -> (Apollo.Unknown, (Lval (var v))))
+      (List.filter 
+         (fun v -> (hasAttribute "sos_store" v.vattr)) 
+         (f.slocals @ f.sformals)
+      )
+  in
+
+  let must_claim =
+    List.map 
+      (fun v -> (Apollo.Empty, (Lval (var v))))
+      (List.filter 
+         (fun v -> (hasAttribute "sos_claim" v.vattr)) 
+         f.sformals
+      )
+  in
+
+    stores @ must_claim
 ;;
         
 

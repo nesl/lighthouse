@@ -1,0 +1,121 @@
+
+Start State
+-----------
+
+(global stores @ local stores, local heaps)
+
+[global stores]: Any global variable (excluding functions).  Unless otherwise
+noted, this defaults to being in the Unknown state.
+
+[local stores]:  Any formal parameter with the sos_claim attribute or any
+local variable or formal with the sos_store attribute.  Variables annotated
+with the sos_store attribute default to Unknown.  Formal variables annotated
+with the sos_claim attribute default to Empty.  *BUG* This curretly does
+nothing special for static variables local to a function.  
+
+[local heaps]: Any foraml parameter with the sos_release attribute set.  This
+set can grow and shrink as a function is examined.  Allocating data into a
+non-store expression adds the expression to the heap.  Freeing data from a
+non-store expression removes the expression from the heap.
+
+
+Transfer Function
+-----------------
+
+Overview
+~~~~~~~~
+
+Store state can be in any of the states:
+
+[Empty]:  Store knowen to be empty.  Can only be used as an lval or a formal
+annotated with sos_claim.
+
+[Full]: Store knowen to reference heap data.  Can be used in lots of places.
+Need to be careful not to overwrite it and make it empty when the data it
+references is released.
+
+[Noheap]: Store knowen to refernce non-heap data.  It is a pain, but it
+happens.  For now Noheap is treated as a top value.
+
+[Unknown]: Heap is in an unknown state, but not explicitly in an error state.
+This is also treated as a top value.
+
+[Error]: Heap is known to be in an error state.  And again, this is a top
+value.  Lots of top values...
+
+Any heap data that is not in a store is noted in a seperate heap list.  This
+list can grow as more data is allocated (into non-store expressions) and
+shring as heap data (not referenced by a store) is freed or stored.
+
+Functions to update the state of a function monitoring the relevent store /
+heap pre-conditions and signal errors (or simply die) if something goes wrong.
+
+
+Statement Level
+~~~~~~~~~~~~~~~
+
+For now this is doing nothing.  *TODO* This should take into account the
+any return statement that returns heap data.  This could have the effect of
+making a store empty or removing an entry from the heap list.
+
+Instruction Level
+~~~~~~~~~~~~~~~~~
+
+Set Instructions
+^^^^^^^^^^^^^^^^
+
+If rval is a heap expression and lval is a store then
+fill the store
+remove heap expression from heap list
+
+Else If rval is a heap expression (but lval is not a store)
+note that the heap has been used
+
+Else If rval is a store and lval is a store
+fill the lval store
+empty the rval store
+
+Else If rval is a store (but lval is not a store)
+note that the store has been used
+
+Else If the rval is a complicated instruction involving multiple stores / heaps
+lie down and die
+
+Else If the rval is nothing of interest and rval is a store
+note that nonheap data is being placed in store
+
+Else If the rval is nothing of interest and rval is a heap expression
+note that heap expression is being overwritten
+
+*TODO* Need a special case to catch folks setting a freed heap / store to
+NULL.
+
+Call Instruction
+^^^^^^^^^^^^^^^^
+
+If no annotations then do nothing else
+
+Ensure that any given expression (or alias) is being at most once freed or
+stored via annotations on formal parameters.
+
+Warn if an empty store is being used as a formal without an sos_claim
+annotation.
+
+Add newly allocated memory (via annotated formal parameter) to store or heap,
+location depending on formal parameter.
+
+Remove freed data from heap or set corresponding store to Empty, location
+depending on formal parameter.
+
+Add newly allocated memory (via return value of function) to store of heap,
+location depending on lval.
+
+
+Join Function
+-------------
+
+*TODO* Need to compute the join.  State that is the same on both branches
+stays the same.  Conflicting states for stores go to the top value Unknown.
+Conflicting states for heap data does something.  For now probably lie down
+and die.
+

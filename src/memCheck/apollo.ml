@@ -16,7 +16,7 @@ let dbg_apollo_df = ref false;;
 
 (* State maintained by the dataflow analysis.  This includes a set of stores and
  * a list of expressions refering to heap data that has not been stored. *)
-type store_state = Empty | Full | Unknown | Error;;
+type store_state = Empty | Full | Nonheap | Unknown | Error;;
 
 type store_data = (store_state * exp);;
 type heap_data = exp;;
@@ -134,6 +134,35 @@ let empty_store (target: exp) (state: dataflow_state): dataflow_state =
 ;;
 
 
+let abuse_store (target: exp) (state: dataflow_state): dataflow_state =
+
+  let (stores, heaps) = state in
+  let found = ref false in
+  
+  let new_stores =
+    List.map
+      (fun store -> match store with
+           (Empty, e2) when (IE.is_equiv_start target e2 !currentStmt) ->
+             found := true;
+             (Nonheap, e2)
+         | (_, e2) when (IE.is_equiv_start target e2 !currentStmt) ->
+             found := true;
+             (Error, target)
+         | s -> s
+      )
+      stores
+  in
+
+    if !found then (new_stores, heaps)
+    else (
+      E.s (E.error "%s %s %a\n"
+        "Apollo.abuse_store:"
+        "Overwriting store:"
+        d_exp target)
+    )
+;;
+
+
 let add_heap (target: exp) (state: dataflow_state): dataflow_state =
   
   let (stores, heaps) = state in
@@ -179,6 +208,34 @@ let remove_heap (target: exp) (state: dataflow_state): dataflow_state =
     else
       (stores, new_heaps)
 ;;
+
+
+let abuse_heap (target: exp) (state: dataflow_state): dataflow_state =
+  
+  let (stores, heaps) = state in
+  
+  let new_heaps = 
+    List.filter 
+      (fun heap -> 
+         if (IE.is_equiv_start target heap !currentStmt) then (
+           E.s (E.error "%s %s %a\n"
+                  "Apollo.abuse_heap:"
+                  "Overwriting heap data:"
+                  d_exp target)
+         ) else true
+      )
+      heaps 
+  in
+
+    if (compare new_heaps heaps) = 0 then
+      E.s (E.error "%s %s %a\n"
+        "Apollo.remove_heap:"
+        "Expression is not heap data:"
+        d_exp target)
+    else
+      (stores, new_heaps)
+;;
+
 
 
 (* State info types used to describe an expression as:
@@ -320,6 +377,18 @@ module Apollo_Dataflow = struct
                          "Unable to update state given set with rval" 
                          d_exp e)
                   
+              | Other when (is_store (Lval lv) state) ->
+                  (* Over writing a store with some random value *)
+                  let new_state = abuse_store e state in
+                    DF.Done new_state
+
+
+              | Other when (is_heap (Lval lv) state) ->
+                  (* Over writing a heap with some random value *)
+                  let new_state = abuse_heap e state in
+                    DF.Done new_state
+
+
               | Other ->
                   (* This set expression has no effect (and is not effected by)
                    * the current state *)
@@ -356,16 +425,14 @@ module Apollo_Dataflow = struct
 
             let new_state = state in
 
-            (* Warn if an empty store is being used as a regular parameter *)
+            (* Warn if an empty store is being used as a regular parameter
+            * without the sos_claim attribute *)
             let new_state =
               List.fold_left
                 (fun s e -> 
                    if not (List.exists 
                               (fun alloc -> IE.is_equiv_start e alloc !currentStmt) 
                               alloced) &&
-                       not (List.exists 
-                              (fun free -> IE.is_equiv_start e free !currentStmt) 
-                              freed) &&
                        (is_store e state) 
                     then use_store e s
                     else s
