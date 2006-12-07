@@ -10,10 +10,10 @@ noted, this defaults to being in the Unknown state.
 [local stores]:  Any formal parameter with the sos_claim attribute or any
 local variable or formal with the sos_store attribute.  Variables annotated
 with the sos_store attribute default to Unknown.  Formal variables annotated
-with the sos_claim attribute default to Empty.  *BUG* This curretly does
+with the sos_claim attribute default to Empty.  *BUG* This currently does
 nothing special for static variables local to a function.  
 
-[local heaps]: Any foraml parameter with the sos_release attribute set.  This
+[local heaps]: Any formal parameter with the sos_release attribute set.  This
 set can grow and shrink as a function is examined.  Allocating data into a
 non-store expression adds the expression to the heap.  Freeing data from a
 non-store expression removes the expression from the heap.
@@ -27,14 +27,14 @@ Overview
 
 Store state can be in any of the states:
 
-[Empty]:  Store knowen to be empty.  Can only be used as an lval or a formal
+[Empty]:  Store known to be empty.  Can only be used as an lval or a formal
 annotated with sos_claim.
 
-[Full]: Store knowen to reference heap data.  Can be used in lots of places.
+[Full]: Store known to reference heap data.  Can be used in lots of places.
 Need to be careful not to overwrite it and make it empty when the data it
 references is released.
 
-[Noheap]: Store knowen to refernce non-heap data.  It is a pain, but it
+[Noheap]: Store known to reference non-heap data.  It is a pain, but it
 happens.  For now Noheap is treated as a top value.
 
 [Unknown]: Heap is in an unknown state, but not explicitly in an error state.
@@ -43,11 +43,11 @@ This is also treated as a top value.
 [Error]: Heap is known to be in an error state.  And again, this is a top
 value.  Lots of top values...
 
-Any heap data that is not in a store is noted in a seperate heap list.  This
+Any heap data that is not in a store is noted in a separate heap list.  This
 list can grow as more data is allocated (into non-store expressions) and
-shring as heap data (not referenced by a store) is freed or stored.
+shrink as heap data (not referenced by a store) is freed or stored.
 
-Functions to update the state of a function monitoring the relevent store /
+Functions to update the state of a function monitoring the relevant store /
 heap pre-conditions and signal errors (or simply die) if something goes wrong.
 
 
