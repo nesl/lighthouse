@@ -6,6 +6,10 @@ module E = Errormsg;;
 (** [cil_file] CIL file being analyzed. *)
 let cil_file: file ref = ref dummyFile;;
 
+(** Flag to enable checking of functions defined in included header files. These
+  * are mainly macros that cause a lot of extra runtime overhead. *)
+let check_headers = ref false;;
+
 
 (** Helper functions *)
 let get_global_stores (f: file): Apollo.store_data list = 
@@ -59,21 +63,32 @@ let get_local_heaps (f: fundec): Apollo.heap_data list =
 class rocketVisitor = object inherit nopCilVisitor
 
   method vfunc (f: fundec) =
-    
-    let stores = (get_global_stores !cil_file) @ (get_local_stores f) in
-    let heaps = get_local_heaps f in
-      
-      IsEquivalent.generate_equiv f !cil_file;
-      
-      ignore (
-      try 
-        ignore (Apollo.apollo_func f (stores, heaps))
-      with 
-          E.Error -> ignore (printf "####\n# Bummer!\n####\n");
-      );
-          
 
+    (** Check to see if we can skip this function since it may be defined in a
+      * header file *)
+      
+    if (not !check_headers) &&
+       (String.get !currentLoc.file ((String.length !currentLoc.file) -1)) = 'h' &&
+       (String.get !currentLoc.file ((String.length !currentLoc.file) -2)) = '.'
+    then (
       DoChildren
+    ) else (
+    
+      let stores = (get_global_stores !cil_file) @ (get_local_stores f) in
+      let heaps = get_local_heaps f in
+
+        IsEquivalent.generate_equiv f !cil_file;
+
+        ignore (
+          try 
+            ignore (Apollo.apollo_func f (stores, heaps))
+          with 
+              E.Error -> ignore (printf "####\n# Bummer!\n####\n");
+        );
+
+
+        DoChildren
+    )
 
 end
 
@@ -106,6 +121,9 @@ let argDescr = [
 
   ("--out", Arg.String (openFile "output" (fun oc -> outChannel := Some oc)),
    "Name of the output CIL file");
+  
+  ("--check_headers", Arg.String (fun _ -> check_headers := true),
+   "Enable checking of header files");
 
   (* Configuration options *)
 

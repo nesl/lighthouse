@@ -386,6 +386,12 @@ module Apollo_Dataflow = struct
 
 
   let doInstr (i: instr) (state: t): t DF.action = 
+   
+    (* 
+    ignore (printf "Checking instruction at %a\n" d_loc (get_instrLoc i));
+    flush stdout;
+    *)
+
     match i with
 
         Set (lv, e, _) ->
@@ -592,7 +598,7 @@ let apollo_func (f: fundec) (state: dataflow_state): bool =
          let (stores, heaps) = (IH.find Apollo_Dataflow.stmtStartData s.sid) in
            List.iter
              (fun heap ->
-                E.error "Failed to store heap data %a" d_exp heap
+                E.error "Failed to store heap data %a in function %s" d_exp heap f.svar.vname
              )
              heaps
        with Not_found -> 
