@@ -193,10 +193,11 @@ let abuse_store (target: exp) (state: dataflow_state): dataflow_state =
 
     if !found then (new_stores, heaps)
     else (
-      E.s (E.bug "%s %s %a\n"
-             "Apollo.abuse_store:"
-             "Overwriting store:"
-             d_exp target)
+      ignore (E.error "%s %s %a\n"
+                "Apollo.abuse_store:"
+                "Unable to find overwritten store store:"
+                d_exp target);
+      state
     )
 ;;
 
@@ -598,7 +599,9 @@ let apollo_func (f: fundec) (state: dataflow_state): bool =
          let (stores, heaps) = (IH.find Apollo_Dataflow.stmtStartData s.sid) in
            List.iter
              (fun heap ->
-                E.error "Failed to store heap data %a in function %s" d_exp heap f.svar.vname
+                E.error 
+                  "Failed to store heap data %a in function %s before return at %a" 
+                  d_exp heap f.svar.vname d_loc (get_stmtLoc s.skind)
              )
              heaps
        with Not_found -> 

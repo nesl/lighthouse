@@ -225,29 +225,39 @@ module DFM = struct
   (* Merge points take the intersection of the two sets *)
   let combinePredecessors (s: stmt) ~(old: t) (new_state: t) : t option =  
 
-    (* Print incoming state *)
-    if (!dbg_is_equiv_c) then (
-      ignore (printf "IS_EQUIV COMBINE: Examining State: %d:\n" s.sid);
-      ignore (printf "IS_EQUIV COMBINE: Incoming old state:\n");
-      print_equiv_table old;
-      ignore (printf "IS_EQUIV COMBINE: Incoming merge:\n");
-      print_equiv_table new_state;
-      flush stdout;
-    );
-
-    
-    (* Create a NEW state by merging the two old state.  If the state is
-     * different that the old state then continue iterating on the dataflow. *)
-    let state = set_intersect old new_state in
-
+    if (ListSet.subset new_state old) && (ListSet.subset old new_state) then (
       if (!dbg_is_equiv_c) then (
-        ignore (printf "IS_EQUIV COMBINE: Outging state:\n");
-        print_equiv_table state;
+        ignore (printf "IS_EQUIV COMBINE: Merge point at state %d (%a) with same states:\n" 
+                   s.sid d_loc (get_stmtLoc s.skind))
+      );
+      None
+
+    ) else (
+                                        
+      (* Print incoming state *)
+      if (!dbg_is_equiv_c) then (
+        ignore (printf "IS_EQUIV COMBINE: Examining State: %d (%a):\n" 
+                  s.sid d_loc (get_stmtLoc s.skind));
+        ignore (printf "IS_EQUIV COMBINE: Incoming old state:\n");
+        print_equiv_table old;
+        ignore (printf "IS_EQUIV COMBINE: Incoming merge:\n");
+        print_equiv_table new_state;
         flush stdout;
       );
 
-      if (ListSet.subset state old) && (ListSet.subset old state) then None
-      else (Some state)
+    
+      (* Create a NEW state by merging the two old state.  If the state is
+       * different that the old state then continue iterating on the dataflow. *)
+      let state = set_intersect old new_state in
+
+        if (!dbg_is_equiv_c) then (
+          ignore (printf "IS_EQUIV COMBINE: Outging state:\n");
+          print_equiv_table state;
+          flush stdout;
+        );
+
+        Some state
+    )
   ;;
 
 
