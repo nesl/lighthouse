@@ -223,9 +223,9 @@ module DFM = struct
 
 
   (* Merge points take the intersection of the two sets *)
-  let combinePredecessors (s: stmt) ~(old: t) (new_state: t) : t option =  
+  let combinePredecessors (s: stmt) ~(old: t) (in_state: t) : t option =  
 
-    if (ListSet.subset new_state old) && (ListSet.subset old new_state) then (
+    if (ListSet.subset in_state old) && (ListSet.subset old in_state) then (
       if (!dbg_is_equiv_c) then (
         ignore (printf "IS_EQUIV COMBINE: Merge point at state %d (%a) with same states:\n" 
                    s.sid d_loc (get_stmtLoc s.skind))
@@ -241,22 +241,31 @@ module DFM = struct
         ignore (printf "IS_EQUIV COMBINE: Incoming old state:\n");
         print_equiv_table old;
         ignore (printf "IS_EQUIV COMBINE: Incoming merge:\n");
-        print_equiv_table new_state;
+        print_equiv_table in_state;
         flush stdout;
       );
 
     
       (* Create a NEW state by merging the two old state.  If the state is
        * different that the old state then continue iterating on the dataflow. *)
-      let state = set_intersect old new_state in
+      let out_state = set_intersect old in_state in
 
         if (!dbg_is_equiv_c) then (
           ignore (printf "IS_EQUIV COMBINE: Outging state:\n");
-          print_equiv_table state;
+          print_equiv_table out_state;
           flush stdout;
         );
 
-        Some state
+        (* It could be that the merged state ends up being the old state.  In
+         * this case we do not need to release the "new" state. *)
+        if (ListSet.subset out_state old) && (ListSet.subset old out_state) then (
+          if (!dbg_is_equiv_c) then (
+            ignore (printf "IS_EQUIV COMBINE: Merged down to same as old state\n")
+          );
+          None
+        ) else (
+          Some out_state
+        )
     )
   ;;
 
