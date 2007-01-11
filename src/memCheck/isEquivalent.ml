@@ -614,7 +614,8 @@ module DFM = struct
                        if (v.vname = alloc_name) then (
 
                          (* Make the heap expression *)
-                         let base_name = "__heap_" ^ (string_of_int !heap_counter) in
+                         (* let base_name = "__heap_" ^ (string_of_int !heap_counter) in *)
+                         let base_name = "__heap_" in
                          let extended_name = 
                            base_name ^ "_line_" ^ (string_of_int !currentLoc.line) in
                          let heap = makeVarinfo false extended_name voidPtrType in

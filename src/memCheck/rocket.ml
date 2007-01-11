@@ -73,7 +73,7 @@ class rocketVisitor = object inherit nopCilVisitor
     then (
       DoChildren
     ) else (
-    
+      
       let stores = (get_global_stores !cil_file) @ (get_local_stores f) in
       let heaps = get_local_heaps f in
 
@@ -135,6 +135,9 @@ let argDescr = [
 
   ("--dbg_apollo_c", Arg.Unit (fun _ -> Apollo.dbg_apollo_c := true),
    "Join debugging of the Apollo dataflow");
+
+  ("--dbg_apollo_g", Arg.Unit (fun _ -> Apollo.dbg_apollo_g := true),
+   "Guard evaluation debugging of the Apollo dataflow");
 
   (* IsEquivalent specific debugging *)
   

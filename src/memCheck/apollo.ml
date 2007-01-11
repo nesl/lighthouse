@@ -13,6 +13,7 @@ let dbg_apollo_s = ref false;;
 let dbg_apollo_i = ref false;;
 let dbg_apollo_c = ref false;;
 let dbg_apollo_df = ref false;;
+let dbg_apollo_g = ref false;;
 
 (* State maintained by the dataflow analysis.  This includes a set of stores and
  * a list of expressions refering to heap data that has not been stored. *)
@@ -563,7 +564,96 @@ module Apollo_Dataflow = struct
     DF.SDefault
   ;;
 
-  let doGuard _ _ = 
+  
+  (* Special cases for when an if statment is checking to see if the target
+   * expression is Null.  An example of this is checking to see if a call to
+   * malloc fails.  When the expression is Null, it can be considered to have
+   * been claimed. *)
+  let doGuard (e: exp) (state: t) = 
+    
+    (* Helper function used to determine if a binary comparison is comparing the
+     * target expression to a null pointer *)
+    let is_target_and_null (e1: exp) (e2: exp) (s: stmt) : bool =
+      let is_target = 
+        (is_heap e1 state) || 
+        (is_heap e2 state)
+      in
+      let is_null = 
+        (IE.is_equiv_start e1 IE.nullPtr !current_stmt) || 
+        (IE.is_equiv_start e2 IE.nullPtr !current_stmt)
+      in
+        if !dbg_apollo_g then (
+          ignore (printf "Checking (target, NULL) on %a and %a: (%b, %b)\n"
+                    d_exp e1 d_exp e2 is_target is_null);
+        );
+        is_target && is_null
+    in
+      
+    let transition = match e with
+
+      | Lval lv 
+          when (is_heap (Lval lv) state) ->
+          (* Unary check to see if item is NOT null.  Continue on with the
+           * default action to ensure that the target is stored. *)
+          DF.GDefault
+
+      | UnOp (LNot, (Lval lv), _) 
+          when (is_heap (Lval lv) state) ->
+          (* Unary check to see if item is Null.  Since we know that the target is
+           * Null we can abort the check for this branch and directly insert the Null
+           * state. *)
+          DF.GUse (remove_heap (Lval lv) state)
+
+      | UnOp (LNot, (UnOp (LNot, (Lval lv), _)), _)
+          when (is_heap (Lval lv) state) ->
+          (* Unary check to see if item is NOT Null.  This form results from the
+           * elseGuard clause within the dataflow engine. Continue with default
+           * action. *)
+          DF.GDefault
+
+      | BinOp (Ne, e1, e2, _) 
+          when (is_target_and_null e1 e2 !current_stmt) ->
+          (* Binary check to see if item is NOT null *)
+          DF.GDefault
+
+      | BinOp (Eq, e1, e2, _)
+          when (is_target_and_null e1 e2 !current_stmt) ->
+          (* Binary check to see if item is Null *)
+          if (is_heap e1 state) then
+            DF.GUse (remove_heap e1 state)
+          else
+            DF.GUse (remove_heap e2 state)
+         
+      | UnOp (LNot, (BinOp (Ne, e1, e2, _)), _)
+          when (is_target_and_null e1 e2 !current_stmt) ->
+          (* Binary check to see if item is NOT NOT null.  This form results
+           * from the elseGuard clause within the dataflow engine. *)
+          if (is_heap e1 state) then
+            DF.GUse (remove_heap e1 state)
+          else
+            DF.GUse (remove_heap e2 state)
+
+      | UnOp (LNot, (BinOp (Eq, e1, e2, _)), _)
+          when (is_target_and_null e1 e2 !current_stmt) ->
+          (* Binary check to see if item is NOT Null.  This form results 
+           * from the elseGuard clause within the dataflow engine. *)
+          DF.GDefault
+
+      | _ -> 
+          DF.GDefault
+    in
+
+      if !dbg_apollo_g then (
+        ignore (printf "Apollo.doGuard: Expression %a guarding statement %d (%a)\n" 
+                  d_exp e !current_stmt.sid d_loc (get_stmtLoc !current_stmt.skind));
+        match transition with
+            DF.GUse new_state -> ignore (printf " propogates %a\n" pretty new_state);
+          | DF.GDefault -> ignore (printf " has no special effect\n");
+          | _ -> E.s (E.bug "unexpected evaluation of guard\n")
+      );
+      flush stdout;
+      transition
+  ;;
     DF.GDefault
   ;;
 
@@ -586,6 +676,7 @@ module Track = DF.ForwardsDataFlow(Apollo_Dataflow);;
 
 
 let apollo_func (f: fundec) (state: dataflow_state): bool =
+    
 
   IH.clear Apollo_Dataflow.stmtStartData;
   IH.add Apollo_Dataflow.stmtStartData (List.hd f.sbody.bstmts).sid  state;
