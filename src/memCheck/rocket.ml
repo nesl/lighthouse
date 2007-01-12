@@ -18,7 +18,7 @@ let get_global_stores (f: file): Apollo.store_data list =
     (fun s g -> match g with
          GVarDecl (v, l) 
        | GVar (v, _, l) when not (isFunctionType v.vtype) -> 
-           (Apollo.Unknown, (Lval (var v)))::s
+           (Apollo.Error, (Lval (var v)))::s
        | GFun (fd, l) -> s
        | _ -> s
     ) 
@@ -29,7 +29,7 @@ let get_global_stores (f: file): Apollo.store_data list =
 let get_local_stores (f: fundec): Apollo.store_data list = 
   let stores = 
     List.map 
-      (fun v -> (Apollo.Unknown, (Lval (var v))))
+      (fun v -> (Apollo.Error, (Lval (var v))))
       (List.filter 
          (fun v -> (hasAttribute "sos_store" v.vattr)) 
          (f.slocals @ f.sformals)
