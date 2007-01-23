@@ -3,6 +3,10 @@ open Pretty;;
 open Cil;;
 module E = Errormsg;;
 
+(* Specification file *)
+let spec_file = ref "";;
+let specification = ref [];;
+
 (** [cil_file] CIL file being analyzed. *)
 let cil_file: file ref = ref dummyFile;;
 
@@ -59,6 +63,32 @@ let get_local_heaps (f: fundec): Apollo.heap_data list =
 ;;
 
 
+let set_pre stores heaps full empty =
+
+  let match_str_exp s e =
+    match e with
+        Lval (Var v, _) -> v.vname = s
+      | _ -> E.s (E.bug "Unable to match against expression %a" d_exp e)
+  in
+
+
+  let update_state states = 
+    List.fold_left
+      (fun new_stores (s_state, s_var) ->
+         if List.exists (fun s -> match_str_exp s s_var) full then
+           (Apollo.Full, s_var)::new_stores
+         else if List.exists (fun s -> match_str_exp s s_var) empty then
+           (Apollo.Empty, s_var)::new_stores
+         else
+           (s_state, s_var)::new_stores
+      )
+      []
+      states
+  in
+
+    (update_state stores, heaps)
+;;
+
 (** Visitor *)
 class rocketVisitor = object inherit nopCilVisitor
 
@@ -76,6 +106,11 @@ class rocketVisitor = object inherit nopCilVisitor
       
       let stores = (get_global_stores !cil_file) @ (get_local_stores f) in
       let heaps = get_local_heaps f in
+
+      let (pre_full, pre_empty, pre_heap) = SpecParse.lookup_pre !specification f.svar.vname in
+      let (post_full, post_empty, post_heap) = SpecParse.lookup_post !specification f.svar.vname in
+
+      let (stores, heaps) = set_pre stores heaps pre_full pre_empty in
 
         IsEquivalent.generate_equiv f !cil_file;
 
@@ -118,6 +153,9 @@ let argDescr = [
   
   ("--config", Arg.String (fun config -> AddAnnotations.config_file := config),
    "Use custom configuration file for alias annotations");
+
+  ("--spec", Arg.String (fun spec -> spec_file := spec),
+   "Use specification file for pre- / post- condition specifications");
 
   ("--out", Arg.String (openFile "output" (fun oc -> outChannel := Some oc)),
    "Name of the output CIL file");
@@ -209,6 +247,11 @@ let mainFunction () =
     if not (List.length !fileNames == 1) then (
       Arg.usage argDescr usageMsg;
       exit 0;
+    );
+
+    specification := (
+      if (!spec_file = "") then []
+      else (SpecParse.parse_spec !spec_file)
     );
       
     List.iter doFile !fileNames;

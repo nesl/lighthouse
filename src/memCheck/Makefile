@@ -7,7 +7,7 @@ OCAMLMAKEFILE = OCamlMakefile
 # OCAMLDOCFLAGS = -stars
 
 
-SOURCES	= memUtil.ml isEquivalent.ml mayAliasWrapper.ml addAnnotations.ml apollo.ml makeOneCFG.ml rocket.ml
+SOURCES	= memUtil.ml isEquivalent.ml mayAliasWrapper.ml addAnnotations.ml apollo.ml makeOneCFG.ml specParse.ml rocket.ml
 RESULT	= rocket
 
 LIBS = unix str cil
