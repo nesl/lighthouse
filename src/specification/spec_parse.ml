@@ -142,8 +142,18 @@ let parse_spec file_name =
 ;;
 
 
+let usage () =
+  prerr_endline (Printf.sprintf "usage: %s <spec file>" Sys.argv.(0));
+  exit 1
+;;
+
+
 let main _ = 
-  ignore (parse_spec "toggle_alloc.spec")
+
+  if Array.length Sys.argv != 2 then
+    usage ();
+        
+  ignore (parse_spec Sys.argv.(1))
 ;;
 
 main ()
