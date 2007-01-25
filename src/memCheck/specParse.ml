@@ -2,6 +2,7 @@
 (* The above comment is required to inform the build system of the preprocessor
  * to be used. *)
 
+open Cil;;
 open Genlex;;
 open Pretty;;
 
@@ -141,7 +142,7 @@ let lookup_post blocks name =
   in
     match block with
         Post (_, state) -> (state.full, state.empty, state.heap)
-      | _ -> E.s E.error "Huh?"
+      | _ -> E.s (E.error "Huh?")
 ;;
 
 
@@ -163,7 +164,7 @@ let lookup_pre blocks name =
 
     match block with
         Pre (_, state) -> (state.full, state.empty, state.heap)
-      | _ -> E.s E.error "Huh?"
+      | _ -> E.s (E.error "Huh?")
 ;;
 
 
@@ -193,7 +194,6 @@ let parse_spec file_name =
           raise (Stream.Error s)
                          
 ;;
-
 
 
 (*

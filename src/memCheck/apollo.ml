@@ -15,6 +15,9 @@ let dbg_apollo_c = ref false;;
 let dbg_apollo_df = ref false;;
 let dbg_apollo_g = ref false;;
 
+(* Reference to the pre- / post- condition specifications *)
+let specification : SpecParse.spec_block list ref = ref [];;
+
 (* State maintained by the dataflow analysis.  This includes a set of stores and
  * a list of expressions refering to heap data that has not been stored. *)
 type store_state = Empty | Full | Nonheap | Unknown | Error;;
@@ -461,10 +464,38 @@ module Apollo_Dataflow = struct
           end
 
 
-      | Call (lvop, e, el, _) ->
+      | Call (lvop, Lval((Var v), NoOffset), el, _) ->
+
           let alloced = MemUtil.get_claim_formals i in
           let freed = MemUtil.get_released i in
 
+          (* Check preconditions *)
+(*
+          let _ = 
+
+            let (stores, heaps) = state in
+            let (pre_full, pre_empty, pre_heap) = 
+              SpecParse.lookup_pre !specification v.vname 
+            in
+
+              (* Besure that all stores assumed to be full are full *)
+              List.iter
+                (fun s -> 
+                   if not (
+                     List.exists 
+                       (fun blah -> match blah with
+                            (Full, Lval (Var v, _)) when v.vname = s -> true
+                          | (_, Lval (Var v, _)) -> false
+                          | (_, e) -> E.s (E.bug "Not made to handle expression %a" d_exp e)
+                       ) stores
+                   ) then
+                     ignore (E.error "Bad precondition");
+                   ()
+                )
+                pre_full
+              
+          in
+ *)
           (* Insure that no expression is being released and allocated *)
           let _ = 
             if List.exists 
@@ -549,6 +580,9 @@ module Apollo_Dataflow = struct
           in
 
             DF.Done new_state
+      
+      | Call _ ->
+          E.s (E.bug "Have not implemented this form of call")
 
       | _ -> DF.Default
   ;;
@@ -704,5 +738,44 @@ let apollo_func (f: fundec) (state: dataflow_state): bool =
     true
 ;;
 
+
+(* Given update a state concisting of stores and heaps to conform to those from
+ * a specification with assume_full, assume_empty, and assume_heap.  In
+ * particular:
+ *
+ * - Force any stores listed in assume_full to be full
+ * - Force any stores listed in assume_empty to be empty
+ * - No update of heaps at this time
+ *) 
+let set_state_pre (stores, heaps) spec fname = 
+
+  let (assume_full, assume_empty, assume_heap) = SpecParse.lookup_pre spec fname in
+      
+  if not (List.length assume_heap = 0) then 
+    E.s (E.bug "What...  I thought all heap specifications were zero...");
+
+  let match_str_exp s e =
+    match e with
+        Lval (Var v, _) -> v.vname = s
+      | _ -> E.s (E.bug "Unable to match against expression %a" d_exp e)
+  in
+
+
+  let update_state states = 
+    List.fold_left
+      (fun new_stores (s_state, s_var) ->
+         if List.exists (fun s -> match_str_exp s s_var) assume_full then
+           (Full, s_var)::new_stores
+         else if List.exists (fun s -> match_str_exp s s_var) assume_empty then
+           (Empty, s_var)::new_stores
+         else
+           (s_state, s_var)::new_stores
+      )
+      []
+      states
+  in
+
+    (update_state stores, heaps)
+;;
 
 
