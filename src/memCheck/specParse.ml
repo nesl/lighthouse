@@ -10,20 +10,6 @@ module E = Errormsg;;
 
 exception Parse_error;;
 
-type store_state = {
-  full:string list;
-  empty:string list;
-  heap:string list;
-};;
-
-
-type spec_block = 
-    Stores of string list
-  | Pre of (string * store_state)
-  | Post of (string * store_state)
-;;
-
-
 let keywords = [
   "{";
   "}";
@@ -125,48 +111,6 @@ let pretty_print_block b =
 ;;
 
 
-let lookup_post blocks name =
-  let block = 
-    try
-      List.find 
-        (fun b -> 
-           match b with 
-             | Post (f_name, state) when (f_name = name) -> true
-             | _ -> false
-        ) 
-        blocks
-    with 
-        Not_found -> 
-          E.warn "Failed to find post state for function: %s" name;
-          Post (name, {full=[]; empty=[]; heap=[]})
-  in
-    match block with
-        Post (_, state) -> (state.full, state.empty, state.heap)
-      | _ -> E.s (E.error "Huh?")
-;;
-
-
-let lookup_pre blocks name =
-  let block = 
-    try
-      List.find 
-        (fun b -> 
-           match b with 
-             | Pre (f_name, state) when (f_name = name) -> true
-             | _ -> false
-        ) 
-        blocks
-    with 
-        Not_found -> 
-          E.warn "Failed to find pre state for function: %s" name;
-          Pre (name, {full=[]; empty=[]; heap=[]})
-  in
-
-    match block with
-        Pre (_, state) -> (state.full, state.empty, state.heap)
-      | _ -> E.s (E.error "Huh?")
-;;
-
 
 let parse_spec file_name =
 
@@ -194,19 +138,4 @@ let parse_spec file_name =
           raise (Stream.Error s)
                          
 ;;
-
-
-(*
-let main _ = 
-
-  if Array.length Sys.argv != 2 then (
-    prerr_endline (Printf.sprintf "usage: %s <spec file>" Sys.argv.(0));
-    exit 1
-  );
-
-  let spec = ignore (parse_spec Sys.argv.(1)) in
-
-    List.iter pretty_print_block spec
-;;
- *)
 
