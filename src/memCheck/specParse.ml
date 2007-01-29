@@ -2,6 +2,7 @@
 (* The above comment is required to inform the build system of the preprocessor
  * to be used. *)
 
+open State;;
 open Cil;;
 open Genlex;;
 open Pretty;;

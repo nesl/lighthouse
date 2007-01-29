@@ -15,13 +15,13 @@ let check_headers = ref false;;
 
 
 (** Helper functions *)
-let get_global_stores (f: file): Apollo.store_data list = 
+let get_global_stores (f: file): State.store_data list = 
   foldGlobals 
     f
     (fun s g -> match g with
          GVarDecl (v, l) 
        | GVar (v, _, l) when not (isFunctionType v.vtype) -> 
-           (Apollo.Error, (Lval (var v)))::s
+           (State.Error, (Lval (var v)))::s
        | GFun (fd, l) -> s
        | _ -> s
     ) 
@@ -29,10 +29,10 @@ let get_global_stores (f: file): Apollo.store_data list =
 ;;
 
 
-let get_local_stores (f: fundec): Apollo.store_data list = 
+let get_local_stores (f: fundec): State.store_data list = 
   let stores = 
     List.map 
-      (fun v -> (Apollo.Error, (Lval (var v))))
+      (fun v -> (State.Error, (Lval (var v))))
       (List.filter 
          (fun v -> (hasAttribute "sos_store" v.vattr)) 
          (f.slocals @ f.sformals)
@@ -41,7 +41,7 @@ let get_local_stores (f: fundec): Apollo.store_data list =
 
   let must_claim =
     List.map 
-      (fun v -> (Apollo.Empty, (Lval (var v))))
+      (fun v -> (State.Empty, (Lval (var v))))
       (List.filter 
          (fun v -> (hasAttribute "sos_claim" v.vattr)) 
          f.sformals
@@ -52,7 +52,7 @@ let get_local_stores (f: fundec): Apollo.store_data list =
 ;;
         
 
-let get_local_heaps (f: fundec): Apollo.heap_data list = 
+let get_local_heaps (f: fundec): State.heap_data list = 
   let heap_vars = 
     List.filter 
       (fun v -> (hasAttribute "sos_release" v.vattr)) 
@@ -81,7 +81,7 @@ class rocketVisitor = object inherit nopCilVisitor
       let heaps = get_local_heaps f in
 
       let (stores, heaps) = 
-        Apollo.set_state_pre (stores, heaps) !Apollo.specification f.svar.vname 
+        Apollo.set_state_pre (stores, heaps) !State.specification f.svar.vname 
       in
 
         IsEquivalent.generate_equiv f !cil_file;
@@ -221,7 +221,7 @@ let mainFunction () =
       exit 0;
     );
 
-    Apollo.specification := (
+    State.specification := (
       if (!spec_file = "") then []
       else (SpecParse.parse_spec !spec_file)
     );

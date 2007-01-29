@@ -1,5 +1,6 @@
-open Cil
-open Pretty
+open Cil;;
+open Pretty;;
+open State;;
 
 module IH = Inthash;;
 module DF = Dataflow;;
@@ -84,41 +85,41 @@ module Apollo_Dataflow = struct
 
         Set (lv, e, _) ->
           begin
-            match get_state_from_exp e state with
+            match get_state_from_exp e state !current_stmt with
 
-                Heap e when (is_store (Lval lv) state) ->
+                Heap e when (is_store (Lval lv) state !current_stmt) ->
                   (* "Transfer" heap data into the store. *)
-                  let new_state = fill_store (Lval lv) state in
-                  let new_state = remove_heap e new_state in
+                  let new_state = fill_store (Lval lv) state !current_stmt in
+                  let new_state = remove_heap e new_state !current_stmt in
                     DF.Done new_state
 
-              | Heap e when (is_heap (Lval lv) state) ->
+              | Heap e when (is_heap (Lval lv) state!current_stmt ) ->
                   (* Over writing a heap with a reference to another heap *)
-                  let new_state = overwrite_heap (Lval lv) state in
-                  let new_state = remove_heap e new_state in
+                  let new_state = overwrite_heap (Lval lv) state !current_stmt in
+                  let new_state = remove_heap e new_state !current_stmt in
                     DF.Done new_state
 
 
               | Heap e ->
                   (* Using heap data.  Tranfer depends on use_heap function. *)
-                  let new_state = use_heap e state in
+                  let new_state = use_heap e state !current_stmt in
                     DF.Done new_state
 
-              | Store e when (is_store (Lval lv) state) ->
+              | Store e when (is_store (Lval lv) state !current_stmt) ->
                   (* "Transfer" heap data from one store to another. *)
-                  let new_state = fill_store (Lval lv) state in
-                  let new_state = empty_store e new_state in
+                  let new_state = fill_store (Lval lv) state !current_stmt in
+                  let new_state = empty_store e new_state !current_stmt in
                     DF.Done new_state
 
-              | Store e when (is_heap (Lval lv) state) ->
+              | Store e when (is_heap (Lval lv) state !current_stmt) ->
                   (* Over writing a heap with a reference to another heap *)
-                  let new_state = overwrite_heap (Lval lv) state in
-                  let new_state = use_store e new_state in
+                  let new_state = overwrite_heap (Lval lv) state !current_stmt in
+                  let new_state = use_store e new_state !current_stmt in
                     DF.Done new_state
 
               | Store e ->
                   (* Using store data.  Transfer depends on use_store function. *)
-                  let new_state = use_store e state in
+                  let new_state = use_store e state !current_stmt in
                     DF.Done new_state
 
               | Complex e ->
@@ -128,15 +129,15 @@ module Apollo_Dataflow = struct
                          "Unable to update state given set with rval" 
                          d_exp e)
 
-              | Other when (is_store (Lval lv) state) ->
+              | Other when (is_store (Lval lv) state !current_stmt) ->
                   (* Over writing a store with some random value *)
-                  let new_state = abuse_store e state in
+                  let new_state = abuse_store e state !current_stmt in
                     DF.Done new_state
 
 
-              | Other when (is_heap (Lval lv) state) ->
+              | Other when (is_heap (Lval lv) state !current_stmt) ->
                   (* Over writing a heap with some random value *)
-                  let new_state = overwrite_heap e state in
+                  let new_state = overwrite_heap e state !current_stmt in
                     DF.Done new_state
 
 
@@ -207,8 +208,8 @@ module Apollo_Dataflow = struct
                  if not (List.exists 
                            (fun alloc -> IE.is_equiv_start e alloc !current_stmt) 
                            alloced) &&
-                    (is_store e state) 
-                 then use_store e s
+                    (is_store e state !current_stmt) 
+                 then use_store e s !current_stmt
                  else s
               )
               new_state
@@ -220,8 +221,8 @@ module Apollo_Dataflow = struct
           let new_state =  
             List.fold_left 
               (fun s e ->  
-                 if (is_store e s) then fill_store e s
-                 else add_heap e s
+                 if (is_store e s !current_stmt) then fill_store e s !current_stmt
+                 else add_heap e s !current_stmt
               ) 
               new_state
               alloced
@@ -232,8 +233,8 @@ module Apollo_Dataflow = struct
           let new_state =
             List.fold_left
               (fun s e ->
-                 if (is_store e s) then empty_store e s
-                 else remove_heap e s
+                 if (is_store e s !current_stmt) then empty_store e s !current_stmt
+                 else remove_heap e s !current_stmt
               )
               new_state
               freed
@@ -244,20 +245,20 @@ module Apollo_Dataflow = struct
           let new_state = 
             match lvop with
                 Some lv when (MemUtil.returns_alloc i) &&
-                             (is_store (Lval lv) new_state) ->
-                  fill_store (Lval lv) new_state
+                             (is_store (Lval lv) new_state) !current_stmt ->
+                  fill_store (Lval lv) new_state !current_stmt
               | Some lv when (MemUtil.returns_alloc i) ->
-                  add_heap (Lval lv) new_state
+                  add_heap (Lval lv) new_state !current_stmt
               | None when (MemUtil.returns_alloc i) ->
                   ignore (E.error "%s (%a): %a"
                             "Return value of allocated data is not being stored at "
                             d_loc (get_stmtLoc !current_stmt.skind)
                             d_instr i);
                   new_state
-              | Some lv when (is_store (Lval lv) new_state) ->
-                  abuse_store (Lval lv) state
-              | Some lv when (is_heap (Lval lv) new_state) ->
-                  overwrite_heap (Lval lv) state
+              | Some lv when (is_store (Lval lv) new_state) !current_stmt ->
+                  abuse_store (Lval lv) state !current_stmt
+              | Some lv when (is_heap (Lval lv) new_state) !current_stmt ->
+                  overwrite_heap (Lval lv) state !current_stmt
               | Some lv -> new_state
               | None -> new_state 
           in
@@ -292,8 +293,8 @@ module Apollo_Dataflow = struct
      * target expression to a null pointer *)
     let is_target_and_null (e1: exp) (e2: exp) (s: stmt) : bool =
       let is_target = 
-        (is_heap e1 state) || 
-        (is_heap e2 state)
+        (is_heap e1 state !current_stmt) || 
+        (is_heap e2 state !current_stmt)
       in
       let is_null = 
         (IE.is_equiv_start e1 IE.nullPtr !current_stmt) || 
@@ -309,20 +310,20 @@ module Apollo_Dataflow = struct
     let transition = match e with
 
       | Lval lv 
-          when (is_heap (Lval lv) state) ->
+          when (is_heap (Lval lv) state !current_stmt) ->
           (* Unary check to see if item is NOT null.  Continue on with the
            * default action to ensure that the target is stored. *)
           DF.GDefault
 
       | UnOp (LNot, (Lval lv), _) 
-          when (is_heap (Lval lv) state) ->
+          when (is_heap (Lval lv) state !current_stmt) ->
           (* Unary check to see if item is Null.  Since we know that the target is
            * Null we can abort the check for this branch and directly insert the Null
            * state. *)
-          DF.GUse (remove_heap (Lval lv) state)
+          DF.GUse (remove_heap (Lval lv) state !current_stmt)
 
       | UnOp (LNot, (UnOp (LNot, (Lval lv), _)), _)
-          when (is_heap (Lval lv) state) ->
+          when (is_heap (Lval lv) state !current_stmt) ->
           (* Unary check to see if item is NOT Null.  This form results from the
            * elseGuard clause within the dataflow engine. Continue with default
            * action. *)
@@ -336,19 +337,19 @@ module Apollo_Dataflow = struct
       | BinOp (Eq, e1, e2, _)
           when (is_target_and_null e1 e2 !current_stmt) ->
           (* Binary check to see if item is Null *)
-          if (is_heap e1 state) then
-            DF.GUse (remove_heap e1 state)
+          if (is_heap e1 state !current_stmt) then
+            DF.GUse (remove_heap e1 state !current_stmt)
           else
-            DF.GUse (remove_heap e2 state)
+            DF.GUse (remove_heap e2 state !current_stmt)
          
       | UnOp (LNot, (BinOp (Ne, e1, e2, _)), _)
           when (is_target_and_null e1 e2 !current_stmt) ->
           (* Binary check to see if item is NOT NOT null.  This form results
            * from the elseGuard clause within the dataflow engine. *)
-          if (is_heap e1 state) then
-            DF.GUse (remove_heap e1 state)
+          if (is_heap e1 state !current_stmt) then
+            DF.GUse (remove_heap e1 state !current_stmt)
           else
-            DF.GUse (remove_heap e2 state)
+            DF.GUse (remove_heap e2 state !current_stmt)
 
       | UnOp (LNot, (BinOp (Eq, e1, e2, _)), _)
           when (is_target_and_null e1 e2 !current_stmt) ->
@@ -432,7 +433,7 @@ let apollo_func (f: fundec) (state: dataflow_state): bool =
  *) 
 let set_state_pre (stores, heaps) spec fname = 
 
-  let (assume_full, assume_empty, assume_heap) = SpecParse.lookup_pre spec fname in
+  let (assume_full, assume_empty, assume_heap) = lookup_pre spec fname in
       
   if not (List.length assume_heap = 0) then 
     E.s (E.bug "What...  I thought all heap specifications were zero...");

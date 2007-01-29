@@ -1,4 +1,9 @@
-type store_state = {
+open Cil;;
+
+module E = Errormsg;;
+module IE = IsEquivalent;;
+
+type store_spec = {
   full:string list;
   empty:string list;
   heap:string list;
@@ -7,8 +12,8 @@ type store_state = {
 
 type spec_block = 
     Stores of string list
-  | Pre of (string * store_state)
-  | Post of (string * store_state)
+  | Pre of (string * store_spec)
+  | Post of (string * store_spec)
 ;;
 
 
@@ -55,7 +60,7 @@ let lookup_pre blocks name =
 ;;
 
 (* Reference to the pre- / post- condition specifications *)
-let specification : SpecParse.spec_block list ref = ref [];;
+let specification : spec_block list ref = ref [];;
 
 (* State maintained by the dataflow analysis.  This includes a set of stores and
  * a list of expressions refering to heap data that has not been stored. *)
@@ -68,12 +73,12 @@ type dataflow_state = (store_data list) * (heap_data list);;
 
 (** Return true if target expression is equivalent to one of the heap enteries
   * in state *)
-let is_heap (target: exp) (state: dataflow_state): bool =
+let is_heap (target: exp) (state: dataflow_state) (current_stmt: stmt): bool =
   let (_, heaps) = state in
 
   let b =
     List.exists
-      (fun heap -> IE.is_equiv_start target heap !current_stmt)
+      (fun heap -> IE.is_equiv_start target heap current_stmt)
       heaps
   in
     b
@@ -82,12 +87,12 @@ let is_heap (target: exp) (state: dataflow_state): bool =
 
 (** Retrun true if target expression is equivalent to one of the store enteries
   * in state *)
-let is_store (target: exp) (state: dataflow_state): bool = 
+let is_store (target: exp) (state: dataflow_state) (current_stmt: stmt): bool = 
   let (stores, _) = state in
 
   let b =
     List.exists
-      (fun (_, store) -> IE.is_equiv_start target store !current_stmt)
+      (fun (_, store) -> IE.is_equiv_start target store current_stmt)
       stores
   in
     b
@@ -96,7 +101,7 @@ let is_store (target: exp) (state: dataflow_state): bool =
 
 (** Attempts to fill the store represented by target expression within the
   * state.  Returns an updated state. *)
-let fill_store (target: exp) (state: dataflow_state): dataflow_state =
+let fill_store (target: exp) (state: dataflow_state) (current_stmt: stmt): dataflow_state =
 
   let (stores, heaps) = state in
   let found = ref false in
@@ -104,16 +109,16 @@ let fill_store (target: exp) (state: dataflow_state): dataflow_state =
   let new_stores =
     List.map
       (fun store -> match store with
-           (Empty, e2) when (IE.is_equiv_start target e2 !current_stmt) ->
+           (Empty, e2) when (IE.is_equiv_start target e2 current_stmt) ->
              found := true;
              (Full, e2)
-         | (Unknown, e2) when (IE.is_equiv_start target e2 !current_stmt) ->
+         | (Unknown, e2) when (IE.is_equiv_start target e2 current_stmt) ->
              found := true;
              (Full, e2)
-         | (_, e2) when (IE.is_equiv_start target e2 !current_stmt) ->
+         | (_, e2) when (IE.is_equiv_start target e2 current_stmt) ->
              ignore (E.error 
                        "Overwriting store at %a" 
-                       d_loc (get_stmtLoc !current_stmt.skind));
+                       d_loc (get_stmtLoc current_stmt.skind));
              found := true;
              (Error, target)
          | s -> s
@@ -133,7 +138,7 @@ let fill_store (target: exp) (state: dataflow_state): dataflow_state =
 
 (** Attempts to use data refrenced by the store represented by target
   * expression.  Retrurns an updated state.  *)
-let use_store (target: exp) (state: dataflow_state): dataflow_state =
+let use_store (target: exp) (state: dataflow_state) (current_stmt: stmt): dataflow_state =
 
   let (stores, heaps) = state in
   let found = ref false in
@@ -141,16 +146,16 @@ let use_store (target: exp) (state: dataflow_state): dataflow_state =
   let new_stores =
     List.map
       (fun store -> match store with
-           (Full, e2) when (IE.is_equiv_start target e2 !current_stmt) ->
+           (Full, e2) when (IE.is_equiv_start target e2 current_stmt) ->
              found := true;
              (Full, e2)
-         | (Unknown, e2) when (IE.is_equiv_start target e2 !current_stmt) ->
+         | (Unknown, e2) when (IE.is_equiv_start target e2 current_stmt) ->
              found := true;
              (Full, e2)
-         | (_, e2) when (IE.is_equiv_start target e2 !current_stmt) ->
+         | (_, e2) when (IE.is_equiv_start target e2 current_stmt) ->
              ignore (E.error 
                        "Using empty store at %a" 
-                       d_loc (get_stmtLoc !current_stmt.skind));
+                       d_loc (get_stmtLoc current_stmt.skind));
              found := true;
              (Error, target)
          | s -> s
@@ -165,7 +170,7 @@ let use_store (target: exp) (state: dataflow_state): dataflow_state =
 
 (** Attempts to release data referenced by the store represented by target
   * expression.  Returns an upadated state. *)
-let empty_store (target: exp) (state: dataflow_state): dataflow_state =
+let empty_store (target: exp) (state: dataflow_state) (current_stmt: stmt): dataflow_state =
 
   let (stores, heaps) = state in
   let found = ref false in
@@ -173,16 +178,16 @@ let empty_store (target: exp) (state: dataflow_state): dataflow_state =
   let new_stores =
     List.map
       (fun store -> match store with
-           (Full, e2) when (IE.is_equiv_start target e2 !current_stmt) ->
+           (Full, e2) when (IE.is_equiv_start target e2 current_stmt) ->
              found := true;
              (Empty, e2)
-         | (Unknown, e2) when (IE.is_equiv_start target e2 !current_stmt) ->
+         | (Unknown, e2) when (IE.is_equiv_start target e2 current_stmt) ->
              found := true;
              (Empty, e2)
-         | (_, e2) when (IE.is_equiv_start target e2 !current_stmt) ->
+         | (_, e2) when (IE.is_equiv_start target e2 current_stmt) ->
              ignore (E.error 
                        "Releasing empty store at %a" 
-                       d_loc (get_stmtLoc !current_stmt.skind));
+                       d_loc (get_stmtLoc current_stmt.skind));
              found := true;
              (Error, target)
          | s -> s
@@ -204,7 +209,7 @@ let empty_store (target: exp) (state: dataflow_state): dataflow_state =
  * store *)
 (** Attempts to write a value not referencing heap data into the store
   * represented by target expression.  Returns an updated state. *)
-let abuse_store (target: exp) (state: dataflow_state): dataflow_state =
+let abuse_store (target: exp) (state: dataflow_state) (current_stmt: stmt): dataflow_state =
 
   let (stores, heaps) = state in
   let found = ref false in
@@ -212,14 +217,14 @@ let abuse_store (target: exp) (state: dataflow_state): dataflow_state =
   let new_stores =
     List.map
       (fun store -> match store with
-           (Empty, e2) when (IE.is_equiv_start target e2 !current_stmt) ->
+           (Empty, e2) when (IE.is_equiv_start target e2 current_stmt) ->
              found := true;
              (Nonheap, e2)
-         | (_, e2) when (IE.is_equiv_start target e2 !current_stmt) ->
+         | (_, e2) when (IE.is_equiv_start target e2 current_stmt) ->
              found := true;
              ignore (E.error 
                        "Storing non-heap data into store at %a" 
-                       d_loc (get_stmtLoc !current_stmt.skind));
+                       d_loc (get_stmtLoc current_stmt.skind));
              (Error, target)
          | s -> s
       )
@@ -239,14 +244,14 @@ let abuse_store (target: exp) (state: dataflow_state): dataflow_state =
 
 (** Add target expression to list of heap data that is not currentnly referenced
   * by a store.  Returns an updated state. *)
-let add_heap (target: exp) (state: dataflow_state): dataflow_state =
+let add_heap (target: exp) (state: dataflow_state) (current_stmt: stmt): dataflow_state =
 
   let (stores, heaps) = state in
 
-    if (List.exists (fun heap -> IE.is_equiv_start target heap !current_stmt) heaps) then (
+    if (List.exists (fun heap -> IE.is_equiv_start target heap current_stmt) heaps) then (
       ignore (E.error 
                 "Expression already is heap at %a" 
-                d_loc (get_stmtLoc !current_stmt.skind));
+                d_loc (get_stmtLoc current_stmt.skind));
       (stores, heaps)
     ) else
       (stores, target::heaps)
@@ -255,10 +260,10 @@ let add_heap (target: exp) (state: dataflow_state): dataflow_state =
 
 (** Use heap data that is referenced by target expression.  Returns an updated
   * state. *)
-let use_heap (target: exp) (state: dataflow_state): dataflow_state =
+let use_heap (target: exp) (state: dataflow_state) (current_stmt: stmt): dataflow_state =
   let (stores, heaps) = state in
 
-    if not (List.exists (fun heap -> IE.is_equiv_start target heap !current_stmt) heaps) then 
+    if not (List.exists (fun heap -> IE.is_equiv_start target heap current_stmt) heaps) then 
       E.s (E.bug "%s %s %a\n"
              "Apollo.use_heap:"
              "Expression is not heap data:"
@@ -270,20 +275,20 @@ let use_heap (target: exp) (state: dataflow_state): dataflow_state =
 
 (** Remove heap data referenced by target expression from the state.  Returns an
   * updated state. *)
-let remove_heap (target: exp) (state: dataflow_state): dataflow_state =
+let remove_heap (target: exp) (state: dataflow_state) (current_stmt: stmt): dataflow_state =
 
   let (stores, heaps) = state in
 
   let new_heaps = 
     List.filter 
-      (fun heap -> not (IE.is_equiv_start target heap !current_stmt))
+      (fun heap -> not (IE.is_equiv_start target heap current_stmt))
       heaps 
   in
 
     if (compare new_heaps heaps) = 0 then (
       ignore (E.error 
                 "Can not free non-heap expression at %a" 
-                d_loc (get_stmtLoc !current_stmt.skind));
+                d_loc (get_stmtLoc current_stmt.skind));
       (stores, heaps)
     ) else
       (stores, new_heaps)
@@ -291,17 +296,17 @@ let remove_heap (target: exp) (state: dataflow_state): dataflow_state =
 
 
 (** Overwrite heap data with something eles *)
-let overwrite_heap (target: exp) (state: dataflow_state): dataflow_state =
+let overwrite_heap (target: exp) (state: dataflow_state) (current_stmt: stmt): dataflow_state =
 
   let (stores, heaps) = state in
 
   let new_heaps = 
     List.filter 
       (fun heap -> 
-         if (IE.is_equiv_start target heap !current_stmt) then (
+         if (IE.is_equiv_start target heap current_stmt) then (
            ignore (E.error 
                      "Overwriting heap expression at %a" 
-                     d_loc (get_stmtLoc !current_stmt.skind));
+                     d_loc (get_stmtLoc current_stmt.skind));
            false
          ) else true
       )
@@ -334,23 +339,23 @@ type state_info =
 (* This function is used to extract state relevant information from an
  * expression.
  *)
-let rec get_state_from_exp (e: exp) (state: dataflow_state): state_info =
+let rec get_state_from_exp (e: exp) (state: dataflow_state) (current_stmt: stmt): state_info =
   match e with
-    | Lval lv when is_heap (Lval lv) state -> Heap (Lval lv)
+    | Lval lv when is_heap (Lval lv) state current_stmt -> Heap (Lval lv)
 
-    | Lval lv when is_store (Lval lv) state -> Store (Lval lv)
+    | Lval lv when is_store (Lval lv) state current_stmt -> Store (Lval lv)
 
-    | UnOp (_, e, _) -> get_state_from_exp e state
+    | UnOp (_, e, _) -> get_state_from_exp e state current_stmt
 
     | BinOp (_, e1, e2, _) -> 
         begin
-          match (get_state_from_exp e1 state, get_state_from_exp e2 state) with
+          match (get_state_from_exp e1 state current_stmt, get_state_from_exp e2 state current_stmt) with
               (Other, tmp) -> tmp
             | (tmp, Other) -> tmp
             | _ -> Complex e
         end
 
-    | CastE (_, e) -> get_state_from_exp e state
+    | CastE (_, e) -> get_state_from_exp e state current_stmt
 
     | AddrOf lv
     | StartOf lv -> Other
