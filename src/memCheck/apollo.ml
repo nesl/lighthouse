@@ -159,7 +159,7 @@ module Apollo_Dataflow = struct
               E.s (E.error "%s %s %a"
                      "Apollo.Apollo_Dataflow.doInstr:"
                      "Unsafe precondition found in call %a\n" 
-                     instr i)
+                     d_instr i)
             )
           in
 
@@ -378,107 +378,9 @@ module Track = DF.ForwardsDataFlow(Apollo_Dataflow);;
 (****************************************)
 (****************************************)
 
-(* Given update a state concisting of stores and heaps to conform to those from
- * a specification with assume_full, assume_empty, and assume_heap.  In
- * particular:
- *
- * - Force any stores listed in assume_full to be full
- * - Force any stores listed in assume_empty to be empty
- * - No update of heaps at this time
- *) 
-let set_state_pre state spec fname = 
-
-  let (stores, heaps) = state in
-
-  let (assume_full, assume_empty, assume_heap) = lookup_pre spec fname in
-      
-  if not (List.length assume_heap = 0) then 
-    E.s (E.bug "What...  I thought all heap specifications were zero...");
-
-  let match_str_exp s e =
-    match e with
-        Lval (Var v, _) -> v.vname = s
-      | _ -> E.s (E.bug "Unable to match against expression %a" d_exp e)
-  in
-
-
-  let update_state states = 
-    List.fold_left
-      (fun new_stores (s_state, s_var) ->
-         if List.exists (fun s -> match_str_exp s s_var) assume_full then
-           (Full, s_var)::new_stores
-         else if List.exists (fun s -> match_str_exp s s_var) assume_empty then
-           (Empty, s_var)::new_stores
-         else
-           (s_state, s_var)::new_stores
-      )
-      []
-      states
-  in
-
-    (update_state stores, heaps)
-;;
-
-(** Helper functions *)
-let get_global_stores (f: file): State.store_data list = 
-  foldGlobals 
-    f
-    (fun s g -> match g with
-         GVarDecl (v, l) 
-       | GVar (v, _, l) when not (isFunctionType v.vtype) -> 
-           (State.Error, (Lval (var v)))::s
-       | GFun (fd, l) -> s
-       | _ -> s
-    ) 
-    []
-;;
-
-
-let get_local_stores (f: fundec): State.store_data list = 
-  let stores = 
-    List.map 
-      (fun v -> (State.Error, (Lval (var v))))
-      (List.filter 
-         (fun v -> (hasAttribute "sos_store" v.vattr)) 
-         (f.slocals @ f.sformals)
-      )
-  in
-
-  let must_claim =
-    List.map 
-      (fun v -> (State.Empty, (Lval (var v))))
-      (List.filter 
-         (fun v -> (hasAttribute "sos_claim" v.vattr)) 
-         f.sformals
-      )
-  in
-
-    stores @ must_claim
-;;
-        
-
-let get_local_heaps (f: fundec): State.heap_data list = 
-  let heap_vars = 
-    List.filter 
-      (fun v -> (hasAttribute "sos_release" v.vattr)) 
-      f.sformals
-  in
-    List.map (fun v -> (Lval (var v))) heap_vars
-;;
-
-
-
-
 let apollo_func (f: fundec) (cil_file: file) : bool =
       
-  let stores = (get_global_stores cil_file) @ (get_local_stores f) in
-  let heaps = get_local_heaps f in
-
-   
-  (* TODO: Update this to use the "update_state_with_pre" function *) 
-  let (state) = 
-    set_state_pre (stores, heaps) !State.specification f.svar.vname 
-  in
+  let state = update_state_with_pre f in
 
   IH.clear Apollo_Dataflow.stmtStartData;
   IH.add Apollo_Dataflow.stmtStartData (List.hd f.sbody.bstmts).sid  state;

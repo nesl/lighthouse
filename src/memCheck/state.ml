@@ -372,8 +372,72 @@ let rec get_state_from_exp (e: exp) (state: dataflow_state) (current_stmt: stmt)
 
 
 (* Update state based on pre-conditions *)
-let update_state_with_pre (state: dataflow_state) (current_stmt: stmt): dataflow_state =
-  state
+(* Given update a state concisting of stores and heaps to conform to those from
+ * a specification with assume_full, assume_empty, and assume_heap.  In
+ * particular:
+ *
+ * - Force any stores listed in assume_full to be full
+ * - Force any stores listed in assume_empty to be empty
+ * - No update of heaps at this time
+ *) 
+let update_state_with_pre (f: fundec): dataflow_state =
+
+  let (assume_full, assume_empty, assume_heap) = 
+    lookup_pre !specification f.svar.vname
+  in
+      
+  if not (List.length assume_heap = 0) then 
+    E.s (E.bug "What...  I thought all heap specifications were zero...");
+
+  let match_str_exp s e =
+    match e with
+        Lval (Var v, _) -> v.vname = s
+      | _ -> E.s (E.bug "Unable to match against expression %a" d_exp e)
+  in
+
+         
+
+  (* TODO: This assumes stores are listed by name and not by number :-(
+   * *)
+  let full_stores = 
+    List.fold_left
+      (fun full s -> 
+         if s.[0] = '$' then (
+           let index = int_of_string  (String.sub s 1 (String.length s - 1)) in
+           let formal = List.nth f.sformals index in
+             (Full, Lval (var formal))::full
+         ) else (
+           try 
+             let formal = List.find (fun v -> match_str_exp s (Lval (var v))) f.sformals in 
+               (Full, Lval (var formal))::full
+           with Not_found -> 
+             E.s (E.bug "Dude.  How can we have a full store that ain't a formal?")
+         )
+      )
+      []
+      assume_full
+  in
+      
+  let empty_stores = 
+    List.fold_left
+      (fun empty s -> 
+         if s.[0] = '$' then (
+           let index = int_of_string  (String.sub s 1 (String.length s - 1)) in
+           let formal = List.nth f.sformals index in
+             (Empty, Lval (var formal))::empty
+         ) else (
+           try 
+             let formal = List.find (fun v -> match_str_exp s (Lval (var v))) f.sformals in 
+               (Empty, Lval (var formal))::empty
+           with Not_found -> 
+             E.s (E.bug "Dude.  How can we have an empty store that ain't a formal?")
+         )
+      )
+      []
+      assume_empty
+  in
+      
+    (full_stores @ empty_stores, [])
 ;;
 
 (* Verify that state upholds pre-conditions *)
@@ -414,4 +478,6 @@ let update_state_with_post (state: dataflow_state) (current_stmt: stmt): dataflo
 let verify_state_with_post (state: dataflow_state) (current_stmt: stmt): bool =
   true
 ;;
+
+
 
