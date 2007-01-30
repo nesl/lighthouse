@@ -14,54 +14,6 @@ let cil_file: file ref = ref dummyFile;;
 let check_headers = ref false;;
 
 
-(** Helper functions *)
-let get_global_stores (f: file): State.store_data list = 
-  foldGlobals 
-    f
-    (fun s g -> match g with
-         GVarDecl (v, l) 
-       | GVar (v, _, l) when not (isFunctionType v.vtype) -> 
-           (State.Error, (Lval (var v)))::s
-       | GFun (fd, l) -> s
-       | _ -> s
-    ) 
-    []
-;;
-
-
-let get_local_stores (f: fundec): State.store_data list = 
-  let stores = 
-    List.map 
-      (fun v -> (State.Error, (Lval (var v))))
-      (List.filter 
-         (fun v -> (hasAttribute "sos_store" v.vattr)) 
-         (f.slocals @ f.sformals)
-      )
-  in
-
-  let must_claim =
-    List.map 
-      (fun v -> (State.Empty, (Lval (var v))))
-      (List.filter 
-         (fun v -> (hasAttribute "sos_claim" v.vattr)) 
-         f.sformals
-      )
-  in
-
-    stores @ must_claim
-;;
-        
-
-let get_local_heaps (f: fundec): State.heap_data list = 
-  let heap_vars = 
-    List.filter 
-      (fun v -> (hasAttribute "sos_release" v.vattr)) 
-      f.sformals
-  in
-    List.map (fun v -> (Lval (var v))) heap_vars
-;;
-
-
 (** Visitor *)
 class rocketVisitor = object inherit nopCilVisitor
 
@@ -77,18 +29,11 @@ class rocketVisitor = object inherit nopCilVisitor
       DoChildren
     ) else (
       
-      let stores = (get_global_stores !cil_file) @ (get_local_stores f) in
-      let heaps = get_local_heaps f in
-
-      let (stores, heaps) = 
-        Apollo.set_state_pre (stores, heaps) !State.specification f.svar.vname 
-      in
-
         IsEquivalent.generate_equiv f !cil_file;
 
         ignore (
           try 
-            ignore (Apollo.apollo_func f (stores, heaps))
+            ignore (Apollo.apollo_func f !cil_file)
           with 
               E.Error -> ignore (printf "####\n# Bummer!\n####\n");
         );

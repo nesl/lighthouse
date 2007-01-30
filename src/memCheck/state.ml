@@ -372,10 +372,46 @@ let rec get_state_from_exp (e: exp) (state: dataflow_state) (current_stmt: stmt)
 
 
 (* Update state based on pre-conditions *)
+let update_state_with_pre (state: dataflow_state) (current_stmt: stmt): dataflow_state =
+  state
+;;
 
 (* Verify that state upholds pre-conditions *)
+let verify_state_with_pre (state: dataflow_state) (current_stmt: stmt): bool =
+  (*
+  let (stores, heaps) = state in
+  let (pre_full, pre_empty, pre_heap) = 
+    SpecParse.lookup_pre !specification v.vname 
+  in
+
+    (* Besure that all stores assumed to be full are full *)
+    List.iter
+      (fun s -> 
+         if not (
+           List.exists 
+             (fun blah -> match blah with
+                  (Full, Lval (Var v, _)) when v.vname = s -> true
+                | (_, Lval (Var v, _)) -> false
+                | (_, e) -> E.s (E.bug "Not made to handle expression %a" d_exp e)
+             ) stores
+         ) then
+           ignore (E.error "Bad precondition");
+         ()
+      )
+      pre_full
+              
+      in
+  *)
+  true
+;;
 
 (* Update state based on post-conditions *)
+let update_state_with_post (state: dataflow_state) (current_stmt: stmt): dataflow_state =
+  state
+;;
 
 (* Verify that state upholds post-conditions *)
+let verify_state_with_post (state: dataflow_state) (current_stmt: stmt): bool =
+  true
+;;
 

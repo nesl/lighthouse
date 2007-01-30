@@ -17,6 +17,7 @@ INCDIRS = /home/rshea/mote/cil-1.3.5/obj/x86_LINUX
 
 include $(OCAMLMAKEFILE)
 
-dot:
+dot: ._d
 	rm -f lighthouse.dot
-	ocamldep *.ml | ocamldot > lighthouse.dot
+	cat ._d/*.d | ocamldot > lighthouse.dot
+	dot -Tps lighthouse.dot > lighthouse.ps

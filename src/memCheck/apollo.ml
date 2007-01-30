@@ -153,33 +153,16 @@ module Apollo_Dataflow = struct
           let alloced = MemUtil.get_claim_formals i in
           let freed = MemUtil.get_released i in
 
-          (* Check preconditions *)
-(*
-          let _ = 
-
-            let (stores, heaps) = state in
-            let (pre_full, pre_empty, pre_heap) = 
-              SpecParse.lookup_pre !specification v.vname 
-            in
-
-              (* Besure that all stores assumed to be full are full *)
-              List.iter
-                (fun s -> 
-                   if not (
-                     List.exists 
-                       (fun blah -> match blah with
-                            (Full, Lval (Var v, _)) when v.vname = s -> true
-                          | (_, Lval (Var v, _)) -> false
-                          | (_, e) -> E.s (E.bug "Not made to handle expression %a" d_exp e)
-                       ) stores
-                   ) then
-                     ignore (E.error "Bad precondition");
-                   ()
-                )
-                pre_full
-              
+          let proper_pre = verify_state_with_pre state !current_stmt in
+          let _ =
+            if not proper_pre then (
+              E.s (E.error "%s %s %a"
+                     "Apollo.Apollo_Dataflow.doInstr:"
+                     "Unsafe precondition found in call %a\n" 
+                     instr i)
+            )
           in
- *)
+
           (* Insure that no expression is being released and allocated *)
           let _ = 
             if List.exists 
@@ -262,6 +245,9 @@ module Apollo_Dataflow = struct
               | Some lv -> new_state
               | None -> new_state 
           in
+
+            (* TODO: Update the new state based on the post_conditions of the
+             * called function *)
 
             DF.Done new_state
       
@@ -392,37 +378,6 @@ module Track = DF.ForwardsDataFlow(Apollo_Dataflow);;
 (****************************************)
 (****************************************)
 
-
-let apollo_func (f: fundec) (state: dataflow_state): bool =
-    
-
-  IH.clear Apollo_Dataflow.stmtStartData;
-  IH.add Apollo_Dataflow.stmtStartData (List.hd f.sbody.bstmts).sid  state;
-  Track.compute [List.hd f.sbody.bstmts];
-
-  let return_stmts = MemUtil.get_return_statements f in
-
-    List.iter 
-      (fun s -> 
-       try 
-         let (stores, heaps) = (IH.find Apollo_Dataflow.stmtStartData s.sid) in
-           List.iter
-             (fun heap ->
-                E.error 
-                  "Failed to store heap data %a in function %s before return at %a" 
-                  d_exp heap f.svar.vname d_loc (get_stmtLoc s.skind)
-             )
-             heaps
-       with Not_found -> 
-         E.error "Unable to find state for return statement %d" s.sid;
-
-      )
-      return_stmts;
-
-    true
-;;
-
-
 (* Given update a state concisting of stores and heaps to conform to those from
  * a specification with assume_full, assume_empty, and assume_heap.  In
  * particular:
@@ -431,7 +386,9 @@ let apollo_func (f: fundec) (state: dataflow_state): bool =
  * - Force any stores listed in assume_empty to be empty
  * - No update of heaps at this time
  *) 
-let set_state_pre (stores, heaps) spec fname = 
+let set_state_pre state spec fname = 
+
+  let (stores, heaps) = state in
 
   let (assume_full, assume_empty, assume_heap) = lookup_pre spec fname in
       
@@ -460,6 +417,97 @@ let set_state_pre (stores, heaps) spec fname =
   in
 
     (update_state stores, heaps)
+;;
+
+(** Helper functions *)
+let get_global_stores (f: file): State.store_data list = 
+  foldGlobals 
+    f
+    (fun s g -> match g with
+         GVarDecl (v, l) 
+       | GVar (v, _, l) when not (isFunctionType v.vtype) -> 
+           (State.Error, (Lval (var v)))::s
+       | GFun (fd, l) -> s
+       | _ -> s
+    ) 
+    []
+;;
+
+
+let get_local_stores (f: fundec): State.store_data list = 
+  let stores = 
+    List.map 
+      (fun v -> (State.Error, (Lval (var v))))
+      (List.filter 
+         (fun v -> (hasAttribute "sos_store" v.vattr)) 
+         (f.slocals @ f.sformals)
+      )
+  in
+
+  let must_claim =
+    List.map 
+      (fun v -> (State.Empty, (Lval (var v))))
+      (List.filter 
+         (fun v -> (hasAttribute "sos_claim" v.vattr)) 
+         f.sformals
+      )
+  in
+
+    stores @ must_claim
+;;
+        
+
+let get_local_heaps (f: fundec): State.heap_data list = 
+  let heap_vars = 
+    List.filter 
+      (fun v -> (hasAttribute "sos_release" v.vattr)) 
+      f.sformals
+  in
+    List.map (fun v -> (Lval (var v))) heap_vars
+;;
+
+
+
+
+let apollo_func (f: fundec) (cil_file: file) : bool =
+      
+  let stores = (get_global_stores cil_file) @ (get_local_stores f) in
+  let heaps = get_local_heaps f in
+
+   
+  (* TODO: Update this to use the "update_state_with_pre" function *) 
+  let (state) = 
+    set_state_pre (stores, heaps) !State.specification f.svar.vname 
+  in
+
+  IH.clear Apollo_Dataflow.stmtStartData;
+  IH.add Apollo_Dataflow.stmtStartData (List.hd f.sbody.bstmts).sid  state;
+  Track.compute [List.hd f.sbody.bstmts];
+
+  let return_stmts = MemUtil.get_return_statements f in
+
+    List.iter 
+      (fun s -> 
+       try 
+         let (stores, heaps) = (IH.find Apollo_Dataflow.stmtStartData s.sid) in
+           (* TODO:  Verify that the state matches the post condition specified
+            * for this function. *)
+
+           (* Check for heap data that is not stored *)
+           List.iter
+             (fun heap ->
+                E.error 
+                  "Failed to store heap data %a in function %s before return at %a" 
+                  d_exp heap f.svar.vname d_loc (get_stmtLoc s.skind)
+             )
+             heaps
+       with Not_found -> 
+         E.error "Unable to find state for return statement %d" s.sid;
+
+      )
+      return_stmts;
+
+    true
 ;;
 
 

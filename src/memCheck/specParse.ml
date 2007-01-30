@@ -3,7 +3,6 @@
  * to be used. *)
 
 open State;;
-open Cil;;
 open Genlex;;
 open Pretty;;
 
