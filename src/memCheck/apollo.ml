@@ -32,28 +32,27 @@ module Apollo_Dataflow = struct
   (* Vital stats for this dataflow. *)
   let name = "apollo";;
   let debug = dbg_apollo_df;;
-  type t = dataflow_state;;
+  type t = runtime_state;;
 
   (* Basic util functions to jumpstart dataflow. *)
   let stmtStartData: t IH.t = IH.create 17;;
   let copy (state: t) = state;;
   let pretty () (state: t) =
     dprintf "%s" (
-      let (stores, heaps) = state in
       let s = 
         List.fold_left 
           (fun s store -> 
              let (type_name, e) = match store with
-                 (Empty, e) -> ("Empty", e)
-               | (Full, e) -> ("Full", e)
-               | (Nonheap, e) -> ("Nonheap", e)
-               | (Unknown, e) -> ("Unknown", e)
-               | (Error, e) -> ("Error", e)
+                 (Empty e) -> ("Empty", e)
+               | (Full e) -> ("Full", e)
+               | (Nonheap e) -> ("Nonheap", e)
+               | (Unknown e) -> ("Unknown", e)
+               | (Error e) -> ("Error", e)
              in
                s ^ (sprint 70 (dprintf "Store %a in state %s\n" d_exp e type_name))
           ) 
           "Stores:\n" 
-          stores 
+          state.stores 
       in
       let s =
         List.fold_left 
@@ -61,7 +60,7 @@ module Apollo_Dataflow = struct
              s ^ (sprint 70 (dprintf "Heap referenced by expression %a\n" d_exp heap))
           ) 
           (s ^ "Heap Data:\n") 
-          heaps 
+          state.heaps 
       in
         s
     )
@@ -380,7 +379,7 @@ module Track = DF.ForwardsDataFlow(Apollo_Dataflow);;
 
 let apollo_func (f: fundec) (cil_file: file) : bool =
       
-  let state = update_state_with_pre f in
+  let state = State.update_state_with_pre f in
 
   IH.clear Apollo_Dataflow.stmtStartData;
   IH.add Apollo_Dataflow.stmtStartData (List.hd f.sbody.bstmts).sid  state;
@@ -391,18 +390,10 @@ let apollo_func (f: fundec) (cil_file: file) : bool =
     List.iter 
       (fun s -> 
        try 
-         let (stores, heaps) = (IH.find Apollo_Dataflow.stmtStartData s.sid) in
-           (* TODO:  Verify that the state matches the post condition specified
-            * for this function. *)
-
-           (* Check for heap data that is not stored *)
-           List.iter
-             (fun heap ->
-                E.error 
-                  "Failed to store heap data %a in function %s before return at %a" 
-                  d_exp heap f.svar.vname d_loc (get_stmtLoc s.skind)
-             )
-             heaps
+         if not (State.verify_state_with_post f (IH.find Apollo_Dataflow.stmtStartData s.sid) s) then
+           E.error 
+             "Return at %a fails to satisfy post- conditions for function %s"
+             d_loc (get_stmtLoc s.skind) f.svar.vname
        with Not_found -> 
          E.error "Unable to find state for return statement %d" s.sid;
 

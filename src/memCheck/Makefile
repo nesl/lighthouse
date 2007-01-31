@@ -12,8 +12,8 @@ SOURCES	= memUtil.ml isEquivalent.ml mayAliasWrapper.ml addAnnotations.ml makeOn
 RESULT	= rocket
 
 LIBS = unix str cil
-#INCDIRS = /home/rshea/mote/cil-1.3.5/obj/x86_LINUX
-INCDIRS = /home/rshea/research/cil-1.3.5/obj/x86_LINUX
+INCDIRS = /home/rshea/mote/cil-1.3.5/obj/x86_LINUX
+#INCDIRS = /home/rshea/research/cil-1.3.5/obj/x86_LINUX
 
 include $(OCAMLMAKEFILE)
 
