@@ -52,7 +52,7 @@ module Apollo_Dataflow = struct
                s ^ (sprint 70 (dprintf "Store %a in state %s\n" d_exp e type_name))
           ) 
           "Stores:\n" 
-          state.stores 
+          state.r_stores 
       in
       let s =
         List.fold_left 
@@ -60,7 +60,7 @@ module Apollo_Dataflow = struct
              s ^ (sprint 70 (dprintf "Heap referenced by expression %a\n" d_exp heap))
           ) 
           (s ^ "Heap Data:\n") 
-          state.heaps 
+          state.r_heaps 
       in
         s
     )

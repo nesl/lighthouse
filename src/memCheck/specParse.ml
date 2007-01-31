@@ -28,6 +28,12 @@ let keywords = [
   "heap";
 ];;
 
+type spec_block = 
+    Stores of string list
+  | Pre of (string * spec_store)
+  | Post of (string * spec_store)
+;;
+
 
 let spec_lexer (c: in_channel) = 
   Genlex.make_lexer keywords (Stream.of_channel c)
@@ -114,24 +120,25 @@ let pretty_print_block b =
 
 let parse_spec file_name =
 
-  let blocks = ref [] in
-
   let block_num = ref 1 in
+
+  let specification = {stores=[]; pre=[]; post=[]} in
 
   let spec_stream = spec_lexer (open_in file_name) in
  
     try 
       while true do
-        let next = parse_spec_block spec_stream in
-          blocks := (next :: !blocks);
-          block_num := !block_num + 1;
+        block_num := !block_num + 1;
+        match parse_spec_block spec_stream with
+            Stores stores -> specification.stores <- stores@(specification.stores)
+          | Pre pre -> specification.pre <- pre::(specification.pre)
+          | Post post -> specification.post <- post::(specification.post)
       done;
       assert false
     with
       | Parse_error ->
             Stream.empty spec_stream;
-            blocks := List.rev !blocks;
-            !blocks
+            specification
 
       | Stream.Error s -> 
           E.error "*** Error in block %d ***\n" !block_num;

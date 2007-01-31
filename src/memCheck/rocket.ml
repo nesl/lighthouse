@@ -167,7 +167,7 @@ let mainFunction () =
     );
 
     State.specification := (
-      if (!spec_file = "") then []
+      if (!spec_file = "") then {State.stores=[]; State.pre=[]; State.post=[]}
       else (SpecParse.parse_spec !spec_file)
     );
       
