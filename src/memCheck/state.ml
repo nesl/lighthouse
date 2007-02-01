@@ -339,6 +339,16 @@ let spec_lookup_pre spec name = spec_lookup spec.pre name ;;
 let spec_lookup_post spec name = spec_lookup spec.post name ;;
 
 
+let get_var_from_str (f: fundec) (s: string) (stores: varinfo list): varinfo =
+ 
+  if s.[0] = '$' then 
+    List.nth f.sformals (int_of_string (String.sub s 1 (String.length s - 1)))
+  else 
+    try 
+      List.find (fun v -> v.vname = s) stores
+    with Not_found -> 
+      E.s (E.bug "get_var_from_str: Faild to find store \"%s\" in supplied stores\n" s)
+;;
 
 (* Update state based on pre-conditions *)
 (* Given update a state concisting of stores and heaps to conform to those from
@@ -349,123 +359,62 @@ let spec_lookup_post spec name = spec_lookup spec.post name ;;
  * - Force any stores listed in store.empty to be empty
  * - No update of heaps at this time
  *) 
-let update_state_with_pre (f: fundec): runtime_state =
+let update_state_with_pre (f: fundec) (g: varinfo list): runtime_state =
 
   let store = spec_lookup_pre !specification f.svar.vname in
       
   if not (List.length store.heap = 0) then 
     E.s (E.bug "What...  I thought all heap specifications were zero...");
 
-  let match_str_exp s e =
-    match e with
-        Lval (Var v, _) -> v.vname = s
-      | _ -> E.s (E.bug "Unable to match against expression %a" d_exp e)
-  in
-
-  (* TODO: What about global stores? *) 
-
-  let full_stores : runtime_store list= 
+  let full_stores = 
     List.fold_left
       (fun full s -> 
-         if s.[0] = '$' then (
-           let index = int_of_string  (String.sub s 1 (String.length s - 1)) in
-           let formal = List.nth f.sformals index in
-             (Full (Lval (var formal)))::full
-         ) else (
-           try 
-             let formal = List.find (fun v -> match_str_exp s (Lval (var v))) f.sformals in 
-               (Full (Lval (var formal)))::full
-           with Not_found -> 
-             E.s (E.bug "Dude.  How can we have a full store that ain't a formal?")
-         )
+         let store = (get_var_from_str f s (f.sformals@g)) in
+           (Full (Lval (var store)))::full
       )
       []
       store.full
   in
-      
-  let empty_stores : runtime_store list= 
+  
+  let empty_stores = 
     List.fold_left
       (fun empty s -> 
-         if s.[0] = '$' then (
-           let index = int_of_string  (String.sub s 1 (String.length s - 1)) in
-           let formal = List.nth f.sformals index in
-             (Empty (Lval (var formal)))::empty
-         ) else (
-           try 
-             let formal = List.find (fun v -> match_str_exp s (Lval (var v))) f.sformals in 
-               (Empty (Lval (var formal)))::empty
-           with Not_found -> 
-             E.s (E.bug "Dude.  How can we have an empty store that ain't a formal?")
-         )
+         let store = (get_var_from_str f s (f.sformals@g)) in
+           (Empty (Lval (var store)))::empty
       )
       []
       store.empty
   in
       
+      
     {r_stores=(full_stores @ empty_stores); r_heaps=[]}
 ;;
 
-(* Verify that state upholds pre-conditions *)
+(* TODO: Verify that state upholds pre-conditions *)
 let verify_state_with_pre (state: runtime_state) (current_stmt: stmt): bool =
-           
-  (*
-  let (stores, heaps) = state in
-  let (pre_full, pre_empty, pre_heap) = 
-    SpecParse.lookup_pre !specification v.vname 
-  in
-
-    (* Besure that all stores assumed to be full are full *)
-    List.iter
-      (fun s -> 
-         if not (
-           List.exists 
-             (fun blah -> match blah with
-                  (Full, Lval (Var v, _)) when v.vname = s -> true
-                | (_, Lval (Var v, _)) -> false
-                | (_, e) -> E.s (E.bug "Not made to handle expression %a" d_exp e)
-             ) stores
-         ) then
-           ignore (E.error "Bad precondition");
-         ()
-      )
-      pre_full
-              
-      in
-  *)
   true
 ;;
 
 
 (* Update state based on post-conditions *)
-let update_state_with_post (f: fundec) (state: runtime_state) (current_stmt: stmt): runtime_state =
+let update_state_with_post 
+      (f: fundec) 
+      (state: runtime_state) 
+      (current_stmt: stmt) 
+      (g: varinfo list): runtime_state =
   
   let store = spec_lookup_post !specification f.svar.vname in
       
   if not (List.length store.heap = 0) then 
     E.s (E.bug "What...  I thought all heap specifications were zero...");
-
-  let match_str_exp s e =
-    match e with
-        Lval (Var v, _) -> v.vname = s
-      | _ -> E.s (E.bug "Unable to match against expression %a" d_exp e)
-  in
 
   let new_state = state in
    
   let new_state = 
     List.fold_left
       (fun new_state s -> 
-         if s.[0] = '$' then (
-           let index = int_of_string  (String.sub s 1 (String.length s - 1)) in
-           let formal = List.nth f.sformals index in
-             fill_store (Lval (var formal)) new_state current_stmt 
-         ) else (
-           try 
-             let formal = List.find (fun v -> match_str_exp s (Lval (var v))) f.sformals in 
-               fill_store (Lval (var formal)) new_state current_stmt 
-           with Not_found -> 
-             E.s (E.bug "Dude.  How can we have a full store that ain't a formal?")
-         )
+         let store = (get_var_from_str f s (f.sformals@g)) in
+           fill_store (Lval (var store)) new_state current_stmt
       )
       new_state
       store.full
@@ -474,70 +423,49 @@ let update_state_with_post (f: fundec) (state: runtime_state) (current_stmt: stm
   let new_state = 
     List.fold_left
       (fun new_state s -> 
-         if s.[0] = '$' then (
-           let index = int_of_string  (String.sub s 1 (String.length s - 1)) in
-           let formal = List.nth f.sformals index in
-             empty_store (Lval (var formal)) new_state current_stmt 
-         ) else (
-           try 
-             let formal = List.find (fun v -> match_str_exp s (Lval (var v))) f.sformals in 
-               empty_store (Lval (var formal)) new_state current_stmt 
-           with Not_found -> 
-             E.s (E.bug "Dude.  How can we have an empty store that ain't a formal?")
-         )
+         let store = (get_var_from_str f s (f.sformals@g)) in
+             empty_store (Lval (var store)) new_state current_stmt
       )
       new_state
-      store.empty
+      store.full
   in
 
     new_state
 ;;
 
+
+let is_full (state: runtime_state) (current_stmt: stmt) (store: varinfo) = 
+  List.exists
+    (fun st -> match st with
+         (Full e) when (IE.is_equiv_start (Lval (var store)) e current_stmt) -> true
+       | _ -> false
+    )
+    state.r_stores
+;;
+
+let is_empty (state: runtime_state) (current_stmt: stmt) (store: varinfo) = 
+  List.exists
+    (fun st -> match st with
+         (Full e) when (IE.is_equiv_start (Lval (var store)) e current_stmt) -> true
+       | _ -> false
+    )
+    state.r_stores
+;;
+
 (* Verify that state upholds post-conditions *)
-let verify_state_with_post (f: fundec) (state: runtime_state) (current_stmt: stmt): bool =
+let verify_state_with_post (f: fundec) (state: runtime_state) (current_stmt: stmt) (g: varinfo list): bool =
   
   let store = spec_lookup_post !specification f.svar.vname in
       
   if not (List.length store.heap = 0) then 
     E.s (E.bug "What...  I thought all heap specifications were zero...");
 
-  let match_str_exp s e =
-    match e with
-        Lval (Var v, _) -> v.vname = s
-      | _ -> E.s (E.bug "Unable to match against expression %a" d_exp e)
-  in
-
   let _ = 
     List.iter
       (fun s -> 
-         if s.[0] = '$' then (
-           let index = int_of_string  (String.sub s 1 (String.length s - 1)) in
-           let formal = List.nth f.sformals index in
-             if not (
-               List.exists
-                 (fun st -> match st with
-                      (Full e) when (IE.is_equiv_start (Lval (var formal)) e current_stmt) -> true
-                    | _ -> false
-                 )
-                 state.r_stores
-             ) then 
-               E.s (E.bug "Store %s is not full or not found" s)
-         ) else (
-           try 
-             let formal = List.find (fun v -> match_str_exp s (Lval (var v))) f.sformals in 
-               if not (
-                 List.exists
-                   (fun st -> match st with
-                        (Full e) when (IE.is_equiv_start (Lval (var formal)) e current_stmt) -> true
-                      | _ -> false
-                   )
-                   state.r_stores
-               ) then
-                 E.s (E.bug "Store %s is not full or not found" s)
-           with Not_found -> 
-             (* TODO: What if s was refering to a global store? *) 
-             E.s (E.bug "Dude.  How can we have a full store that ain't a formal?")
-         )
+         let store = (get_var_from_str f s (f.sformals@g)) in
+           if not (is_full state current_stmt store) then 
+             E.s (E.bug "Store %s is not full or not found" s)
       )
       store.full
   in
@@ -546,34 +474,9 @@ let verify_state_with_post (f: fundec) (state: runtime_state) (current_stmt: stm
   let _ = 
     List.iter
       (fun s -> 
-         if s.[0] = '$' then (
-           let index = int_of_string  (String.sub s 1 (String.length s - 1)) in
-           let formal = List.nth f.sformals index in
-             if not (
-               List.exists
-                 (fun st -> match st with
-                      (Full e) when (IE.is_equiv_start (Lval (var formal)) e current_stmt) -> true
-                    | _ -> false
-                 )
-                 state.r_stores
-             ) then
-               E.s (E.bug "Store %s is not empty or not found" s)
-         ) else (
-           try 
-             let formal = List.find (fun v -> match_str_exp s (Lval (var v))) f.sformals in 
-               if not (
-                 List.exists
-                   (fun st -> match st with
-                        (Full e) when (IE.is_equiv_start (Lval (var formal)) e current_stmt) -> true
-                      | _ -> false
-                   )
-                   state.r_stores
-               ) then
-                 E.s (E.bug "Store %s is not empty or not found" s)
-           with Not_found -> 
-             (* TODO: What if s was refering to a global store? *) 
-             E.s (E.bug "Dude.  How can we have a empty store that ain't a formal?")
-         )
+         let store = (get_var_from_str f s (f.sformals@g)) in
+           if not (is_empty state current_stmt store) then 
+             E.s (E.bug "Store %s is not empty or not found" s)
       )
       store.empty
   in

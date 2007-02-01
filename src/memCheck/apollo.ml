@@ -378,8 +378,18 @@ module Track = DF.ForwardsDataFlow(Apollo_Dataflow);;
 (****************************************)
 
 let apollo_func (f: fundec) (cil_file: file) : bool =
+
+  let global_exps = 
+    foldGlobals cil_file
+      (fun s g -> match g with
+           GVarDecl (v, l) | GVar (v, _, l) -> v::s
+         | _ -> s
+      ) 
+      []
+  in
+
       
-  let state = State.update_state_with_pre f in
+  let state = State.update_state_with_pre f global_exps in
 
   IH.clear Apollo_Dataflow.stmtStartData;
   IH.add Apollo_Dataflow.stmtStartData (List.hd f.sbody.bstmts).sid  state;
@@ -390,7 +400,7 @@ let apollo_func (f: fundec) (cil_file: file) : bool =
     List.iter 
       (fun s -> 
        try 
-         if not (State.verify_state_with_post f (IH.find Apollo_Dataflow.stmtStartData s.sid) s) then
+         if not (State.verify_state_with_post f (IH.find Apollo_Dataflow.stmtStartData s.sid) s global_exps) then
            E.error 
              "Return at %a fails to satisfy post- conditions for function %s"
              d_loc (get_stmtLoc s.skind) f.svar.vname
