@@ -18,6 +18,35 @@ type runtime_state = {
   r_heaps: runtime_heap list;
 };;
 
+let state_to_string state = 
+  let s = 
+    List.fold_left 
+      (fun s store -> 
+         let (type_name, e) = match store with
+             (Empty e) -> ("Empty", e)
+           | (Full e) -> ("Full", e)
+           | (Nonheap e) -> ("Nonheap", e)
+           | (Unknown e) -> ("Unknown", e)
+           | (Error e) -> ("Error", e)
+         in
+           s ^ (Pretty.sprint 70 (Pretty.dprintf "Store %a in state %s\n" d_exp e type_name))
+      ) 
+      "Stores:\n" 
+      state.r_stores 
+  in
+  let s =
+    List.fold_left 
+      (fun s heap -> 
+         s ^ (Pretty.sprint 70 (Pretty.dprintf "Heap referenced by expression %a\n" d_exp heap))
+      ) 
+      (s ^ "Heap Data:\n") 
+      state.r_heaps 
+  in
+    s
+;;
+
+
+
 (** Retrun true if target expression is equivalent to one of the store enteries
   * in state *)
 let is_store (target: exp) (state: runtime_state) (current_stmt: stmt): bool = 
@@ -100,12 +129,14 @@ let use_store (target: exp) (state: runtime_state) (current_stmt: stmt): runtime
       state.r_stores
   in
 
-    if (compare new_stores state.r_stores) = 0 then 
-      E.s (E.bug "%s %s %a\n"
+    if (compare new_stores state.r_stores) = 0 then (
+      Pretty.printf "%s" (state_to_string state);
+      flush stdout;
+      E.s (E.bug "%s %s %a %a\n"
              "Apollo.use_store:"
              "Expression is not a store:"
-             d_exp target)
-    else
+             d_exp target d_stmt current_stmt)
+    ) else
       {r_stores=new_stores; r_heaps=state.r_heaps}
 ;;
 

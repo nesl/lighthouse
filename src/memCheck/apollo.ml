@@ -38,33 +38,7 @@ module Apollo_Dataflow = struct
   let stmtStartData: t IH.t = IH.create 17;;
   let copy (state: t) = state;;
   let pretty () (state: t) =
-    dprintf "%s" (
-      let s = 
-        List.fold_left 
-          (fun s store -> 
-             let (type_name, e) = match store with
-                 (Empty e) -> ("Empty", e)
-               | (Full e) -> ("Full", e)
-               | (Nonheap e) -> ("Nonheap", e)
-               | (Unknown e) -> ("Unknown", e)
-               | (Error e) -> ("Error", e)
-             in
-               s ^ (sprint 70 (dprintf "Store %a in state %s\n" d_exp e type_name))
-          ) 
-          "Stores:\n" 
-          state.r_stores 
-      in
-      let s =
-        List.fold_left 
-          (fun s heap -> 
-             s ^ (sprint 70 (dprintf "Heap referenced by expression %a\n" d_exp heap))
-          ) 
-          (s ^ "Heap Data:\n") 
-          state.r_heaps 
-      in
-        s
-    )
-  ;;
+    dprintf "%s" (State.state_to_string state);;
 
 
   let computeFirstPredecessor (s: stmt) (state: t): t = state;;
