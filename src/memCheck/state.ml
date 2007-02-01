@@ -78,8 +78,7 @@ let fill_store (target: exp) (state: runtime_state) (current_stmt: stmt): runtim
   let new_stores =
     List.map
       (fun store -> match store with
-           (Empty e2) when (IE.is_equiv_start target e2 current_stmt) ->
-             (Full e2)
+           (Empty e2) 
          | (Unknown e2) when (IE.is_equiv_start target e2 current_stmt) ->
              (Full e2)
          | (Full e2) 
@@ -109,35 +108,35 @@ let fill_store (target: exp) (state: runtime_state) (current_stmt: stmt): runtim
   * expression.  Retrurns an updated state.  *)
 let use_store (target: exp) (state: runtime_state) (current_stmt: stmt): runtime_state =
 
+  let found = ref false in
+
   let new_stores =
     List.map
       (fun store -> match store with
-           (Full e2) when (IE.is_equiv_start target e2 current_stmt) ->
-             (Full e2)
+           (Full e2) 
          | (Unknown e2) when (IE.is_equiv_start target e2 current_stmt) ->
+             found := true;
              (Full e2)
          | (Empty e2) 
          | (Nonheap e2) 
-         | (Error e2)
-             when (IE.is_equiv_start target e2 current_stmt) ->
+         | (Error e2) when (IE.is_equiv_start target e2 current_stmt) ->
              ignore (E.error 
                        "Using empty store at %a" 
                        d_loc (get_stmtLoc current_stmt.skind));
+             found := true;
              (Error target)
          | s -> s
       )
       state.r_stores
   in
 
-    if (compare new_stores state.r_stores) = 0 then (
-      Pretty.printf "%s" (state_to_string state);
-      flush stdout;
+    if !found then 
+      {r_stores=new_stores; r_heaps=state.r_heaps}
+    else 
       E.s (E.bug "%s %s %a %a\n"
              "Apollo.use_store:"
              "Expression is not a store:"
              d_exp target d_stmt current_stmt)
-    ) else
-      {r_stores=new_stores; r_heaps=state.r_heaps}
 ;;
 
 
@@ -148,8 +147,7 @@ let empty_store (target: exp) (state: runtime_state) (current_stmt: stmt): runti
   let new_stores =
     List.map
       (fun store -> match store with
-           (Full e2) when (IE.is_equiv_start target e2 current_stmt) ->
-             (Empty e2)
+           (Full e2) 
          | (Unknown e2) when (IE.is_equiv_start target e2 current_stmt) ->
              (Empty e2)
          | (Empty e2) 
@@ -181,16 +179,19 @@ let empty_store (target: exp) (state: runtime_state) (current_stmt: stmt): runti
   * represented by target expression.  Returns an updated state. *)
 let abuse_store (target: exp) (state: runtime_state) (current_stmt: stmt): runtime_state =
 
+  let found = ref false in
+
   let new_stores =
     List.map
       (fun store -> match store with
-           (Empty e2) when (IE.is_equiv_start target e2 current_stmt) ->
-             (Nonheap e2)
-         | (Full e2) 
-         | (Nonheap e2) 
+           (Empty e2) 
          | (Unknown e2) 
-         | (Error e2)
-             when (IE.is_equiv_start target e2 current_stmt) ->
+         | (Nonheap e2) when (IE.is_equiv_start target e2 current_stmt) ->
+             found := true;
+             (Nonheap e2)
+         | (Full e2)
+         | (Error e2) when (IE.is_equiv_start target e2 current_stmt) ->
+             found := true;
              ignore (E.error 
                        "Storing non-heap data into store at %a" 
                        d_loc (get_stmtLoc current_stmt.skind));
@@ -200,13 +201,13 @@ let abuse_store (target: exp) (state: runtime_state) (current_stmt: stmt): runti
       state.r_stores
   in
 
-    if (compare new_stores state.r_stores) = 0 then 
+    if !found then 
+      {r_stores=new_stores; r_heaps=state.r_heaps}
+    else 
       E.s (E.error "%s %s %a\n"
              "Apollo.abuse_store:"
              "Unable to find overwritten store store:"
              d_exp target)
-    else 
-      {r_stores=new_stores; r_heaps=state.r_heaps}
 ;;
 
 
