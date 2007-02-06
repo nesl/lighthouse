@@ -35,7 +35,7 @@ class rocketVisitor = object inherit nopCilVisitor
           try 
             ignore (Apollo.apollo_func f !cil_file)
           with 
-              E.Error -> ignore (printf "####\n# Bummer!\n####\n");
+              E.Error -> flush stdout; ignore (printf "####\n# Bummer!\n####\n\n\n");
         );
 
 

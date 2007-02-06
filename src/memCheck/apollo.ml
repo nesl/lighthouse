@@ -22,6 +22,9 @@ let current_stmt = ref (mkEmptyStmt ());;
 (* Reference to an error log *)
 let error_log = ref "Error Log:\n";;
 
+(* Reference to the file we are working with *)
+let cil_file = ref dummyFile;;
+
 (****************************************)
 (****************************************)
 (* Data  flow implementation *)
@@ -123,10 +126,9 @@ module Apollo_Dataflow = struct
 
       | Call (lvop, Lval((Var v), NoOffset), el, _) ->
 
-          let alloced = MemUtil.get_claim_formals i in
-          let freed = MemUtil.get_released i in
 
           let proper_pre = verify_state_with_pre state !current_stmt in
+
           let _ =
             if not proper_pre then (
               E.s (E.error "%s %s %a"
@@ -136,6 +138,21 @@ module Apollo_Dataflow = struct
             )
           in
 
+
+          let new_state = update_state_with_post v.vname (lvop, el) state !current_stmt !cil_file in
+          
+            if (compare new_state state) = 0 then (
+              ignore (printf "No need to update state for function call: %a\n" d_instr i);
+              DF.Default
+            ) else (
+              ignore (printf "Updating state for function call: %a\n" d_instr i);
+              DF.Done new_state
+            )
+
+                     (*
+          let alloced = MemUtil.get_claim_formals i in
+          let freed = MemUtil.get_released i in
+          
           (* Insure that no expression is being released and allocated *)
           let _ = 
             if List.exists 
@@ -223,6 +240,7 @@ module Apollo_Dataflow = struct
              * called function *)
 
             DF.Done new_state
+                      *)
       
       | Call _ ->
           E.s (E.bug "Have not implemented this form of call")
@@ -351,19 +369,30 @@ module Track = DF.ForwardsDataFlow(Apollo_Dataflow);;
 (****************************************)
 (****************************************)
 
-let apollo_func (f: fundec) (cil_file: file) : bool =
+let apollo_func (f: fundec) (cfile: file) : bool =
+
+  cil_file := cfile;
 
   let global_exps = 
-    foldGlobals cil_file
+    foldGlobals !cil_file
       (fun s g -> match g with
-           GVarDecl (v, l) | GVar (v, _, l) -> v::s
+           GVarDecl (v, l) | GVar (v, _, l) -> (Lval (var v))::s
          | _ -> s
       ) 
       []
   in
 
-      
-  let state = State.update_state_with_pre f global_exps in
+  let global_stores = List.map (fun e -> Unknown e) global_exps in
+  let initial_heaps = [] in
+  let initial_state = {State.r_stores=global_stores; State.r_heaps=initial_heaps} in
+
+  let state = 
+    State.update_state_with_pre f.svar.vname global_exps initial_state
+  in
+   
+    ignore (printf "State coming into function %s is:\n%a\n" 
+              f.svar.vname Apollo_Dataflow.pretty state);
+    flush stdout;
 
   IH.clear Apollo_Dataflow.stmtStartData;
   IH.add Apollo_Dataflow.stmtStartData (List.hd f.sbody.bstmts).sid  state;
@@ -373,11 +402,12 @@ let apollo_func (f: fundec) (cil_file: file) : bool =
 
     List.iter 
       (fun s -> 
-       try 
-         if not (State.verify_state_with_post f (IH.find Apollo_Dataflow.stmtStartData s.sid) s global_exps) then
-           E.error 
-             "Return at %a fails to satisfy post- conditions for function %s"
-             d_loc (get_stmtLoc s.skind) f.svar.vname
+       try
+         let return = (IH.find Apollo_Dataflow.stmtStartData s.sid) in 
+           if not (State.verify_state_with_post f.svar.vname global_exps return s) then
+             E.error 
+               "Return at %a fails to satisfy post- conditions for function %s"
+               d_loc (get_stmtLoc s.skind) f.svar.vname
        with Not_found -> 
          E.error "Unable to find state for return statement %d" s.sid;
 

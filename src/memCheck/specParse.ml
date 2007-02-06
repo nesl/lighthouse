@@ -18,12 +18,14 @@ let keywords = [
   ";";
   ".";
 
+  "$";
+
   "stores";
 
   "pre";
   "post";
 
-  "empty";
+  "mpty";
   "full";
   "heap";
 ];;
@@ -56,9 +58,32 @@ let parse_spec_block s =
 
   let rec parse_pre_post s f e h =
     match s with parser
+      | [<'Kwd "$">] -> begin
+           match s with parser
+             | [<'Ident s_name; 'Kwd ".">] -> begin
+                 match s with parser 
+                   | [<'Kwd "mpty"; 'Kwd "("; 'Kwd ")"; 'Kwd ";">] ->
+                       parse_pre_post s f ((Char.escaped '$' ^ s_name)::e) h
+                   | [<'Kwd "full"; 'Kwd "("; 'Kwd ")"; 'Kwd ";">] ->
+                       parse_pre_post s ((Char.escaped '$' ^ s_name)::f) e h
+                   | [<'Kwd "heap"; 'Kwd "("; 'Kwd ")"; 'Kwd ";">] ->
+                       parse_pre_post s f e h
+                   | [<>] -> raise Parse_error
+               end
+             | [<'Float count>] -> begin
+                 match s with parser 
+                   | [<'Kwd "mpty"; 'Kwd "("; 'Kwd ")"; 'Kwd ";">] ->
+                       parse_pre_post s f ((Char.escaped '$' ^ (string_of_float count))::e) h
+                   | [<'Kwd "full"; 'Kwd "("; 'Kwd ")"; 'Kwd ";">] ->
+                       parse_pre_post s ((Char.escaped '$' ^ (string_of_float count))::f) e h
+                   | [<'Kwd "heap"; 'Kwd "("; 'Kwd ")"; 'Kwd ";">] ->
+                       parse_pre_post s f e h
+                   | [<>] -> raise Parse_error
+               end
+         end
       | [<'Ident s_name; 'Kwd ".">] -> begin
           match s with parser 
-            | [<'Kwd "empty"; 'Kwd "("; 'Kwd ")"; 'Kwd ";">] ->
+            | [<'Kwd "mpty"; 'Kwd "("; 'Kwd ")"; 'Kwd ";">] ->
                 parse_pre_post s f (s_name::e) h
             | [<'Kwd "full"; 'Kwd "("; 'Kwd ")"; 'Kwd ";">] ->
                 parse_pre_post s (s_name::f) e h
@@ -68,7 +93,8 @@ let parse_spec_block s =
         end
       | [<'Kwd "}">] ->
           {full=f; empty=e; heap=h}
-      | [<>] -> raise Parse_error
+      | [<>] -> 
+          raise Parse_error
   in
 
   let parse_pre f_name s = 
@@ -120,7 +146,7 @@ let pretty_print_block b =
 
 let parse_spec file_name =
 
-  let block_num = ref 1 in
+  let block_num = ref 0 in
 
   let specification = {stores=[]; pre=[]; post=[]} in
 
