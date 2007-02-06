@@ -127,7 +127,7 @@ module Apollo_Dataflow = struct
       | Call (lvop, Lval((Var v), NoOffset), el, _) ->
 
 
-          let proper_pre = verify_state_with_pre state !current_stmt in
+          let proper_pre = verify_state_with_pre v.vname state !current_stmt (lvop, el) in
 
           let _ =
             if not proper_pre then (
@@ -139,7 +139,7 @@ module Apollo_Dataflow = struct
           in
 
 
-          let new_state = update_state_with_post v.vname (lvop, el) state !current_stmt !cil_file in
+          let new_state = update_state_with_post v.vname (lvop, el) state !current_stmt in
           
             if (compare new_state state) = 0 then (
               ignore (printf "No need to update state for function call: %a\n" d_instr i);
@@ -149,99 +149,6 @@ module Apollo_Dataflow = struct
               DF.Done new_state
             )
 
-                     (*
-          let alloced = MemUtil.get_claim_formals i in
-          let freed = MemUtil.get_released i in
-          
-          (* Insure that no expression is being released and allocated *)
-          let _ = 
-            if List.exists 
-                 (fun free_e -> 
-                    List.exists 
-                      (fun alloc_e -> IE.is_equiv_start free_e alloc_e !current_stmt) 
-                      alloced
-                 ) 
-                 freed
-            then
-              E.s (E.error "%s %s %a"
-                     "Apollo.Apollo_Dataflow.doInstr:"
-                     "Attempting to free and / or allocate equivalent expressions: %a"
-                     d_instr i)
-          in
-
-          let new_state = state in
-
-          (* Warn if an empty store is being used as a regular parameter
-           * without the sos_claim attribute.  This includes cases where the
-           * expression is simply being used, and cases where the expression is
-           * going to be freed. *)
-          let new_state =
-            List.fold_left
-              (fun s e -> 
-                 if not (List.exists 
-                           (fun alloc -> IE.is_equiv_start e alloc !current_stmt) 
-                           alloced) &&
-                    (is_store e state !current_stmt) 
-                 then use_store e s !current_stmt
-                 else s
-              )
-              new_state
-              el
-          in
-
-
-          (* Update state with newly allocated data *)
-          let new_state =  
-            List.fold_left 
-              (fun s e ->  
-                 if (is_store e s !current_stmt) then fill_store e s !current_stmt
-                 else add_heap e s !current_stmt
-              ) 
-              new_state
-              alloced
-          in
-
-
-          (* Updated state with freshly released data *)
-          let new_state =
-            List.fold_left
-              (fun s e ->
-                 if (is_store e s !current_stmt) then empty_store e s !current_stmt
-                 else remove_heap e s !current_stmt
-              )
-              new_state
-              freed
-          in
-
-
-          (* Update state if function returns allocated data *)
-          let new_state = 
-            match lvop with
-                Some lv when (MemUtil.returns_alloc i) &&
-                             (is_store (Lval lv) new_state) !current_stmt ->
-                  fill_store (Lval lv) new_state !current_stmt
-              | Some lv when (MemUtil.returns_alloc i) ->
-                  add_heap (Lval lv) new_state !current_stmt
-              | None when (MemUtil.returns_alloc i) ->
-                  ignore (E.error "%s (%a): %a"
-                            "Return value of allocated data is not being stored at "
-                            d_loc (get_stmtLoc !current_stmt.skind)
-                            d_instr i);
-                  new_state
-              | Some lv when (is_store (Lval lv) new_state) !current_stmt ->
-                  abuse_store (Lval lv) state !current_stmt
-              | Some lv when (is_heap (Lval lv) new_state) !current_stmt ->
-                  overwrite_heap (Lval lv) state !current_stmt
-              | Some lv -> new_state
-              | None -> new_state 
-          in
-
-            (* TODO: Update the new state based on the post_conditions of the
-             * called function *)
-
-            DF.Done new_state
-                      *)
-      
       | Call _ ->
           E.s (E.bug "Have not implemented this form of call")
 

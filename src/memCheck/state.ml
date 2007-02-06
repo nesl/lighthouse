@@ -395,20 +395,6 @@ let spec_lookup_pre spec name = spec_lookup spec.pre name ;;
 
 let spec_lookup_post spec name = spec_lookup spec.post name ;;
 
-(*
-let get_var_from_str (s: string) (f: fundec) (stores: varinfo list): varinfo =
- 
-  if s.[0] = '$' then (
-    ignore (Pretty.printf "1. Looking at value: %s\n" s); flush stdout;
-    List.nth f.sformals (int_of_string (String.sub s 1 (String.length s - 2)) - 1)
-  ) else 
-    try 
-      List.find (fun v -> v.vname = s) (stores@(f.sformals))
-    with Not_found -> 
-      E.s (E.bug "get_var_from_str: Faild to find store \"%s\" in supplied stores\n" s)
-;;
- *)
-
 
 let get_exp_from_str (s:string) ((lvop: lval option), (el: exp list)) (state: runtime_state): exp =
 
@@ -441,11 +427,10 @@ let update_state_with_pre (fname: string) (global_stores: exp list) (state): run
   if not (List.length store.heap = 0) then 
     E.s (E.bug "What...  I thought all heap specifications were zero...");
 
-  ignore (Pretty.printf "Filling stores\n"); flush stdout;
+  flush stdout;
   let full_stores = 
     List.fold_left
       (fun full s -> 
-          ignore (Pretty.printf "Attempting to fill store %s\n" s); flush stdout;
          let store = (get_exp_from_str s (None, global_stores) state) in
            (Full store)::full
       )
@@ -453,11 +438,9 @@ let update_state_with_pre (fname: string) (global_stores: exp list) (state): run
       store.full
   in
   
-  ignore (Pretty.printf "Emptying stores\n"); flush stdout;
   let empty_stores = 
     List.fold_left
       (fun empty s -> 
-          ignore (Pretty.printf "Attempting to empty store %s\n" s); flush stdout;
          let store = (get_exp_from_str s (None, global_stores) state) in
            (Empty store)::empty
       )
@@ -469,48 +452,78 @@ let update_state_with_pre (fname: string) (global_stores: exp list) (state): run
     {r_stores=(full_stores @ empty_stores); r_heaps=[]}
 ;;
 
-(* TODO: Verify that state upholds pre-conditions *)
-let verify_state_with_pre (state: runtime_state) (current_stmt: stmt): bool =
-  true
+
+let is_full (state: runtime_state) (current_stmt: stmt) (store: exp) = 
+  List.exists
+    (fun st -> match st with
+         (Full e) when (IE.is_equiv_start store e current_stmt) -> true
+       | _ -> false
+    )
+    state.r_stores
 ;;
 
-(*
-let get_fundec_from_string (cil_file: file) (fname: string): fundec option =   
-  let fds = 
-    foldGlobals 
-      cil_file 
-      (fun fds g -> match g with
-           GVarDecl (v, _) when v.vname = fname -> begin
-             match v with
-                 TFun (_, _, true, _) ->
-                   E.s (E.error "Unable to handle variable argument functions")
-                 TFun (return, formals, _, _) ->
-                  ) else (
-                    false
-                  )
+let is_empty (state: runtime_state) (current_stmt: stmt) (store: exp) = 
+  List.exists
+    (fun st -> match st with
+         (Empty e) when (IE.is_equiv_start store e current_stmt) -> true
+       | _ -> false
+    )
+    state.r_stores
+;;
 
 
-             end
-         | _ -> fds
-      ) 
-      []
+(* TODO: Verify that state upholds pre-conditions *)
+let verify_state_with_pre 
+      (fname: string)
+      (state: runtime_state) 
+      (current_stmt: stmt)
+      (lvop, el): bool =
+
+  let store = spec_lookup_pre !specification fname in
+      
+  if not (List.length store.heap = 0) then 
+    E.s (E.bug "What...  I thought all heap specifications were zero...");
+
+  let _ = 
+    List.iter
+      (fun s -> 
+         let store = (get_exp_from_str s (lvop, el) state) in
+           if not (is_full state current_stmt store) then 
+             E.s (E.bug "Store %s is not full or not found" s)
+      )
+      store.full
+  in
+  
+    
+  let _ = 
+    List.iter
+      (fun s -> 
+         let store = (get_exp_from_str s (lvop, el) state) in
+           if not (is_empty state current_stmt store) then 
+             E.s (E.bug "Store %s is not empty or not found" s)
+      )
+      store.empty
+  in
+  
+  let _ =    
+    List.iter
+      (fun heap ->
+         E.error 
+           "Failed to store heap data %a in function %s before return at %a" 
+           d_exp heap fname d_loc (get_stmtLoc current_stmt.skind)
+      )
+      state.r_heaps
   in
 
-    match fds with
-        fd::[] -> Some fd
-      | [] -> None (* E.s (E.error "Function %s not found" fname) *)
-      | _ -> E.s (E.error "More than one definition of function %s found" fname)
-
+  true
 ;;
- *)
 
 (* Update state based on post-conditions *)
 let update_state_with_post 
       (fname: string)
       ((lvop: lval option), (el: exp list))
       (state: runtime_state) 
-      (current_stmt: stmt)
-      (cil_file: file): runtime_state =
+      (current_stmt: stmt): runtime_state =
   
   ignore (Pretty.printf "State before call at stmt %a\n%s\n" 
             d_stmt current_stmt (state_to_string state));
@@ -551,24 +564,6 @@ let update_state_with_post
             new_state
 ;;
 
-
-let is_full (state: runtime_state) (current_stmt: stmt) (store: exp) = 
-  List.exists
-    (fun st -> match st with
-         (Full e) when (IE.is_equiv_start store e current_stmt) -> true
-       | _ -> false
-    )
-    state.r_stores
-;;
-
-let is_empty (state: runtime_state) (current_stmt: stmt) (store: exp) = 
-  List.exists
-    (fun st -> match st with
-         (Full e) when (IE.is_equiv_start store e current_stmt) -> true
-       | _ -> false
-    )
-    state.r_stores
-;;
 
 (* Verify that state upholds post-conditions *)
 let verify_state_with_post 
