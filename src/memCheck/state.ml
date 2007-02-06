@@ -435,14 +435,17 @@ let get_exp_from_str (s:string) ((lvop: lval option), (el: exp list)) (state: ru
  *) 
 let update_state_with_pre (fname: string) (global_stores: exp list) (state): runtime_state =
 
+
   let store = spec_lookup_pre !specification fname in
       
   if not (List.length store.heap = 0) then 
     E.s (E.bug "What...  I thought all heap specifications were zero...");
 
+  ignore (Pretty.printf "Filling stores\n"); flush stdout;
   let full_stores = 
     List.fold_left
       (fun full s -> 
+          ignore (Pretty.printf "Attempting to fill store %s\n" s); flush stdout;
          let store = (get_exp_from_str s (None, global_stores) state) in
            (Full store)::full
       )
@@ -450,9 +453,11 @@ let update_state_with_pre (fname: string) (global_stores: exp list) (state): run
       store.full
   in
   
+  ignore (Pretty.printf "Emptying stores\n"); flush stdout;
   let empty_stores = 
     List.fold_left
       (fun empty s -> 
+          ignore (Pretty.printf "Attempting to empty store %s\n" s); flush stdout;
          let store = (get_exp_from_str s (None, global_stores) state) in
            (Empty store)::empty
       )
