@@ -403,7 +403,6 @@ let get_exp_from_str (s:string) ((lvop: lval option), (el: exp list)) (state: ru
           Some lval -> Lval lval
         | None -> E.s (E.error "Instruction needs a return value")
     ) else if s.[0] = '$' then (
-      ignore (Pretty.printf "2. Looking at value: %s\n" s); flush stdout;
       List.nth el (int_of_string (String.sub s 1 (String.length s - 2)) - 1)
     ) else (
       lookup_store_by_name s state 
@@ -524,13 +523,7 @@ let update_state_with_post
       (state: runtime_state) 
       (current_stmt: stmt): runtime_state =
   
-  ignore (Pretty.printf "State before call at stmt %a\n%s\n" 
-            d_stmt current_stmt (state_to_string state));
-  flush stdout;
-
   let store = spec_lookup_post !specification fname in
-
-    ignore (Pretty.printf "Found specification for function %s\n" fname);
 
     if not (List.length store.heap = 0) then 
       E.s (E.bug "What...  I thought all heap specifications were zero...");
@@ -557,10 +550,7 @@ let update_state_with_post
         store.empty
     in
 
-      ignore (Pretty.printf "State after call at stmt %a\n%s\n" 
-                d_stmt current_stmt (state_to_string new_state));
-            flush stdout;
-            new_state
+      new_state
 ;;
 
 

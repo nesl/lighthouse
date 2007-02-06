@@ -126,6 +126,10 @@ module Apollo_Dataflow = struct
 
       | Call (lvop, Lval((Var v), NoOffset), el, _) ->
 
+          ignore (printf "State coming into called function %s is:\n%a\n" 
+                    v.vname pretty state);
+          flush stdout;
+
           (* Verify that we are in a state that is valid for the function call
            *)
           let proper_pre = verify_state_with_pre v.vname state !current_stmt (lvop, el) in
@@ -142,7 +146,12 @@ module Apollo_Dataflow = struct
           (* Update state to reflect the effects of the function call *)
           let new_state = update_state_with_post v.vname (lvop, el) state !current_stmt in
           
-            if (compare new_state state) = 0 then (
+          ignore (printf "State leaving called function %s is:\n%a\n" 
+                    v.vname pretty state);
+          flush stdout;
+          
+        
+          if (compare new_state state) = 0 then (
               DF.Default
             ) else (
               DF.Done new_state
@@ -297,6 +306,10 @@ let apollo_func (f: fundec) (cfile: file) : bool =
     State.update_state_with_pre f.svar.vname global_exps initial_state
   in
    
+    ignore (printf "State coming into function %s is:\n%a\n" 
+              f.svar.vname Apollo_Dataflow.pretty state);
+    flush stdout;
+
 
   (* Run dataflow for function *)
   IH.clear Apollo_Dataflow.stmtStartData;
@@ -304,6 +317,11 @@ let apollo_func (f: fundec) (cfile: file) : bool =
   Track.compute [List.hd f.sbody.bstmts];
 
   let return_stmts = MemUtil.get_return_statements f in
+
+    ignore (printf "State leaving function %s is:\n%a\n" 
+              f.svar.vname Apollo_Dataflow.pretty state);
+    flush stdout;
+
 
   (* For each return point verify that the post conditions required by the
    * function are satisfied by the state *)
