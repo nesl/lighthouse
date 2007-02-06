@@ -1,5 +1,7 @@
 #include <stdlib.h>
 
+void free(void*);
+
 void foo(int *p) {
     p++;
 }

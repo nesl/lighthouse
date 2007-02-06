@@ -12,11 +12,11 @@ create_a.post {
     global_buff.full();
 }
 
-delet_a.pre {
+delete_a.pre {
     global_buff.full();
 }
 
-delet_a.post {
+delete_a.post {
     global_buff.empty();
 }
 
@@ -30,7 +30,7 @@ create_b.post {
     global_buff.full();
 }
 
-delet_b.pre {
+delete_b.pre {
     global_buff.full();
 }
 

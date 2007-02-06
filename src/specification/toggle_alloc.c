@@ -22,4 +22,23 @@ void delete_b() {
     return;
 };
 
+void bad_a() {
+    create_a();
+    return;
+}
 
+void bad_b() {
+    create_a();
+    create_a();
+    return;
+}
+
+void bad_c() {
+    return;
+}
+
+void bad_d() {
+    void *tmp;
+    tmp = malloc(5);
+    return;
+}

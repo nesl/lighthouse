@@ -21,7 +21,7 @@ let global_stores =
   foldGlobals 
     cilFile
     (fun s g -> match g with
-         GVarDecl (v, l) | GVar (v, _, l) -> (Lval (var v))::s
+         GVarDecl (v, l) | GVar (v, _, l) -> {IS.s_exp = (Lval (var v)); IS.s_state = IS.Unknown}::s
        | GFun (fd, l) -> s
        | _ -> s
     ) 
@@ -29,10 +29,10 @@ let global_stores =
 ;;
 
 
-let stores (f:fundec) : exp list = 
+let stores (f:fundec) : IS.store list = 
   let local_stores = 
     List.map 
-      (fun v -> (Lval (var v)))
+      (fun v -> {IS.s_exp = (Lval (var v)); IS.s_state = IS.Unknown})
       (List.filter (fun v -> hasAttribute "sos_store" v.vattr) (f.slocals @ f.sformals))
   in
     local_stores @ global_stores

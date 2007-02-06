@@ -4,7 +4,7 @@ open Cil
 open CilDriver
   
 (* Set up a file for running tests *)
-let inputFile = "ptranalTest.c";;
+let inputFile = "isDeadUnit03.cil.c";;
 let cilFile = makeCilFile inputFile;;
 
 (* Prepare the file for pointer analysis queries *)
