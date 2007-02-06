@@ -472,7 +472,6 @@ let is_empty (state: runtime_state) (current_stmt: stmt) (store: exp) =
 ;;
 
 
-(* TODO: Verify that state upholds pre-conditions *)
 let verify_state_with_pre 
       (fname: string)
       (state: runtime_state) 

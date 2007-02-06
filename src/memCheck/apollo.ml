@@ -126,7 +126,8 @@ module Apollo_Dataflow = struct
 
       | Call (lvop, Lval((Var v), NoOffset), el, _) ->
 
-
+          (* Verify that we are in a state that is valid for the function call
+           *)
           let proper_pre = verify_state_with_pre v.vname state !current_stmt (lvop, el) in
 
           let _ =
@@ -138,14 +139,12 @@ module Apollo_Dataflow = struct
             )
           in
 
-
+          (* Update state to reflect the effects of the function call *)
           let new_state = update_state_with_post v.vname (lvop, el) state !current_stmt in
           
             if (compare new_state state) = 0 then (
-              ignore (printf "No need to update state for function call: %a\n" d_instr i);
               DF.Default
             ) else (
-              ignore (printf "Updating state for function call: %a\n" d_instr i);
               DF.Done new_state
             )
 
@@ -158,11 +157,6 @@ module Apollo_Dataflow = struct
 
   let doStmt (s: stmt) (state: t) =
     current_stmt := s;
-    (*
-    ignore (Pretty.printf "%a\n" d_loc (get_stmtLoc !current_stmt.skind));
-    ignore (Pretty.printf "%a\n" pretty state);
-    flush stdout;
-     *)
     DF.SDefault
   ;;
 
@@ -280,6 +274,8 @@ let apollo_func (f: fundec) (cfile: file) : bool =
 
   cil_file := cfile;
 
+  (* Collect the global variables together *)
+
   let global_exps = 
     foldGlobals !cil_file
       (fun s g -> match g with
@@ -289,24 +285,28 @@ let apollo_func (f: fundec) (cfile: file) : bool =
       []
   in
 
+  (* Create a dummy "initial_state" that has all stores in an unknown state and
+   * an empty heap *)
   let global_stores = List.map (fun e -> Unknown e) global_exps in
   let initial_heaps = [] in
   let initial_state = {State.r_stores=global_stores; State.r_heaps=initial_heaps} in
 
+  (* Update the state based on the pre-condition assumptions that we can assume
+   * are true upon having entered a function *)
   let state = 
     State.update_state_with_pre f.svar.vname global_exps initial_state
   in
    
-    ignore (printf "State coming into function %s is:\n%a\n" 
-              f.svar.vname Apollo_Dataflow.pretty state);
-    flush stdout;
 
+  (* Run dataflow for function *)
   IH.clear Apollo_Dataflow.stmtStartData;
   IH.add Apollo_Dataflow.stmtStartData (List.hd f.sbody.bstmts).sid  state;
   Track.compute [List.hd f.sbody.bstmts];
 
   let return_stmts = MemUtil.get_return_statements f in
 
+  (* For each return point verify that the post conditions required by the
+   * function are satisfied by the state *)
     List.iter 
       (fun s -> 
        try

@@ -253,3 +253,19 @@ delete_b.post {
     global_buff.mpty();
 }
 
+
+bad_b.pre {
+    global_buff.mpty();
+}
+bad_b.post {
+    global_buff.full();
+}
+
+
+bad_c.pre {
+    global_buff.mpty();
+}
+bad_c.post {
+    global_buff.full();
+}
+
