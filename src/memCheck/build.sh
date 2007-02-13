@@ -26,5 +26,5 @@ ocamlc \
     memUtil.cmo isEquivalent.cmo mayAliasWrapper.cmo addAnnotations.cmo \
     makeOneCFG.cmo state.cmo specParse.cmo apollo.cmo rocket.cmo
 
-echo "Done. Now ready to run rocket."
+echo "Done. Now ready to run lighthouse."
 
