@@ -22,7 +22,7 @@ ocamlc -c -I $CIL_LIB rocket.ml
 
 echo "Linking object files..."
 ocamlc \
-    -I $CIL_LIB unix.cma str.cma cil.cma -o rocket \
+    -I $CIL_LIB unix.cma str.cma cil.cma -o lighthouse \
     memUtil.cmo isEquivalent.cmo mayAliasWrapper.cmo addAnnotations.cmo \
     makeOneCFG.cmo state.cmo specParse.cmo apollo.cmo rocket.cmo
 
