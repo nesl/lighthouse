@@ -3,6 +3,8 @@ open Cil;;
 module E = Errormsg;;
 module IE = IsEquivalent;;
 
+let dbg_state = ref false;;
+
 (* State maintained by the dataflow analysis.  This includes a set of stores and
  * a list of expressions refering to heap data that has not been stored. *)
 type runtime_store = 
@@ -47,194 +49,12 @@ let state_to_string state =
 
 
 
-(** Retrun true if target expression is equivalent to one of the store enteries
-  * in state *)
-let is_store (target: exp) (state: runtime_state) (current_stmt: stmt): bool = 
-  List.exists
-    (fun s -> match s with
-         Empty store
-       | Full store
-       | Nonheap store
-       | Unknown store
-       | Error store ->
-           IE.is_equiv_start target store current_stmt
-    )
-    state.r_stores
-;;
-
-
-
-let lookup_store_by_name (sname: string) (state: runtime_state): exp = 
-  let exps = 
-    List.fold_left
-      (fun exps s -> match s with
-           Empty (Lval (Var v, NoOffset))
-         | Full (Lval (Var v, NoOffset))
-         | Nonheap (Lval (Var v, NoOffset))
-         | Unknown (Lval (Var v, NoOffset))
-         | Error (Lval (Var v, NoOffset)) when v.vname = sname -> 
-             (Lval (Var v, NoOffset))::exps
-         | _ -> exps
-      )
-      []
-      state.r_stores
-  in
-
-    match exps with
-        e::[] -> e
-      | [] -> E.s (E.error "Unable to find store with name %s" sname)
-      | _ -> E.s (E.error "Found more than one store with name %s" sname)
-;;
-
-
-
 (** Return true if target expression is equivalent to one of the heap enteries
   * in state *)
 let is_heap (target: exp) (state: runtime_state) (current_stmt: stmt): bool =
   List.exists
     (fun heap -> IE.is_equiv_start target heap current_stmt)
     state.r_heaps
-;;
-
-(** Attempts to fill the store represented by target expression within the
-  * state.  Returns an updated state. *)
-let fill_store (target: exp) (state: runtime_state) (current_stmt: stmt): runtime_state =
-
-  let new_stores =
-    List.map
-      (fun store -> match store with
-           (Empty e2) 
-         | (Unknown e2) when (IE.is_equiv_start target e2 current_stmt) ->
-             (Full e2)
-         | (Full e2) 
-         | (Nonheap e2) 
-         | (Error e2)
-             when (IE.is_equiv_start target e2 current_stmt) ->
-             ignore (E.error 
-                       "Overwriting store at %a" 
-                       d_loc (get_stmtLoc current_stmt.skind));
-             (Error target)
-         | s -> s
-      )
-      state.r_stores
-  in
-
-    if (compare new_stores state.r_stores) = 0 then (
-      E.s (E.bug "%s %s %a at %a\n"
-             "State.fill_store:"
-             "Expression is not a store:"
-             d_exp target
-             d_loc (get_stmtLoc current_stmt.skind)
-      )
-    ) else
-      {r_stores=new_stores; r_heaps=state.r_heaps}
-;;
-
-
-(** Attempts to use data refrenced by the store represented by target
-  * expression.  Retrurns an updated state.  *)
-let use_store (target: exp) (state: runtime_state) (current_stmt: stmt): runtime_state =
-
-  let found = ref false in
-
-  let new_stores =
-    List.map
-      (fun store -> match store with
-           (Full e2) 
-         | (Unknown e2) when (IE.is_equiv_start target e2 current_stmt) ->
-             found := true;
-             (Full e2)
-         | (Empty e2) 
-         | (Nonheap e2) 
-         | (Error e2) when (IE.is_equiv_start target e2 current_stmt) ->
-             ignore (E.error 
-                       "Using empty store at %a" 
-                       d_loc (get_stmtLoc current_stmt.skind));
-             found := true;
-             (Error target)
-         | s -> s
-      )
-      state.r_stores
-  in
-
-    if !found then 
-      {r_stores=new_stores; r_heaps=state.r_heaps}
-    else 
-      E.s (E.bug "%s %s %a %a\n"
-             "State.use_store:"
-             "Expression is not a store:"
-             d_exp target d_stmt current_stmt)
-;;
-
-
-(** Attempts to release data referenced by the store represented by target
-  * expression.  Returns an upadated state. *)
-let empty_store (target: exp) (state: runtime_state) (current_stmt: stmt): runtime_state =
-
-  let new_stores =
-    List.map
-      (fun store -> match store with
-           (Full e2) 
-         | (Unknown e2) when (IE.is_equiv_start target e2 current_stmt) ->
-             (Empty e2)
-         | (Empty e2) 
-         | (Nonheap e2) 
-         | (Error e2)
-             when (IE.is_equiv_start target e2 current_stmt) ->
-             ignore (E.error 
-                       "Releasing empty store at %a" 
-                       d_loc (get_stmtLoc current_stmt.skind));
-             (Error target)
-         | s -> s
-      )
-      state.r_stores
-  in
-
-    if (compare new_stores state.r_stores) = 0 then 
-      E.s (E.bug "%s %s %a\n"
-             "State.empty_store:"
-             "Expression is not a store:"
-             d_exp target)
-    else
-      {r_stores=new_stores; r_heaps=state.r_heaps}
-;;
-
-
-(* TODO: Add cases for Nonheap into the other functions that manipulate the
- * store *)
-(** Attempts to write a value not referencing heap data into the store
-  * represented by target expression.  Returns an updated state. *)
-let abuse_store (target: exp) (state: runtime_state) (current_stmt: stmt): runtime_state =
-
-  let found = ref false in
-
-  let new_stores =
-    List.map
-      (fun store -> match store with
-           (Empty e2) 
-         | (Unknown e2) 
-         | (Nonheap e2) when (IE.is_equiv_start target e2 current_stmt) ->
-             found := true;
-             (Nonheap e2)
-         | (Full e2)
-         | (Error e2) when (IE.is_equiv_start target e2 current_stmt) ->
-             found := true;
-             ignore (E.error 
-                       "Storing non-heap data into store at %a" 
-                       d_loc (get_stmtLoc current_stmt.skind));
-             (Error target)
-         | s -> s
-      )
-      state.r_stores
-  in
-
-    if !found then 
-      {r_stores=new_stores; r_heaps=state.r_heaps}
-    else 
-      E.s (E.error "%s %s %a\n"
-             "State.abuse_store:"
-             "Unable to find overwritten store store:"
-             d_exp target)
 ;;
 
 
@@ -307,6 +127,192 @@ let overwrite_heap (target: exp) (state: runtime_state) (current_stmt: stmt): ru
              d_exp target)
     else
       {r_stores=state.r_stores; r_heaps=new_heaps}
+;;
+
+
+(** Retrun true if target expression is equivalent to one of the store enteries
+  * in state *)
+let is_store (target: exp) (state: runtime_state) (current_stmt: stmt): bool = 
+  List.exists
+    (fun s -> match s with
+         Empty store
+       | Full store
+       | Nonheap store
+       | Unknown store
+       | Error store ->
+           IE.is_equiv_start target store current_stmt
+    )
+    state.r_stores
+;;
+
+
+
+let lookup_store_by_name (sname: string) (state: runtime_state): exp = 
+  let exps = 
+    List.fold_left
+      (fun exps s -> match s with
+           Empty (Lval (Var v, NoOffset))
+         | Full (Lval (Var v, NoOffset))
+         | Nonheap (Lval (Var v, NoOffset))
+         | Unknown (Lval (Var v, NoOffset))
+         | Error (Lval (Var v, NoOffset)) when v.vname = sname -> 
+             (Lval (Var v, NoOffset))::exps
+         | _ -> exps
+      )
+      []
+      state.r_stores
+  in
+
+    match exps with
+        e::[] -> e
+      | [] -> E.s (E.error "Unable to find store with name %s" sname)
+      | _ -> E.s (E.error "Found more than one store with name %s" sname)
+;;
+
+
+
+(** Attempts to fill the store represented by target expression within the
+  * state.  Returns an updated state. *)
+let fill_store (target: exp) (state: runtime_state) (current_stmt: stmt): runtime_state =
+
+  let new_stores =
+    List.map
+      (fun store -> match store with
+           (Empty e2) 
+         | (Unknown e2) when (IE.is_equiv_start target e2 current_stmt) ->
+             (Full e2)
+         | (Full e2) 
+         | (Nonheap e2) 
+         | (Error e2)
+             when (IE.is_equiv_start target e2 current_stmt) ->
+             ignore (E.error 
+                       "Overwriting store at %a" 
+                       d_loc (get_stmtLoc current_stmt.skind));
+             (Error target)
+         | s -> s
+      )
+      state.r_stores
+  in
+
+    (* Data must be going into a tmp variable that will later be placed in a
+     * store. *)
+    if (compare new_stores state.r_stores) = 0 then (
+      if !dbg_state then (
+        ignore (Pretty.printf "State.fill_store adding heap data at: %a" 
+                  d_loc (get_stmtLoc current_stmt.skind));
+      );
+      add_heap target state current_stmt
+    ) else
+      {r_stores=new_stores; r_heaps=state.r_heaps}
+;;
+
+
+(** Attempts to use data refrenced by the store represented by target
+  * expression.  Retrurns an updated state.  *)
+let use_store (target: exp) (state: runtime_state) (current_stmt: stmt): runtime_state =
+
+  let found = ref false in
+
+  let new_stores =
+    List.map
+      (fun store -> match store with
+           (Full e2) 
+         | (Unknown e2) when (IE.is_equiv_start target e2 current_stmt) ->
+             found := true;
+             (Full e2)
+         | (Empty e2) 
+         | (Nonheap e2) 
+         | (Error e2) when (IE.is_equiv_start target e2 current_stmt) ->
+             ignore (E.error 
+                       "Using empty store at %a" 
+                       d_loc (get_stmtLoc current_stmt.skind));
+             found := true;
+             (Error target)
+         | s -> s
+      )
+      state.r_stores
+  in
+
+    if !found then 
+      {r_stores=new_stores; r_heaps=state.r_heaps}
+    else 
+      E.s (E.bug "%s %s %a %a\n"
+             "State.use_store:"
+             "Expression is not a store:"
+             d_exp target d_stmt current_stmt)
+;;
+
+
+(** Attempts to release data referenced by the store represented by target
+  * expression.  Returns an upadated state. *)
+let empty_store (target: exp) (state: runtime_state) (current_stmt: stmt): runtime_state =
+
+  let new_stores =
+    List.map
+      (fun store -> match store with
+           (Full e2) 
+         | (Unknown e2) when (IE.is_equiv_start target e2 current_stmt) ->
+             (Empty e2)
+         | (Empty e2) 
+         | (Nonheap e2) 
+         | (Error e2)
+             when (IE.is_equiv_start target e2 current_stmt) ->
+             ignore (E.error 
+                       "Releasing empty store at %a" 
+                       d_loc (get_stmtLoc current_stmt.skind));
+             (Error target)
+         | s -> s
+      )
+      state.r_stores
+  in
+
+    if (compare new_stores state.r_stores) = 0 then (
+      if !dbg_state then (
+        ignore (Pretty.printf "State.empty_store checking heap data at: %a" 
+                  d_loc (get_stmtLoc current_stmt.skind));
+      );
+      remove_heap target state current_stmt
+    ) else
+      {r_stores=new_stores; r_heaps=state.r_heaps}
+    
+;;
+
+
+(* TODO: Add cases for Nonheap into the other functions that manipulate the
+ * store *)
+(** Attempts to write a value not referencing heap data into the store
+  * represented by target expression.  Returns an updated state. *)
+let abuse_store (target: exp) (state: runtime_state) (current_stmt: stmt): runtime_state =
+
+  let found = ref false in
+
+  let new_stores =
+    List.map
+      (fun store -> match store with
+           (Empty e2) 
+         | (Unknown e2) 
+         | (Nonheap e2) when (IE.is_equiv_start target e2 current_stmt) ->
+             found := true;
+             (Nonheap e2)
+         | (Full e2)
+         | (Error e2) when (IE.is_equiv_start target e2 current_stmt) ->
+             found := true;
+             ignore (E.error 
+                       "Storing non-heap data into store at %a" 
+                       d_loc (get_stmtLoc current_stmt.skind));
+             (Error target)
+         | s -> s
+      )
+      state.r_stores
+  in
+
+    if !found then 
+      {r_stores=new_stores; r_heaps=state.r_heaps}
+    else 
+      E.s (E.error "%s %s %a\n"
+             "State.abuse_store:"
+             "Unable to find overwritten store store:"
+             d_exp target)
 ;;
 
 
@@ -398,12 +404,12 @@ let spec_lookup_pre spec name = spec_lookup spec.pre name ;;
 let spec_lookup_post spec name = spec_lookup spec.post name ;;
 
 
-let get_exp_from_str (s:string) ((lvop: lval option), (el: exp list)) (state: runtime_state): exp =
+let get_exp_from_str (fname: string) (s:string) ((return: exp option), (el: exp list)) (state: runtime_state): exp =
 
     if s = "$return" then (
-      match lvop with
-          Some lval -> Lval lval
-        | None -> E.s (E.error "Instruction needs a return value")
+      match return with
+          Some e -> e
+        | None -> E.s (E.error "Instruction needs a return value in function: %s" fname)
     ) else if s.[0] = '$' then (
       List.nth el (int_of_string (String.sub s 1 (String.length s - 2)) - 1)
     ) else (
@@ -431,7 +437,7 @@ let update_state_with_pre (fname: string) (formals: exp list) (state): runtime_s
   let full_stores = 
     List.fold_left
       (fun full s -> 
-         let store = (get_exp_from_str s (None, formals) state) in
+         let store = (get_exp_from_str fname s (None, formals) state) in
            (Full store)::full
       )
       []
@@ -441,7 +447,7 @@ let update_state_with_pre (fname: string) (formals: exp list) (state): runtime_s
   let empty_stores = 
     List.fold_left
       (fun empty s -> 
-         let store = (get_exp_from_str s (None, formals) state) in
+         let store = (get_exp_from_str fname s (None, formals) state) in
            (Empty store)::empty
       )
       []
@@ -454,12 +460,23 @@ let update_state_with_pre (fname: string) (formals: exp list) (state): runtime_s
 
 
 let is_full (state: runtime_state) (current_stmt: stmt) (store: exp) = 
-  List.exists
-    (fun st -> match st with
-         (Full e) when (IE.is_equiv_start store e current_stmt) -> true
-       | _ -> false
-    )
-    state.r_stores
+  let in_store =
+    List.exists
+      (fun st -> match st with
+           (Full e) when (IE.is_equiv_start store e current_stmt) -> true
+         | _ -> false
+      )
+      state.r_stores
+  in
+
+  let in_heap =
+    List.exists
+      (fun e -> IE.is_equiv_start store e current_stmt)
+      state.r_heaps
+  in
+
+    (in_store || in_heap)
+
 ;;
 
 let is_empty (state: runtime_state) (current_stmt: stmt) (store: exp) = 
@@ -469,6 +486,13 @@ let is_empty (state: runtime_state) (current_stmt: stmt) (store: exp) =
        | _ -> false
     )
     state.r_stores
+;;
+
+
+let eop_of_lvop (lvop: lval option): exp option =
+  match lvop with
+      Some lv -> Some (Lval lv)
+    | None -> None
 ;;
 
 
@@ -486,10 +510,14 @@ let verify_state_with_pre
   let _ = 
     List.iter
       (fun s -> 
-         let store = (get_exp_from_str s (lvop, el) state) in
+         let store = (get_exp_from_str fname s (eop_of_lvop(lvop), el) state) in
            if not (is_full state current_stmt store) then 
-             E.s (E.bug "Store %s is not full or not found at %a" 
-                    s d_loc (get_stmtLoc current_stmt.skind))
+             E.s (E.error "%s %s %s %a%s" 
+                    "Formal parameter with index"
+                    (String.sub s 1 ((String.length s) - 2))
+                    "(in function call at"
+                    d_loc (get_stmtLoc current_stmt.skind)
+                    ") is not a full store and not heap data.")
       )
       store.full
   in
@@ -498,13 +526,14 @@ let verify_state_with_pre
   let _ = 
     List.iter
       (fun s -> 
-         let store = (get_exp_from_str s (lvop, el) state) in
+         let store = (get_exp_from_str fname s (eop_of_lvop(lvop), el) state) in
            if not (is_empty state current_stmt store) then 
              E.s (E.bug "Store %s is not empty or not found" s)
       )
       store.empty
   in
-  
+ 
+   (* 
   let _ =    
     List.iter
       (fun heap ->
@@ -514,6 +543,7 @@ let verify_state_with_pre
       )
       state.r_heaps
   in
+    *)
 
   true
 ;;
@@ -535,7 +565,7 @@ let update_state_with_post
     let new_state = 
       List.fold_left
         (fun new_state s -> 
-           let store = get_exp_from_str s (lvop, el) state in
+           let store = get_exp_from_str fname s (eop_of_lvop(lvop), el) state in
              fill_store store new_state current_stmt
         )
         new_state
@@ -545,7 +575,7 @@ let update_state_with_post
     let new_state = 
       List.fold_left
         (fun new_state s -> 
-           let store = get_exp_from_str s (lvop, el) state in
+           let store = get_exp_from_str fname s (eop_of_lvop(lvop), el) state in
              empty_store store new_state current_stmt
         )
         new_state
@@ -558,8 +588,9 @@ let update_state_with_post
 
 (* Verify that state upholds post-conditions *)
 let verify_state_with_post 
-      (fname: string) 
-      (global_stores: exp list)
+      (fname: string)
+      (return: exp option)
+      (formals: exp list)
       (state: runtime_state) 
       (current_stmt: stmt): bool =
   
@@ -571,9 +602,9 @@ let verify_state_with_post
   let _ = 
     List.iter
       (fun s -> 
-         let store = (get_exp_from_str s (None, global_stores) state) in
+         let store = (get_exp_from_str fname s (return, formals) state) in
            if not (is_full state current_stmt store) then 
-             E.s (E.bug "Store %s is not full or not found" s)
+             E.s (E.bug "Store %a is not full or not found" d_exp store)
       )
       store.full
   in
@@ -582,9 +613,9 @@ let verify_state_with_post
   let _ = 
     List.iter
       (fun s -> 
-         let store = (get_exp_from_str s (None, global_stores) state) in
+         let store = (get_exp_from_str fname s (return, formals) state) in
            if not (is_empty state current_stmt store) then 
-             E.s (E.bug "Store %s is not empty or not found" s)
+             E.s (E.bug "Store %a is not empty or not found" d_exp store)
       )
       store.empty
   in
@@ -592,14 +623,30 @@ let verify_state_with_post
   let _ =    
     List.iter
       (fun heap ->
-         E.error 
-           "Failed to store heap data %a in function %s before return at %a" 
-           d_exp heap fname d_loc (get_stmtLoc current_stmt.skind)
+         let safe_heap = 
+           match return with
+               Some e ->
+                 (* If the heap is being returned... *)
+                 let heap_returned = IE.is_equiv_start heap e current_stmt in
+
+                 (* And if the return value should be full... *)
+                 let should_be_full = List.mem "$return" store.full in
+
+                   (heap_returned && should_be_full)
+
+             | None -> false
+         in
+           
+           if not safe_heap then (
+             E.error 
+               "Failed to store heap data %a after function %s before return at %a" 
+               d_exp heap fname d_loc (get_stmtLoc current_stmt.skind)
+           );
       )
-      state.r_heaps
+state.r_heaps
   in
 
-  true
+    true
 ;;
 
 

@@ -340,7 +340,12 @@ let apollo_func (f: fundec) (cfile: file) : bool =
       (fun s -> 
        try
          let return = (IH.find Apollo_Dataflow.stmtStartData s.sid) in 
-           if not (State.verify_state_with_post f.svar.vname formals return s) then
+         let return_eop = 
+           match s.skind with
+               Return (eop, _) -> eop
+             | _ -> None
+         in
+           if not (State.verify_state_with_post f.svar.vname return_eop formals return s) then
              E.error 
                "Return at %a fails to satisfy post- conditions for function %s"
                d_loc (get_stmtLoc s.skind) f.svar.vname
