@@ -120,10 +120,12 @@ let fill_store (target: exp) (state: runtime_state) (current_stmt: stmt): runtim
   in
 
     if (compare new_stores state.r_stores) = 0 then (
-      E.s (E.bug "%s %s %a\n"
-             "Apollo.fill_store:"
+      E.s (E.bug "%s %s %a at %a\n"
+             "State.fill_store:"
              "Expression is not a store:"
-             d_exp target)
+             d_exp target
+             d_loc (get_stmtLoc current_stmt.skind)
+      )
     ) else
       {r_stores=new_stores; r_heaps=state.r_heaps}
 ;;
@@ -159,7 +161,7 @@ let use_store (target: exp) (state: runtime_state) (current_stmt: stmt): runtime
       {r_stores=new_stores; r_heaps=state.r_heaps}
     else 
       E.s (E.bug "%s %s %a %a\n"
-             "Apollo.use_store:"
+             "State.use_store:"
              "Expression is not a store:"
              d_exp target d_stmt current_stmt)
 ;;
@@ -190,7 +192,7 @@ let empty_store (target: exp) (state: runtime_state) (current_stmt: stmt): runti
 
     if (compare new_stores state.r_stores) = 0 then 
       E.s (E.bug "%s %s %a\n"
-             "Apollo.empty_store:"
+             "State.empty_store:"
              "Expression is not a store:"
              d_exp target)
     else
@@ -230,7 +232,7 @@ let abuse_store (target: exp) (state: runtime_state) (current_stmt: stmt): runti
       {r_stores=new_stores; r_heaps=state.r_heaps}
     else 
       E.s (E.error "%s %s %a\n"
-             "Apollo.abuse_store:"
+             "State.abuse_store:"
              "Unable to find overwritten store store:"
              d_exp target)
 ;;
@@ -255,7 +257,7 @@ let use_heap (target: exp) (state: runtime_state) (current_stmt: stmt): runtime_
 
     if not (List.exists (fun heap -> IE.is_equiv_start target heap current_stmt) state.r_heaps) then 
       E.s (E.bug "%s %s %a\n"
-             "Apollo.use_heap:"
+             "State.use_heap:"
              "Expression is not heap data:"
              d_exp target)
     else
@@ -300,7 +302,7 @@ let overwrite_heap (target: exp) (state: runtime_state) (current_stmt: stmt): ru
 
     if (compare new_heaps state.r_heaps) = 0 then
       E.s (E.bug "%s %s %a\n"
-             "Apollo.remove_heap:"
+             "State.remove_heap:"
              "Expression is not heap data:"
              d_exp target)
     else
@@ -418,7 +420,7 @@ let get_exp_from_str (s:string) ((lvop: lval option), (el: exp list)) (state: ru
  * - Force any stores listed in store.empty to be empty
  * - No update of heaps at this time
  *) 
-let update_state_with_pre (fname: string) (global_stores: exp list) (state): runtime_state =
+let update_state_with_pre (fname: string) (formals: exp list) (state): runtime_state =
 
 
   let store = spec_lookup_pre !specification fname in
@@ -426,11 +428,10 @@ let update_state_with_pre (fname: string) (global_stores: exp list) (state): run
   if not (List.length store.heap = 0) then 
     E.s (E.bug "What...  I thought all heap specifications were zero...");
 
-  flush stdout;
   let full_stores = 
     List.fold_left
       (fun full s -> 
-         let store = (get_exp_from_str s (None, global_stores) state) in
+         let store = (get_exp_from_str s (None, formals) state) in
            (Full store)::full
       )
       []
@@ -440,7 +441,7 @@ let update_state_with_pre (fname: string) (global_stores: exp list) (state): run
   let empty_stores = 
     List.fold_left
       (fun empty s -> 
-         let store = (get_exp_from_str s (None, global_stores) state) in
+         let store = (get_exp_from_str s (None, formals) state) in
            (Empty store)::empty
       )
       []
@@ -487,7 +488,8 @@ let verify_state_with_pre
       (fun s -> 
          let store = (get_exp_from_str s (lvop, el) state) in
            if not (is_full state current_stmt store) then 
-             E.s (E.bug "Store %s is not full or not found" s)
+             E.s (E.bug "Store %s is not full or not found at %a" 
+                    s d_loc (get_stmtLoc current_stmt.skind))
       )
       store.full
   in

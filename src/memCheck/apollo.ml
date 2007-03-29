@@ -15,6 +15,7 @@ let dbg_apollo_i = ref false;;
 let dbg_apollo_c = ref false;;
 let dbg_apollo_df = ref false;;
 let dbg_apollo_g = ref false;;
+let dbg_apollo = ref false;;
 
 (* Reference to the current statment *)
 let current_stmt = ref (mkEmptyStmt ());;
@@ -126,9 +127,11 @@ module Apollo_Dataflow = struct
 
       | Call (lvop, Lval((Var v), NoOffset), el, _) ->
 
-          ignore (printf "State coming into called function %s is:\n%a\n" 
-                    v.vname pretty state);
-          flush stdout;
+          if !dbg_apollo_i then (
+            ignore (printf "State coming into called function %s is:\n%a\n" 
+                      v.vname pretty state);
+            flush stdout;
+          );
 
           (* Verify that we are in a state that is valid for the function call
            *)
@@ -146,9 +149,11 @@ module Apollo_Dataflow = struct
           (* Update state to reflect the effects of the function call *)
           let new_state = update_state_with_post v.vname (lvop, el) state !current_stmt in
           
-          ignore (printf "State leaving called function %s is:\n%a\n" 
-                    v.vname pretty state);
-          flush stdout;
+          if !dbg_apollo_i then (
+            ignore (printf "State leaving called function %s is:\n%a\n" 
+                      v.vname pretty state);
+            flush stdout;
+          );
           
         
           if (compare new_state state) = 0 then (
@@ -299,16 +304,20 @@ let apollo_func (f: fundec) (cfile: file) : bool =
   let global_stores = List.map (fun e -> Unknown e) global_exps in
   let initial_heaps = [] in
   let initial_state = {State.r_stores=global_stores; State.r_heaps=initial_heaps} in
+  
+  let formals = List.map (fun v -> (Lval (var v))) f.sformals in
 
   (* Update the state based on the pre-condition assumptions that we can assume
    * are true upon having entered a function *)
   let state = 
-    State.update_state_with_pre f.svar.vname global_exps initial_state
+    State.update_state_with_pre f.svar.vname formals initial_state
   in
-   
-    ignore (printf "State coming into function %s is:\n%a\n" 
-              f.svar.vname Apollo_Dataflow.pretty state);
-    flush stdout;
+
+    if !dbg_apollo then (   
+      ignore (printf "State coming into function %s is:\n%a\n" 
+                f.svar.vname Apollo_Dataflow.pretty state);
+      flush stdout;
+    );
 
 
   (* Run dataflow for function *)
@@ -318,9 +327,11 @@ let apollo_func (f: fundec) (cfile: file) : bool =
 
   let return_stmts = MemUtil.get_return_statements f in
 
-    ignore (printf "State leaving function %s is:\n%a\n" 
-              f.svar.vname Apollo_Dataflow.pretty state);
-    flush stdout;
+    if !dbg_apollo then (   
+      ignore (printf "State leaving function %s is:\n%a\n" 
+                f.svar.vname Apollo_Dataflow.pretty state);
+      flush stdout;
+    );
 
 
   (* For each return point verify that the post conditions required by the
@@ -329,7 +340,7 @@ let apollo_func (f: fundec) (cfile: file) : bool =
       (fun s -> 
        try
          let return = (IH.find Apollo_Dataflow.stmtStartData s.sid) in 
-           if not (State.verify_state_with_post f.svar.vname global_exps return s) then
+           if not (State.verify_state_with_post f.svar.vname formals return s) then
              E.error 
                "Return at %a fails to satisfy post- conditions for function %s"
                d_loc (get_stmtLoc s.skind) f.svar.vname
