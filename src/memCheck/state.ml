@@ -124,13 +124,17 @@ let overwrite_heap (target: exp) (state: runtime_state) (current_stmt: stmt): ru
       state.r_heaps 
   in
 
-    if (compare new_heaps state.r_heaps) = 0 then
-      E.s (E.bug "%s %s %a\n"
-             "State.remove_heap:"
-             "Expression is not heap data:"
-             d_exp target)
-    else
-      {r_stores=state.r_stores; r_heaps=new_heaps}
+    if (compare new_heaps state.r_heaps) = 0 then (
+      ignore (E.error 
+                "%s %a %s %a\n"
+                "Overwriting heap data with non-heap data"
+                d_exp target
+                "at"
+                d_loc (get_stmtLoc current_stmt.skind)
+      )
+    );
+
+    {r_stores=state.r_stores; r_heaps=new_heaps}
 ;;
 
 
@@ -302,7 +306,7 @@ let abuse_store (target: exp) (state: runtime_state) (current_stmt: stmt): runti
          | (Error e2) when (IE.is_equiv_start target e2 current_stmt) ->
              found := true;
              ignore (E.error 
-                       "Storing non-heap data into store at %a" 
+                       "Storing potential heap reference into store at %a" 
                        d_loc (get_stmtLoc current_stmt.skind));
              (Error target)
          | s -> s
@@ -310,13 +314,15 @@ let abuse_store (target: exp) (state: runtime_state) (current_stmt: stmt): runti
       state.r_stores
   in
 
-    if !found then 
-      {r_stores=new_stores; r_heaps=state.r_heaps}
-    else 
-      E.s (E.error "%s %s %a\n"
-             "State.abuse_store:"
-             "Unable to find overwritten store store:"
-             d_exp target)
+    if not !found then (
+      E.error "%s %a %s %a\n"
+        "Placing nonheap data"
+        d_exp target
+        "into store at"
+        d_loc (get_stmtLoc current_stmt.skind)
+    );
+      
+    {r_stores=new_stores; r_heaps=state.r_heaps}
 ;;
 
 
@@ -636,12 +642,11 @@ let verify_state_with_post
       (fun s -> 
          let store = (get_exp_from_str fname s (return, formals) state) in
            if not (is_full state current_stmt store) then 
-             (E.error "%s %s %s %a%s" 
+             (E.error "%s %s %s %a" 
                 "Formal parameter with index"
                 (String.sub s 1 ((String.length s) - 2))
-                "(in function call at"
+                "is not a full store and not heap data at return point in")
                 d_loc (get_stmtLoc current_stmt.skind)
-                ") is not a full store and not heap data.")
       )
       store.full
   in
@@ -676,7 +681,7 @@ let verify_state_with_post
            
            if not safe_heap then (
              E.error 
-               "Failed to store heap data %a after function %s before return at %a" 
+               "Failed to store heap data \"%a\" after function %s before return at %a" 
                d_exp heap fname d_loc (get_stmtLoc current_stmt.skind)
            );
       )
