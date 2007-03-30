@@ -848,17 +848,32 @@ let is_equiv_end (e1:exp) (e2:exp) (id:int) : (bool) =
     else stripCasts e2 
   in
     
-  let unify_type (e: exp) : exp = match e with   
-      StartOf lv -> 
-        let e_new = Lval (mkMem (mkAddrOf lv) NoOffset) in
-          e_new
-    | _ -> e
+  let e1 = 
+    if isZero e1 then nullPtr
+    else e1
   in
 
-  let results = List.map unify_type (get_equiv_set_end e1 id) in
-  let query = unify_type e2 in
+  let e2 = 
+    if isZero e2 then nullPtr
+    else e2
+  in
 
-    List.mem query results
+  if ((compare e1 e2) = 0) then
+    true
+  else (
+
+    let unify_type (e: exp) : exp = match e with   
+        StartOf lv -> 
+          let e_new = Lval (mkMem (mkAddrOf lv) NoOffset) in
+            e_new
+      | _ -> e
+    in
+
+    let results = List.map unify_type (get_equiv_set_end e1 id) in
+    let query = unify_type e2 in
+
+      List.mem query results
+  )
 ;;
 
 
@@ -873,18 +888,33 @@ let is_equiv_start (e1:exp) (e2:exp) (s:stmt) : (bool) =
     if (isZero e2) then e2
     else stripCasts e2 
   in
-    
-  let unify_type (e: exp) : exp = match e with   
-      StartOf lv -> 
-        let e_new = Lval (mkMem (mkAddrOf lv) NoOffset) in
-          e_new
-    | _ -> e
+
+  let e1 = 
+    if isZero e1 then nullPtr
+    else e1
   in
 
-  let results = List.map unify_type (get_equiv_set_start e1 s) in
-  let query = unify_type e2 in
+  let e2 = 
+    if isZero e2 then nullPtr
+    else e2
+  in
 
-    List.mem query results
+  if ((compare e1 e2) = 0) then
+    true
+  else (
+
+    let unify_type (e: exp) : exp = match e with   
+        StartOf lv -> 
+          let e_new = Lval (mkMem (mkAddrOf lv) NoOffset) in
+            e_new
+      | _ -> e
+    in
+
+    let results = List.map unify_type (get_equiv_set_start e1 s) in
+    let query = unify_type e2 in
+
+      List.mem query results
+  )
 
 ;;
 

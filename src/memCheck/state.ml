@@ -62,6 +62,7 @@ let is_heap (target: exp) (state: runtime_state) (current_stmt: stmt): bool =
   * by a store.  Returns an updated state. *)
 let add_heap (target: exp) (state: runtime_state) (current_stmt: stmt): runtime_state =
 
+
   if (List.exists (fun heap -> IE.is_equiv_start target heap current_stmt) state.r_heaps) then
     E.s (E.error 
               "Expression already is heap at %a" 
@@ -71,8 +72,8 @@ let add_heap (target: exp) (state: runtime_state) (current_stmt: stmt): runtime_
 ;;
 
 
-(** Use heap data that is referenced by target expression.  Returns an updated
-  * state. *)
+(** Use heap data that is referenced by target expression.  Returns an unmodifed
+* state. *)
 let use_heap (target: exp) (state: runtime_state) (current_stmt: stmt): runtime_state =
 
     if not (List.exists (fun heap -> IE.is_equiv_start target heap current_stmt) state.r_heaps) then 
@@ -81,7 +82,7 @@ let use_heap (target: exp) (state: runtime_state) (current_stmt: stmt): runtime_
              "Expression is not heap data:"
              d_exp target)
     else
-      {r_stores=state.r_stores; r_heaps=target::state.r_heaps}
+      {r_stores=state.r_stores; r_heaps=state.r_heaps}
 ;;
 
 
@@ -95,12 +96,15 @@ let remove_heap (target: exp) (state: runtime_state) (current_stmt: stmt): runti
       state.r_heaps 
   in
 
-    if (compare new_heaps state.r_heaps) = 0 then 
-      E.s (E.error 
-             "Can not free non-heap expression at %a" 
-             d_loc (get_stmtLoc current_stmt.skind))
-    else
-      {r_stores=state.r_stores; r_heaps=new_heaps}
+    if (compare new_heaps state.r_heaps) = 0 then (
+      E.warn 
+        "%s %a. %s"
+        "Can not free non-heap expression at"
+        d_loc (get_stmtLoc current_stmt.skind)
+        "Leaving state unchanged.";
+    );
+
+    {r_stores=state.r_stores; r_heaps=new_heaps}
 ;;
 
 
@@ -475,7 +479,11 @@ let is_full (state: runtime_state) (current_stmt: stmt) (store: exp) =
       state.r_heaps
   in
 
-    (in_store || in_heap)
+  let is_null = 
+    IE.is_equiv_start store IE.nullPtr current_stmt 
+  in
+    
+    (in_store || in_heap || is_null)
 
 ;;
 
@@ -505,19 +513,23 @@ let verify_state_with_pre
   let store = spec_lookup_pre !specification fname in
       
   if not (List.length store.heap = 0) then 
-    E.s (E.bug "What...  I thought all heap specifications were zero...");
+    E.s (E.bug "%s %s %s"
+           "State.verify_state_with_pre:"
+           "Non-empty heap specification in post condition for function"
+           fname
+    );
 
   let _ = 
     List.iter
       (fun s -> 
          let store = (get_exp_from_str fname s (eop_of_lvop(lvop), el) state) in
            if not (is_full state current_stmt store) then 
-             E.s (E.error "%s %s %s %a%s" 
-                    "Formal parameter with index"
-                    (String.sub s 1 ((String.length s) - 2))
-                    "(in function call at"
-                    d_loc (get_stmtLoc current_stmt.skind)
-                    ") is not a full store and not heap data.")
+             (E.error "%s %s %s %a%s" 
+                "Formal parameter with index"
+                (String.sub s 1 ((String.length s) - 2))
+                "(in function call at"
+                d_loc (get_stmtLoc current_stmt.skind)
+                ") is not a full store and not heap data.")
       )
       store.full
   in
@@ -528,7 +540,7 @@ let verify_state_with_pre
       (fun s -> 
          let store = (get_exp_from_str fname s (eop_of_lvop(lvop), el) state) in
            if not (is_empty state current_stmt store) then 
-             E.s (E.bug "Store %s is not empty or not found" s)
+             (E.error "Store %a is not empty or not found" d_exp store)
       )
       store.empty
   in
@@ -597,14 +609,23 @@ let verify_state_with_post
   let store = spec_lookup_post !specification fname in
       
   if not (List.length store.heap = 0) then 
-    E.s (E.bug "What...  I thought all heap specifications were zero...");
+    E.s (E.bug "%s %s %s"
+           "State.verify_state_with_post:"
+           "Non-empty heap specification in post condition for function"
+           fname
+    );
 
   let _ = 
     List.iter
       (fun s -> 
          let store = (get_exp_from_str fname s (return, formals) state) in
            if not (is_full state current_stmt store) then 
-             E.s (E.bug "Store %a is not full or not found" d_exp store)
+             (E.error "%s %s %s %a%s" 
+                "Formal parameter with index"
+                (String.sub s 1 ((String.length s) - 2))
+                "(in function call at"
+                d_loc (get_stmtLoc current_stmt.skind)
+                ") is not a full store and not heap data.")
       )
       store.full
   in
@@ -615,11 +636,11 @@ let verify_state_with_post
       (fun s -> 
          let store = (get_exp_from_str fname s (return, formals) state) in
            if not (is_empty state current_stmt store) then 
-             E.s (E.bug "Store %a is not empty or not found" d_exp store)
+             (E.error "Store %a is not empty or not found" d_exp store)
       )
       store.empty
   in
-  
+
   let _ =    
     List.iter
       (fun heap ->
@@ -643,7 +664,7 @@ let verify_state_with_post
                d_exp heap fname d_loc (get_stmtLoc current_stmt.skind)
            );
       )
-state.r_heaps
+      state.r_heaps
   in
 
     true
