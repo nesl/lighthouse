@@ -70,6 +70,28 @@ module Apollo_Dataflow = struct
                   let new_state = remove_heap e new_state !current_stmt in
                     DF.Done new_state
 
+              | Heap e when (is_field_of_store (Lval lv) state !current_stmt) ->
+                  (* Heap data is accounted for, but can no longer be tracked. *)
+                  ignore (E.warn "%s %a %s %a\n" 
+                            "No longer tracking heap data"
+                            d_exp e
+                            "stored at"
+                            d_loc (get_stmtLoc !current_stmt.skind)
+                  );
+                  let new_state = remove_heap e state !current_stmt in
+                    DF.Done new_state
+
+              | Heap e when (is_field_of_heap (Lval lv) state !current_stmt) ->
+                  (* Heap data is accounted for, but can no longer be tracked. *)
+                  ignore (E.warn "%s %a %s %a\n" 
+                            "No longer tracking heap data"
+                            d_exp e
+                            "stored at"
+                            d_loc (get_stmtLoc !current_stmt.skind)
+                  );
+                  let new_state = remove_heap e state !current_stmt in
+                    DF.Done new_state
+
               | Heap e when (is_heap (Lval lv) state!current_stmt ) ->
                   (* Over writing a heap with a reference to another heap *)
                   let new_state = overwrite_heap (Lval lv) state !current_stmt in
@@ -86,6 +108,30 @@ module Apollo_Dataflow = struct
                   (* "Transfer" heap data from one store to another. *)
                   let new_state = fill_store (Lval lv) state !current_stmt in
                   let new_state = empty_store e new_state !current_stmt in
+                    DF.Done new_state
+
+              | Store e when (is_field_of_store (Lval lv) state !current_stmt) ->
+                  (* "Transfer" heap data out of store.  It is no longer being
+                  * tracked. *)
+                  ignore (E.warn "%s %a %s %a\n" 
+                            "No longer tracking heap data from store"
+                            d_exp e
+                            "stored at"
+                            d_loc (get_stmtLoc !current_stmt.skind)
+                  );
+                  let new_state = empty_store e state !current_stmt in
+                    DF.Done new_state
+
+              | Store e when (is_field_of_heap (Lval lv) state !current_stmt) ->
+                  (* "Transfer" heap data out of store.  It is no longer being
+                  * tracked. *)
+                  ignore (E.warn "%s %a %s %a\n" 
+                            "No longer tracking heap data from store"
+                            d_exp e
+                            "stored at"
+                            d_loc (get_stmtLoc !current_stmt.skind)
+                  );
+                  let new_state = empty_store e state !current_stmt in
                     DF.Done new_state
 
               | Store e when (is_heap (Lval lv) state !current_stmt) ->

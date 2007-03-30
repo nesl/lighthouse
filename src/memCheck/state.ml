@@ -48,6 +48,115 @@ let state_to_string state =
 ;;
 
 
+(* A valid form of storing an expression e is to store it:
+ * 
+ * - directly into a store s such as:
+ *     s = e
+ * - into a field of a store s such as either of:
+ *     s.a = e
+ *     s->b = e
+ * 
+ * This function is used to see if an expression is either one of a set of
+ * targets OR a member of a field of a target.
+ *)
+let is_equiv_to_field_of (e: exp) (targets: exp list) (s: stmt) : bool =
+
+  (* Return simpler sub-expressions of the expression e.  But only those
+   * sub-expressions with the same level of memory derefencing.  Does that make
+   * any sense...  *)
+  let rec reduce_expression (e:exp) : exp list =
+
+    let reduced = match e with
+      | Lval (Var v, NoOffset) -> [e]
+
+      | Lval (Var v, Field _) 
+      | Lval (Var v, Index _) -> [Lval (var v)]
+
+      | Lval (Mem e, NoOffset) ->
+          let addrs = reduce_expression e in
+          let aliases = 
+            List.fold_left 
+              (fun l e -> (IE.get_equiv_set_start e s) @ l)
+              [] addrs
+          in
+          let cleaned = MemUtil.sort_and_uniq aliases in
+              
+            List.map (fun e -> Lval (mkMem ~addr:e ~off:NoOffset)) cleaned
+
+      | Lval (Mem e, Field _)
+      | Lval (Mem e, Index _) -> 
+          (Lval (Mem e, NoOffset))::(reduce_expression (Lval (Mem e, NoOffset)))
+
+      | BinOp (PlusPI, e, _, _)
+      | BinOp (IndexPI, e, _, _)
+      | BinOp (MinusPI, e, _, _) -> e::(reduce_expression e)
+
+      | BinOp (PlusA, e, c, _)
+      | BinOp (MinusA, e, c, _) when (isConstant c) -> e::(reduce_expression e)
+
+      | BinOp (PlusA, c, e, _)
+      | BinOp (MinusA, c, e, _) when (isConstant c) -> e::(reduce_expression e)
+
+      | BinOp (PlusA, e1, e2, _) 
+      | BinOp (MinusA, e1, e2, _)
+      | BinOp (MinusPP, e1, e2, _) -> e1::e1::(reduce_expression e1)@(reduce_expression e2)
+
+      | UnOp (_, e, _) -> e::(reduce_expression e)
+
+      | _ -> [e]
+    in
+
+    let reduced = List.map stripCasts reduced in
+      
+      if !dbg_state then (
+        ignore (Pretty.printf "Reduced expression %a to:\n" d_exp e);
+        List.iter (fun e -> ignore (Pretty.printf "    -> %a\n" d_exp e)) reduced;
+        flush stdout;
+      );
+
+      reduced
+  in
+
+  let l0 = ref [] in
+  let l1 = ref [] in
+
+    l0 := IE.get_equiv_set_start e s;
+    l1 := List.fold_left (fun l e -> (reduce_expression e) @ l) !l0 !l0;
+    l1 := MemUtil.sort_and_uniq !l1;
+    l1 := List.fold_left (fun l e -> (IE.get_equiv_set_start e s) @ l) [] !l1;
+    l1 := MemUtil.sort_and_uniq !l1;
+      
+    while not ((compare !l0 !l1) = 0) do
+    
+      l0 := !l1;
+      l1 := List.fold_left (fun l e -> (reduce_expression e) @ l) !l0 !l0;
+      l1 := MemUtil.sort_and_uniq !l1;
+      l1 := List.fold_left (fun l e -> (IE.get_equiv_set_start e s) @ l) [] !l1;
+      l1 := MemUtil.sort_and_uniq !l1;
+    
+    done;
+
+    (* 
+    if true then (
+     *)
+    if !dbg_state then (
+      ignore (Pretty.printf "IsStored.is_equiv_to_field_of: %a is related to:\n" d_exp e);
+      List.iter (fun e -> ignore (Pretty.printf "    %a\n" d_exp e)) !l0;
+      flush stdout;
+    );
+
+    List.exists 
+      (fun e -> 
+         List.exists (fun t -> MemUtil.is_parent_of t e) targets
+      ) 
+      !l0
+   
+     (* 
+      List.exists (fun e -> List.mem e targets) !l0
+      *)
+  
+;;
+
 
 (** Return true if target expression is equivalent to one of the heap enteries
   * in state *)
@@ -56,6 +165,14 @@ let is_heap (target: exp) (state: runtime_state) (current_stmt: stmt): bool =
     (fun heap -> IE.is_equiv_start target heap current_stmt)
     state.r_heaps
 ;;
+
+
+let is_field_of_heap (target: exp) (state: runtime_state) (current_stmt: stmt): bool = 
+  List.exists
+    (fun heap -> is_equiv_to_field_of target [heap] current_stmt)
+    state.r_heaps
+;;
+
 
 
 (** Add target expression to list of heap data that is not currentnly referenced
@@ -149,6 +266,20 @@ let is_store (target: exp) (state: runtime_state) (current_stmt: stmt): bool =
        | Unknown store
        | Error store ->
            IE.is_equiv_start target store current_stmt
+    )
+    state.r_stores
+;;
+
+
+let is_field_of_store (target: exp) (state: runtime_state) (current_stmt: stmt): bool = 
+  List.exists
+    (fun s -> match s with
+         Empty store
+       | Full store
+       | Nonheap store
+       | Unknown store
+       | Error store ->
+           is_equiv_to_field_of target [store] current_stmt
     )
     state.r_stores
 ;;

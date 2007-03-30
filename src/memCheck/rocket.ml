@@ -80,6 +80,9 @@ let argDescr = [
   ("--check_headers", Arg.String (fun _ -> check_headers := true),
    "Enable checking of header files");
 
+  ("--dbg_state", Arg.Unit (fun _ -> State.dbg_state := true),
+   "Debug state tracking");
+
   (* Configuration options *)
 
   ("--dbg_apollo_s", Arg.Unit (fun _ -> Apollo.dbg_apollo_s := true),
