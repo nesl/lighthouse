@@ -488,12 +488,28 @@ let is_full (state: runtime_state) (current_stmt: stmt) (store: exp) =
 ;;
 
 let is_empty (state: runtime_state) (current_stmt: stmt) (store: exp) = 
-  List.exists
-    (fun st -> match st with
-         (Empty e) when (IE.is_equiv_start store e current_stmt) -> true
-       | _ -> false
-    )
-    state.r_stores
+
+  let not_full_store = 
+    List.for_all
+      (fun st -> 
+         match st with
+             (Empty e) when (IE.is_equiv_start store e current_stmt) -> true
+           | (Full e) when (IE.is_equiv_start store e current_stmt) -> false
+           | (Nonheap e) when (IE.is_equiv_start store e current_stmt) -> false
+           | (Unknown e) when (IE.is_equiv_start store e current_stmt) -> true
+           | (Error e) when (IE.is_equiv_start store e current_stmt) -> false
+           | _ -> true
+      )
+      state.r_stores
+  in
+
+  let not_heap =
+    List.for_all
+      (fun e -> not (IE.is_equiv_start store e current_stmt))
+      state.r_heaps
+  in
+
+    (not_full_store && not_heap)
 ;;
 
 
@@ -540,7 +556,7 @@ let verify_state_with_pre
       (fun s -> 
          let store = (get_exp_from_str fname s (eop_of_lvop(lvop), el) state) in
            if not (is_empty state current_stmt store) then 
-             (E.error "Store %a is not empty or not found" d_exp store)
+             (E.error "Store %a is not empty or not found in call to function %s" d_exp store fname)
       )
       store.empty
   in
@@ -636,7 +652,7 @@ let verify_state_with_post
       (fun s -> 
          let store = (get_exp_from_str fname s (return, formals) state) in
            if not (is_empty state current_stmt store) then 
-             (E.error "Store %a is not empty or not found" d_exp store)
+             (E.error "Store %a is not empty or not found in call to function %s" d_exp store fname)
       )
       store.empty
   in
