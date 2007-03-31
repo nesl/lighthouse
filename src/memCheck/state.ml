@@ -214,11 +214,19 @@ let remove_heap (target: exp) (state: runtime_state) (current_stmt: stmt): runti
   in
 
     if (compare new_heaps state.r_heaps) = 0 then (
-      E.warn 
-        "%s %a. %s"
-        "Can not free non-heap expression at"
-        d_loc (get_stmtLoc current_stmt.skind)
-        "Leaving state unchanged.";
+      if is_field_of_heap target state current_stmt then (
+        E.warn 
+          "%s %a. %s"
+          "Assuming that field of heap data is also heap data at"
+          d_loc (get_stmtLoc current_stmt.skind)
+          "Leaving state unchanged.";
+      ) else (
+        E.warn 
+          "%s %a. %s"
+          "Can not free non-heap expression at"
+          d_loc (get_stmtLoc current_stmt.skind)
+          "Leaving state unchanged.";
+      )
     );
 
     {r_stores=state.r_stores; r_heaps=new_heaps}
@@ -406,11 +414,20 @@ let empty_store (target: exp) (state: runtime_state) (current_stmt: stmt): runti
   in
 
     if (compare new_stores state.r_stores) = 0 then (
-      if !dbg_state then (
-        ignore (Pretty.printf "State.empty_store checking heap data at: %a" 
-                  d_loc (get_stmtLoc current_stmt.skind));
-      );
-      remove_heap target state current_stmt
+      if is_field_of_store target state current_stmt then (
+        E.warn 
+          "%s %a. %s"
+          "Assuming that field of store is also heap data at"
+          d_loc (get_stmtLoc current_stmt.skind)
+          "Leaving state unchanged.";
+        {r_stores=new_stores; r_heaps=state.r_heaps}
+      ) else (
+        if !dbg_state then (
+          ignore (Pretty.printf "State.empty_store checking heap data at: %a" 
+                    d_loc (get_stmtLoc current_stmt.skind));
+        );
+        remove_heap target state current_stmt
+      )
     ) else
       {r_stores=new_stores; r_heaps=state.r_heaps}
     
@@ -600,7 +617,7 @@ let update_state_with_pre (fname: string) (formals: exp list) (state): runtime_s
 ;;
 
 
-let is_full (state: runtime_state) (current_stmt: stmt) (store: exp) = 
+let is_full_pre (state: runtime_state) (current_stmt: stmt) (store: exp) = 
   let in_store =
     List.exists
       (fun st -> match st with
@@ -619,7 +636,48 @@ let is_full (state: runtime_state) (current_stmt: stmt) (store: exp) =
   let is_null = 
     IE.is_equiv_start store IE.nullPtr current_stmt 
   in
+
+  let is_field = 
+    let b =
+      (is_field_of_store store state current_stmt) || 
+      (is_field_of_heap store state current_stmt) 
+    in
+      if not in_store && not in_heap && not is_null && b then (
+        ignore (E.warn "%s %a %s (at %a)\n" 
+                  "Assuming that data referenced by"
+                  d_exp store
+                  "is nested heap data."
+                  d_loc (get_stmtLoc current_stmt.skind)
+        );
+      );
+      b
+  in
+
     
+    (in_store || in_heap || is_null || is_field)
+
+;;
+
+let is_full_post (state: runtime_state) (current_stmt: stmt) (store: exp) = 
+  let in_store =
+    List.exists
+      (fun st -> match st with
+           (Full e) when (IE.is_equiv_start store e current_stmt) -> true
+         | _ -> false
+      )
+      state.r_stores
+  in
+
+  let in_heap =
+    List.exists
+      (fun e -> IE.is_equiv_start store e current_stmt)
+      state.r_heaps
+  in
+
+  let is_null = 
+    IE.is_equiv_start store IE.nullPtr current_stmt 
+  in
+
     (in_store || in_heap || is_null)
 
 ;;
@@ -676,7 +734,7 @@ let verify_state_with_pre
     List.iter
       (fun s -> 
          let store = (get_exp_from_str fname s (eop_of_lvop(lvop), el) state) in
-           if not (is_full state current_stmt store) then 
+           if not (is_full_pre state current_stmt store) then 
              (E.error "%s %s %s %a%s" 
                 "Formal parameter with index"
                 (String.sub s 1 ((String.length s) - 2))
@@ -772,7 +830,7 @@ let verify_state_with_post
     List.iter
       (fun s -> 
          let store = (get_exp_from_str fname s (return, formals) state) in
-           if not (is_full state current_stmt store) then 
+           if not (is_full_post state current_stmt store) then 
              (E.error "%s %s %s %a" 
                 "Formal parameter with index"
                 (String.sub s 1 ((String.length s) - 2))
