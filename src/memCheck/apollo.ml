@@ -48,7 +48,189 @@ module Apollo_Dataflow = struct
   let computeFirstPredecessor (s: stmt) (state: t): t = state;;
 
 
-  let combinePredecessors (s: stmt) ~(old: t) (new_state: t) = None;;
+  let combinePredecessors (s: stmt) ~(old: t) (new_state: t) = 
+
+    let updated_state = ref false in
+
+    (* Intersect the two heap sets *)
+    let out_heaps = 
+      List.fold_left
+        (fun out old_heap ->
+           if (is_heap old_heap new_state s) then (
+             old_heap::out
+           ) else (
+             E.error "Join drops old heap element %a at %a signaling leaked heap data" 
+               d_exp old_heap
+               d_loc (get_stmtLoc s.skind);
+             updated_state := true;
+             out
+           )
+        )
+        []
+        old.r_heaps
+    in
+    let out_heaps = 
+      List.fold_left
+        (fun out new_heap ->
+           if (is_heap new_heap {r_stores=[]; r_heaps=out_heaps} s) then (
+             new_heap::out
+           ) else (
+             E.error "Join drops new heap element %a %a signaling leaked heap data"
+               d_exp new_heap
+               d_loc (get_stmtLoc s.skind);
+             updated_state := true;
+             out
+           )
+        )
+        []
+        new_state.r_heaps
+    in
+
+    (* Intesect the two store sets *)
+    let out_stores = 
+      List.fold_left
+        (fun out old_store ->
+           let found = match old_store with
+               Empty e1 ->
+                 begin
+                   List.exists
+                     (fun store -> match store with
+                          Empty e2 when IE.is_equiv_start e1 e2 s -> true
+                        | _ -> false
+                     )
+                     new_state.r_stores
+                 end
+             | Full e1 ->
+                 begin
+                   List.exists
+                     (fun store -> match store with
+                          Full e2 when IE.is_equiv_start e1 e2 s -> true
+                        | _ -> false
+                     )
+                     new_state.r_stores
+                 end
+             | Nonheap e1 ->
+                 begin
+                   List.exists
+                     (fun store -> match store with
+                          Nonheap e2 when IE.is_equiv_start e1 e2 s -> true
+                        | _ -> false
+                     )
+                     new_state.r_stores
+                 end
+             | Unknown e1 ->
+                 begin
+                   List.exists
+                     (fun store -> match store with
+                          Unknown e2 when IE.is_equiv_start e1 e2 s -> true
+                        | _ -> false
+                     )
+                     new_state.r_stores
+                 end
+             | Error e1 ->
+                 begin
+                   List.exists
+                     (fun store -> match store with
+                          Error e2 when IE.is_equiv_start e1 e2 s -> true
+                        | _ -> false
+                     )
+                     new_state.r_stores
+                 end
+           in
+             if found then (
+               old_store::out
+             ) else (
+               E.error "Mismatched store state at join for store %s %a signaling bad store state" 
+                 (store_to_string old_store)
+                 d_loc (get_stmtLoc s.skind);
+               updated_state := true;
+               match old_store with
+                   Empty e1 
+                 | Full e1
+                 | Nonheap e1
+                 | Unknown e1
+                 | Error e1 -> (Error e1)::out
+             )
+        )
+        []
+        old.r_stores
+    in
+    let out_stores = 
+      List.fold_left
+        (fun out new_store ->
+           let found = match new_store with
+               Empty e1 ->
+                 begin
+                   List.exists
+                     (fun store -> match store with
+                          Empty e2 when IE.is_equiv_start e1 e2 s -> true
+                        | _ -> false
+                     )
+                     out_stores
+                 end
+             | Full e1 ->
+                 begin
+                   List.exists
+                     (fun store -> match store with
+                          Full e2 when IE.is_equiv_start e1 e2 s -> true
+                        | _ -> false
+                     )
+                     out_stores
+                 end
+             | Nonheap e1 ->
+                 begin
+                   List.exists
+                     (fun store -> match store with
+                          Nonheap e2 when IE.is_equiv_start e1 e2 s -> true
+                        | _ -> false
+                     )
+                     out_stores
+                 end
+             | Unknown e1 ->
+                 begin
+                   List.exists
+                     (fun store -> match store with
+                          Unknown e2 when IE.is_equiv_start e1 e2 s -> true
+                        | _ -> false
+                     )
+                     out_stores
+                 end
+             | Error e1 ->
+                 begin
+                   List.exists
+                     (fun store -> match store with
+                          Error e2 when IE.is_equiv_start e1 e2 s -> true
+                        | _ -> false
+                     )
+                     out_stores
+                 end
+           in
+             if found then (
+               new_store::out
+             ) else (
+               E.error "Mismatched store state at join for store %s %a signaling bad store state" 
+                 (store_to_string new_store)
+                 d_loc (get_stmtLoc s.skind);
+               updated_state := true;
+               match new_store with
+                   Empty e1 
+                 | Full e1
+                 | Nonheap e1
+                 | Unknown e1
+                 | Error e1 -> (Error e1)::out
+             )
+        )
+        []
+        new_state.r_stores
+    in
+ 
+      if !updated_state then (
+        E.warn "Apollo.combinePredecessors: Returning updated state";
+        Some {r_stores=out_stores; r_heaps=out_heaps}
+      ) else (
+        None
+      )
+  ;;
 
 
   let doInstr (i: instr) (state: t): t DF.action = 

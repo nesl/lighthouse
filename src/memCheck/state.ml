@@ -20,18 +20,24 @@ type runtime_state = {
   r_heaps: runtime_heap list;
 };;
 
+let store_to_string store: string=
+  let (type_name, e) = match store with
+      (Empty e) -> ("Empty", e)
+    | (Full e) -> ("Full", e)
+    | (Nonheap e) -> ("Nonheap", e)
+    | (Unknown e) -> ("Unknown", e)
+    | (Error e) -> ("Error", e)
+  in
+    (Pretty.sprint 70 (Pretty.dprintf "Store %a in state %s\n" d_exp e type_name))
+;;
+
+
 let state_to_string state = 
   let s = 
     List.fold_left 
       (fun s store -> 
-         let (type_name, e) = match store with
-             (Empty e) -> ("Empty", e)
-           | (Full e) -> ("Full", e)
-           | (Nonheap e) -> ("Nonheap", e)
-           | (Unknown e) -> ("Unknown", e)
-           | (Error e) -> ("Error", e)
-         in
-           s ^ (Pretty.sprint 70 (Pretty.dprintf "Store %a in state %s\n" d_exp e type_name))
+         let state_string = store_to_string store in
+           s ^ state_string
       ) 
       "Stores:\n" 
       state.r_stores 
