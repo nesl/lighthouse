@@ -244,112 +244,159 @@ module Apollo_Dataflow = struct
 
         Set (lv, e, _) ->
           begin
-            match get_state_from_exp e state !current_stmt with
 
-                Heap e when (is_store (Lval lv) state !current_stmt) ->
-                  (* "Transfer" heap data into the store. *)
-                  let new_state = fill_store (Lval lv) state !current_stmt in
-                  let new_state = remove_heap e new_state !current_stmt in
+            let lv_state_op = try_lookup_mem_state (Lval lv) state !current_stmt in
+            let rh_state_op = try_lookup_mem_state e state !current_stmt in
+
+
+
+            match (lv_state_op, rh_state_op) with
+                
+                ((Empty_store, l_key), (Full_store er, r_key))
+              | ((Empty_store, l_key), (Nonheap_store er, r_key))
+              | ((Unknown_store, l_key), (Full_store er, r_key))
+              | ((Unknown_store, l_key), (Nonheap_store er, r_key))
+              | ((Nonheap_store _, l_key), (Full_store er, r_key)) 
+              | ((Nonheap_store _, l_key), (Nonheap_store er, r_key)) ->
+                  let new_state = remove_mem_state (_, r_key) state !current_stmt in
+                  let new_state = add_mem_state (Empty_store, r_key) state !current_stmt in
+                  let new_state = remove_mem_state (_, l_key) state !current_stmt in
+                  let new_state = add_mem_state (Full_store er, l_key) state !current_stmt in
                     DF.Done new_state
+             
 
-              | Heap e when (is_field_of_store (Lval lv) state !current_stmt) ->
-                  (* Heap data is accounted for, but can no longer be tracked. *)
-                  ignore (E.warn "%s %a %s %a\n" 
-                            "No longer tracking heap data"
-                            d_exp e
-                            "stored at"
-                            d_loc (get_stmtLoc !current_stmt.skind)
-                  );
-                  let new_state = remove_heap e state !current_stmt in
-                    DF.Done new_state
-
-              | Heap e when (is_field_of_heap (Lval lv) state !current_stmt) ->
-                  (* Heap data is accounted for, but can no longer be tracked. *)
-                  ignore (E.warn "%s %a %s %a\n" 
-                            "No longer tracking heap data"
-                            d_exp e
-                            "stored at"
-                            d_loc (get_stmtLoc !current_stmt.skind)
-                  );
-                  let new_state = remove_heap e state !current_stmt in
-                    DF.Done new_state
-
-              | Heap e when (is_heap (Lval lv) state!current_stmt ) ->
-                  (* Over writing a heap with a reference to another heap *)
-                  let new_state = overwrite_heap (Lval lv) state !current_stmt in
-                  let new_state = remove_heap e new_state !current_stmt in
+              | ((Empty_store, l_key), (Unknown_store, r_key))
+              | ((Unknown_store, l_key), (Unknown_store, r_key))
+              | ((Nonheap_store _, l_key), (Unknown_store, r_key)) ->
+                  let new_state = remove_mem_state (_, r_key) state !current_stmt in
+                  let new_state = add_mem_state (Empty_store, r_key) state !current_stmt in
+                  let new_state = remove_mem_state (_, l_key) state !current_stmt in
+                  let new_state = 
+                    add_mem_state (Full_store IE.nullPtrU, l_key) state !current_stmt 
+                  in
                     DF.Done new_state
 
 
-              | Heap e ->
-                  (* Using heap data.  Tranfer depends on use_heap function. *)
-                  let new_state = use_heap e state !current_stmt in
-                    DF.Done new_state
-
-              | Store e when (is_store (Lval lv) state !current_stmt) ->
-                  (* "Transfer" heap data from one store to another. *)
-                  let new_state = fill_store (Lval lv) state !current_stmt in
-                  let new_state = empty_store e new_state !current_stmt in
-                    DF.Done new_state
-
-              | Store e when (is_field_of_store (Lval lv) state !current_stmt) ->
-                  (* "Transfer" heap data out of store.  It is no longer being
-                  * tracked. *)
-                  ignore (E.warn "%s %a %s %a\n" 
-                            "No longer tracking heap data from store"
-                            d_exp e
-                            "stored at"
-                            d_loc (get_stmtLoc !current_stmt.skind)
-                  );
-                  let new_state = empty_store e state !current_stmt in
-                    DF.Done new_state
-
-              | Store e when (is_field_of_heap (Lval lv) state !current_stmt) ->
-                  (* "Transfer" heap data out of store.  It is no longer being
-                  * tracked. *)
-                  ignore (E.warn "%s %a %s %a\n" 
-                            "No longer tracking heap data from store"
-                            d_exp e
-                            "stored at"
-                            d_loc (get_stmtLoc !current_stmt.skind)
-                  );
-                  let new_state = empty_store e state !current_stmt in
-                    DF.Done new_state
-
-              | Store e when (is_heap (Lval lv) state !current_stmt) ->
-                  (* Over writing a heap with a reference to another heap *)
-                  let new_state = overwrite_heap (Lval lv) state !current_stmt in
-                  let new_state = use_store e new_state !current_stmt in
-                    DF.Done new_state
-
-              | Store e ->
-                  (* Using store data.  Transfer depends on use_store function. *)
-                  let new_state = use_store e state !current_stmt in
-                    DF.Done new_state
-
-              | Complex e ->
-                  (* This is something that we do not currently handel. *)
-                  E.s (E.bug "%s %s %a\n" 
-                         "Apollo.Apollo_Dataflow.doInstr:" 
-                         "Unable to update state given set with rval" 
-                         d_exp e)
-
-              | Other when (is_store (Lval lv) state !current_stmt) ->
-                  (* Over writing a store with some random value *)
-                  let new_state = abuse_store e state !current_stmt in
+              | ((Empty_store, l_key), (Full_heap er, r_key))
+              | ((Unknown_store, l_key), (Full_heap er, r_key))
+              | ((Nonheap_store _, l_key), (Full_heap er, r_key)) ->
+                  let new_state = remove_mem_state (_, r_key) state !current_stmt in
+                  let new_state = add_mem_state (Dead_heap er, r_key) state !current_stmt in
+                  let new_state = remove_mem_state (_, l_key) state !current_stmt in
+                  let new_state = add_mem_state (Full_store er, l_key) state !current_stmt in
                     DF.Done new_state
 
 
-              | Other when (is_heap (Lval lv) state !current_stmt) ->
-                  (* Over writing a heap with some random value *)
-                  let new_state = overwrite_heap e state !current_stmt in
+              | ((Empty_store, l_key), None)
+              | ((Unknown_store, l_key), None)
+              | ((Nonheap_store _, l_key), (Nonheap_store er, r_key)) ->
+                  let new_state = remove_mem_state (_, l_key) state !current_stmt in
+                  let new_state = add_mem_state (Nonheap_store er, l_key) state !current_stmt in
+                    new_state
+                  
+
+              | ((Dead_heap el, l_key), (Full_store er, r_key))
+              | ((Dead_heap el, l_key), (Nonheap_store _, r_key)) ->
+                  let new_state = remove_mem_state (_, r_key) state !current_stmt in
+                  let new_state = add_mem_state (Empty_store, r_key) state !current_stmt in
+                  let new_state = remove_mem_state (_, l_key) state !current_stmt in
+                  let new_state = add_mem_state (Full_heap er, l_key) state !current_stmt in
+                  let new_state = add_mem_state (Dead_heap el, el) state !current_stmt in
                     DF.Done new_state
 
 
-              | Other ->
-                  (* This set expression has no effect (and is not effected by)
-                   * the current state *)
-                  DF.Default
+              | ((Dead_heap el, l_key), (Unknown_store, r_key)) ->
+                  let new_state = remove_mem_state (_, r_key) state !current_stmt in
+                  let new_state = add_mem_state (Empty_store, r_key) state !current_stmt in
+                  let new_state = remove_mem_state (_, l_key) state !current_stmt in
+                  let new_state = 
+                    add_mem_state (Full_store IE.nullPtrU, l_key) state !current_stmt in
+                  let new_state = add_mem_state (Dead_heap el, el) state !current_stmt in
+                    DF.Done new_state
+
+
+              | ((Dead_heap el, l_key), (Full_heap er, r_key)) ->
+                  let new_state = remove_mem_state (_, r_key) state !current_stmt in
+                  let new_state = add_mem_state (Dead_heap, r_key) state !current_stmt in
+                  let new_state = remove_mem_state (_, l_key) state !current_stmt in
+                  let new_state = add_mem_state (Full_heap er, l_key) state !current_stmt in
+                  let new_state = add_mem_state (Dead_heap el, el) state !current_stmt in
+                    DF.Done new_state
+              
+              | ((Dead_heap el, l_key), None) ->
+                  let new_state = remove_mem_state (_, l_key) state !current_stmt in
+                  let new_state = add_mem_state (Dead_heap el, el) state !current_stmt in
+                    DF.Done new_state
+              
+
+              | (_, (Dead_heap _, _))
+              | (_, (Empty_store, _)) ->
+                  E.s (E.bug "%s %a %s at %a"
+                         "Apollo.doInstr:"
+                         d_exp e
+                         "is empty or dead and may not be dereferenced"
+                         d_loc (get_stmtLoc !current_stmt.skind))
+              
+
+              | ((Full_store _, _), _)
+              | ((Full_heap _, _), _) ->
+                  E.s (E.bug "%s %a %s at %a"
+                         "Apollo.doInstr:"
+                         d_exp (Lval lv)
+                         "stores heap data that is overwritten"
+                         d_loc (get_stmtLoc !current_stmt.skind))
+             
+
+              | (_, (Error_store, _))
+              | (_, (Error_heap _, _)) ->
+                  E.s (E.bug "%s %a %s at %a"
+                         "Apollo.doInstr:"
+                         d_exp e
+                         "is in an error state and can not be used"
+                         d_loc (get_stmtLoc !current_stmt.skind))
+                
+                  
+              | ((Error_store, _), _)
+              | ((Error_heap _, _), _) ->
+                  E.s (E.bug "%s %a %s at %a"
+                         "Apollo.doInstr:"
+                         d_exp (Lval lv)
+                         "is in an error state and can not be used"
+                         d_loc (get_stmtLoc !current_stmt.skind))
+
+
+              | (None, (Full_store er, r_key))
+              | (None, (Unknown_store, r_key))
+              | (None, (Nonheap_store er, r_key))
+                  when (is_field_of_mem_state (Lval lv) state !current_stmt) -> 
+                  
+                  E.warn "%s %a %s at %a"
+                    "Apollo.doInstr:"
+                    d_exp e
+                    "is stored into nested store and no longer tracked"
+                    d_loc (get_stmtLoc !current_stmt.skind);
+                  
+                  let new_state = remove_mem_state (_, r_key) state !current_stmt in
+                  let new_state = add_mem_state (Empty_store, r_key) state !current_stmt in
+                  DF.Done new_state
+                
+
+              | (None, (Full_heap er, r_key))
+                  when (is_field_of_mem_state (Lval lv) state !current_stmt) -> 
+                  
+                  E.warn "%s %a %s at %a"
+                    "Apollo.doInstr:"
+                    d_exp e
+                    "is stored into nested store and no longer tracked"
+                    d_loc (get_stmtLoc !current_stmt.skind);
+                  
+                  let new_state = remove_mem_state (_, r_key) state !current_stmt in
+                  let new_state = add_mem_state (Dead_heap er, r_key) state !current_stmt in
+                  DF.Done new_state
+                
+
+              | (None, _) -> DF.Default
+          
           end
 
 
