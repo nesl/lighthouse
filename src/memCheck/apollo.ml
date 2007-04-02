@@ -258,9 +258,9 @@ module Apollo_Dataflow = struct
               | ((Unknown_store, l_key), (Nonheap_store er, r_key))
               | ((Nonheap_store _, l_key), (Full_store er, r_key)) 
               | ((Nonheap_store _, l_key), (Nonheap_store er, r_key)) ->
-                  let new_state = remove_mem_state (_, r_key) state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, r_key) state !current_stmt in
                   let new_state = add_mem_state (Empty_store, r_key) state !current_stmt in
-                  let new_state = remove_mem_state (_, l_key) state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, l_key) state !current_stmt in
                   let new_state = add_mem_state (Full_store er, l_key) state !current_stmt in
                     DF.Done new_state
              
@@ -268,9 +268,9 @@ module Apollo_Dataflow = struct
               | ((Empty_store, l_key), (Unknown_store, r_key))
               | ((Unknown_store, l_key), (Unknown_store, r_key))
               | ((Nonheap_store _, l_key), (Unknown_store, r_key)) ->
-                  let new_state = remove_mem_state (_, r_key) state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, r_key) state !current_stmt in
                   let new_state = add_mem_state (Empty_store, r_key) state !current_stmt in
-                  let new_state = remove_mem_state (_, l_key) state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, l_key) state !current_stmt in
                   let new_state = 
                     add_mem_state (Full_store IE.nullPtrU, l_key) state !current_stmt 
                   in
@@ -280,9 +280,9 @@ module Apollo_Dataflow = struct
               | ((Empty_store, l_key), (Full_heap er, r_key))
               | ((Unknown_store, l_key), (Full_heap er, r_key))
               | ((Nonheap_store _, l_key), (Full_heap er, r_key)) ->
-                  let new_state = remove_mem_state (_, r_key) state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, r_key) state !current_stmt in
                   let new_state = add_mem_state (Dead_heap er, r_key) state !current_stmt in
-                  let new_state = remove_mem_state (_, l_key) state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, l_key) state !current_stmt in
                   let new_state = add_mem_state (Full_store er, l_key) state !current_stmt in
                     DF.Done new_state
 
@@ -290,25 +290,25 @@ module Apollo_Dataflow = struct
               | ((Empty_store, l_key), None)
               | ((Unknown_store, l_key), None)
               | ((Nonheap_store _, l_key), (Nonheap_store er, r_key)) ->
-                  let new_state = remove_mem_state (_, l_key) state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, l_key) state !current_stmt in
                   let new_state = add_mem_state (Nonheap_store er, l_key) state !current_stmt in
                     new_state
                   
 
               | ((Dead_heap el, l_key), (Full_store er, r_key))
               | ((Dead_heap el, l_key), (Nonheap_store _, r_key)) ->
-                  let new_state = remove_mem_state (_, r_key) state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, r_key) state !current_stmt in
                   let new_state = add_mem_state (Empty_store, r_key) state !current_stmt in
-                  let new_state = remove_mem_state (_, l_key) state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, l_key) state !current_stmt in
                   let new_state = add_mem_state (Full_heap er, l_key) state !current_stmt in
                   let new_state = add_mem_state (Dead_heap el, el) state !current_stmt in
                     DF.Done new_state
 
 
               | ((Dead_heap el, l_key), (Unknown_store, r_key)) ->
-                  let new_state = remove_mem_state (_, r_key) state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, r_key) state !current_stmt in
                   let new_state = add_mem_state (Empty_store, r_key) state !current_stmt in
-                  let new_state = remove_mem_state (_, l_key) state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, l_key) state !current_stmt in
                   let new_state = 
                     add_mem_state (Full_store IE.nullPtrU, l_key) state !current_stmt in
                   let new_state = add_mem_state (Dead_heap el, el) state !current_stmt in
@@ -316,15 +316,15 @@ module Apollo_Dataflow = struct
 
 
               | ((Dead_heap el, l_key), (Full_heap er, r_key)) ->
-                  let new_state = remove_mem_state (_, r_key) state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, r_key) state !current_stmt in
                   let new_state = add_mem_state (Dead_heap, r_key) state !current_stmt in
-                  let new_state = remove_mem_state (_, l_key) state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, l_key) state !current_stmt in
                   let new_state = add_mem_state (Full_heap er, l_key) state !current_stmt in
                   let new_state = add_mem_state (Dead_heap el, el) state !current_stmt in
                     DF.Done new_state
               
               | ((Dead_heap el, l_key), None) ->
-                  let new_state = remove_mem_state (_, l_key) state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, l_key) state !current_stmt in
                   let new_state = add_mem_state (Dead_heap el, el) state !current_stmt in
                     DF.Done new_state
               
@@ -376,7 +376,7 @@ module Apollo_Dataflow = struct
                     "is stored into nested store and no longer tracked"
                     d_loc (get_stmtLoc !current_stmt.skind);
                   
-                  let new_state = remove_mem_state (_, r_key) state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, r_key) state !current_stmt in
                   let new_state = add_mem_state (Empty_store, r_key) state !current_stmt in
                   DF.Done new_state
                 
@@ -390,7 +390,7 @@ module Apollo_Dataflow = struct
                     "is stored into nested store and no longer tracked"
                     d_loc (get_stmtLoc !current_stmt.skind);
                   
-                  let new_state = remove_mem_state (_, r_key) state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, r_key) state !current_stmt in
                   let new_state = add_mem_state (Dead_heap er, r_key) state !current_stmt in
                   DF.Done new_state
                 

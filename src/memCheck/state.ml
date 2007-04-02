@@ -22,6 +22,7 @@ type mem_state_type =
   | Full_heap of heap_exp
   | Dead_heap of heap_exp
   | Error_heap of heap_exp
+  | Dummy
 ;;
 
 type mem_state = (mem_state_type * exp);;
@@ -33,14 +34,15 @@ let mem_state_to_string mem_state: string =
   let (s_type, key) = mem_state in
 
   let (type_str, eop) = match s_type with
-        Empty_store -> ("empty store", None)
-      | Full_store e -> ("full store", Some e)
-      | Nonheap_store e -> ("non-heap", Some e)
-      | Unknown_store -> ("unknowen store", None)
-      | Error_store -> ("error store", None)
-      | Full_heap e -> ("full heap", Some e)
-      | Dead_heap e -> ("dead heap", Some e)
-      | Error_heap e -> ("error heap", Some e)
+      Empty_store -> ("empty store", None)
+    | Full_store e -> ("full store", Some e)
+    | Nonheap_store e -> ("non-heap", Some e)
+    | Unknown_store -> ("unknowen store", None)
+    | Error_store -> ("error store", None)
+    | Full_heap e -> ("full heap", Some e)
+    | Dead_heap e -> ("dead heap", Some e)
+    | Error_heap e -> ("error heap", Some e)
+    | Dummy -> E.s (E.bug "State.mem_state_to_string: Dummy state is invalid at runtime.")
   in
 
     match eop with
@@ -269,7 +271,7 @@ let try_lookup_mem_state (query_key: exp) (states: mem_states) (current_stmt: st
   in 
     if (List.length matches = 1) then (
       Some (List.hd matches)
-    ) else if (List.length maches = 0) then (
+    ) else if (List.length matches = 0) then (
       None
     ) else (
       E.s (E.bug "%s %a %s at %a"
@@ -296,22 +298,26 @@ let lookup_mem_state (query_key: exp) (states: mem_states) (current_stmt: stmt):
 ;;
 
 
-(** Use heap data that is referenced by target expression. *)
-let use_mem_state (query_key: exp) (states: mem_states) (current_stmt: stmt): unit =
+let lookup_mem_state_by_name (sname: string) (states: mem_states): mem_state = 
+  let matches = 
+    List.filter
+      (fun state ->
+         match state with
+             (_, Lval (Var v, NoOffset)) when v.vname = sname -> true
+           | _ -> false
+      )
+      states
+  in
 
-  let state = lookup_mem_state query_key states current_stmt in 
-  
-    match state with
-        Full_store e, key 
-      | Full_heap e, key -> ()
-
-      | _ -> 
-          E.s (E.bug "%s %a %s at %a"
-                 "State.use_mem_state:"
-                 d_exp query_key 
-                 "is not in a usable state"
-                 d_loc (get_stmtLoc current_stmt.skind))
-
+    if (List.length matches = 1) then (
+      List.hd matches
+    ) else (
+      E.s (E.bug "%s %s %s"
+             "State.try_lookup_mem_state_by_name:"
+             sname 
+             "can not be found in tracked states"
+      )
+    )
 ;;
 
 
@@ -345,231 +351,6 @@ let lookup_mem_state_by_name (sname: string) (states: mem_states): mem_state =
     )
 ;;
 
-
-(* Transition a mem_state into the error state.  This assumes that the mem_state
- * entry with key is present. *)
-let mem_state_to_error (query_key: exp) (states: mem_states) (current_stmt: stmt): mem_states =
-  
-  let old_state = lookup_mem_state query_key states current_stmt in
-  
-  let new_states = match old_state with
-      Empty_store, key -> [Error_store, key]
-    | Full_store e, key -> (Error_heap e, e)::[Error_store, key]
-    | Nonheap_store e, key -> [Error_store, key]
-    | Unknown_store, key -> [Error_store, key]
-    | Error_store, key -> [Error_store, key]
-    | Full_heap e, key -> [Error_heap e, e]
-    | Dead_heap e, key -> [Error_heap e, e]
-    | Error_heap e, key -> [Error_heap e, e]
-  in
-
-  let out_states = remove_mem_state old_state states current_stmt in
-
-    List.fold_left
-      (fun out new_state -> add_mem_state new_state states current_stmt)
-      out_states
-      new_states
-;;
-
-
-
-(* Transition a heap state dead. *)
-let heap_state_to_dead (heap_query: exp) (states: mem_states) (current_stmt: stmt): mem_states =
-  
-  let old_state = lookup_mem_state query_key states current_stmt in
-  
-  let new_states = match old_state with
-      Empty_store, key -> [Error_store, key]
-    | Full_store e, key -> (Error_heap e, e)::[Error_store, key]
-    | Nonheap_store e, key -> [Error_store, key]
-    | Unknown_store, key -> [Error_store, key]
-    | Error_store, key -> [Error_store, key]
-    | Full_heap e, key -> [Error_heap e, e]
-    | Dead_heap e, key -> [Error_heap e, e]
-    | Error_heap e, key -> [Error_heap e, e]
-  in
-
-  let out_states = remove_mem_state old_state states current_stmt in
-
-    List.fold_left
-      (fun out new_state -> add_mem_state new_state states current_stmt)
-      out_states
-      new_states
-;;
-
-
-
-(** Attempts to fill the store represented by query_key with heap state state.
-  * *)
-let fill_store (from_key: exp) (to_key: exp) (states: mem_states) (current_stmt: stmt): mem_states =
-
-  let old_heap = lookup_mem_state from_key states current_stmt in
-  let old_store = lookup_store_stote to_key states current_stmt in
-
-
-  let new_stores =
-    List.map
-      (fun store -> match store with
-           (Empty e2) 
-         | (Unknown e2) when (IE.is_equiv_start target e2 current_stmt) ->
-             (Full e2)
-         | (Full e2) 
-         | (Nonheap e2) 
-         | (Error e2)
-             when (IE.is_equiv_start target e2 current_stmt) ->
-             ignore (E.error 
-                       "Overwriting store at %a" 
-                       d_loc (get_stmtLoc current_stmt.skind));
-             (Error target)
-         | s -> s
-      )
-      state.r_stores
-  in
-
-    (* Data must be going into a tmp variable that will later be placed in a
-     * store. *)
-    if (compare new_stores state.r_stores) = 0 then (
-      if !dbg_state then (
-        ignore (Pretty.printf "State.fill_store adding heap data at: %a" 
-                  d_loc (get_stmtLoc current_stmt.skind));
-      );
-      add_heap target state current_stmt
-    ) else
-      {r_stores=new_stores; r_heaps=state.r_heaps}
-;;
-
-
-(** Attempts to release data referenced by the store represented by target
-  * expression.  Returns an upadated state. *)
-let empty_store (target: exp) (state: runtime_state) (current_stmt: stmt): runtime_state =
-
-  let new_stores =
-    List.map
-      (fun store -> match store with
-           (Full e2) 
-         | (Unknown e2) when (IE.is_equiv_start target e2 current_stmt) ->
-             (Empty e2)
-         | (Empty e2) 
-         | (Nonheap e2) 
-         | (Error e2)
-             when (IE.is_equiv_start target e2 current_stmt) ->
-             ignore (E.error 
-                       "Releasing empty store at %a" 
-                       d_loc (get_stmtLoc current_stmt.skind));
-             (Error target)
-         | s -> s
-      )
-      state.r_stores
-  in
-
-    if (compare new_stores state.r_stores) = 0 then (
-      if is_field_of_store target state current_stmt then (
-        E.warn 
-          "%s %a. %s"
-          "Assuming that field of store is also heap data at"
-          d_loc (get_stmtLoc current_stmt.skind)
-          "Leaving state unchanged.";
-        {r_stores=new_stores; r_heaps=state.r_heaps}
-      ) else (
-        if !dbg_state then (
-          ignore (Pretty.printf "State.empty_store checking heap data at: %a" 
-                    d_loc (get_stmtLoc current_stmt.skind));
-        );
-        remove_heap target state current_stmt
-      )
-    ) else
-      {r_stores=new_stores; r_heaps=state.r_heaps}
-    
-;;
-
-
-(* TODO: Add cases for Nonheap into the other functions that manipulate the
- * store *)
-(** Attempts to write a value not referencing heap data into the store
-  * represented by target expression.  Returns an updated state. *)
-let abuse_store (target: exp) (state: runtime_state) (current_stmt: stmt): runtime_state =
-
-  let found = ref false in
-
-  let new_stores =
-    List.map
-      (fun store -> match store with
-           (Empty e2) 
-         | (Unknown e2) 
-         | (Nonheap e2) when (IE.is_equiv_start target e2 current_stmt) ->
-             found := true;
-             (Nonheap e2)
-         | (Full e2)
-         | (Error e2) when (IE.is_equiv_start target e2 current_stmt) ->
-             found := true;
-             ignore (E.error 
-                       "Storing potential heap reference into store at %a" 
-                       d_loc (get_stmtLoc current_stmt.skind));
-             (Error target)
-         | s -> s
-      )
-      state.r_stores
-  in
-
-    if not !found then (
-      E.error "%s %a %s %a\n"
-        "Placing nonheap data"
-        d_exp target
-        "into store at"
-        d_loc (get_stmtLoc current_stmt.skind)
-    );
-      
-    {r_stores=new_stores; r_heaps=state.r_heaps}
-;;
-
-
-(* State info types used to describe an expression as:
- * Heap -> Heap data
- * Stare -> Store data
- * Complex -> Combination of one or more heap and / or store datas
- * Other -> Nothing of interest such as a constant
- *)
-type exp_state = 
-   Heap of exp 
-  | Store of exp
-  | Complex of exp
-  | Other
-;;
-
-(* This function is used to extract state relevant information from an
- * expression.
- *)
-let rec get_state_from_exp (e: exp) (state: runtime_state) (current_stmt: stmt): exp_state =
-  match e with
-    | Lval lv when is_heap (Lval lv) state current_stmt -> Heap (Lval lv)
-
-    | Lval lv when is_store (Lval lv) state current_stmt -> Store (Lval lv)
-
-    | UnOp (_, e, _) -> get_state_from_exp e state current_stmt
-
-    | BinOp (_, e1, e2, _) -> 
-        begin
-          match (get_state_from_exp e1 state current_stmt, 
-                 get_state_from_exp e2 state current_stmt) with
-              (Other, tmp) -> tmp
-            | (tmp, Other) -> tmp
-            | _ -> Complex e
-        end
-
-    | CastE (_, e) -> get_state_from_exp e state current_stmt
-
-    | AddrOf lv
-    | StartOf lv -> Other
-
-    | Lval _                                    
-    | Const _ 
-    | SizeOf _ 
-    | SizeOfE _
-    | SizeOfStr _
-    | AlignOf _
-    | AlignOfE _
-      -> Other
-;;
 
 
 type spec_store = {
@@ -611,18 +392,27 @@ let spec_lookup_pre spec name = spec_lookup spec.pre name ;;
 let spec_lookup_post spec name = spec_lookup spec.post name ;;
 
 
-let get_exp_from_str (fname: string) (s:string) ((return: exp option), (el: exp list)) (state: runtime_state): exp =
+let get_mem_state_from_spec_str
+      (fname: string) 
+      (s:string) 
+      ((return: exp option), (el: exp list)) 
+      (states: mem_states): exp =
 
-    if s = "$return" then (
-      match return with
-          Some e -> e
-        | None -> E.s (E.error "Instruction needs a return value in function: %s" fname)
-    ) else if s.[0] = '$' then (
-      List.nth el (int_of_string (String.sub s 1 (String.length s - 2)) - 1)
-    ) else (
-      lookup_store_by_name s state 
-    )
+  if s = "$return" then (
+    match return with
+        Some e -> e
+      | None -> E.s (E.error "Instruction needs a return value in function: %s" fname)
+  ) else if s.[0] = '$' then (
+    List.nth el (int_of_string (String.sub s 1 (String.length s - 2)) - 1)
+  ) else (
+    let (_, key) = lookup_mem_state_by_name s states in
+      key
+  )
 ;;
+
+
+(*** TODO: Start cleaning up pre- and post- here ***)
+
 
 (* Update state based on pre-conditions *)
 (* Given update a state concisting of stores and heaps to conform to those from
@@ -644,7 +434,7 @@ let update_state_with_pre (fname: string) (formals: exp list) (state): runtime_s
   let full_stores = 
     List.fold_left
       (fun full s -> 
-         let store = (get_exp_from_str fname s (None, formals) state) in
+         let store = (get_mem_state_from_spec_str fname s (None, formals) state) in
            (Full store)::full
       )
       []
@@ -654,7 +444,7 @@ let update_state_with_pre (fname: string) (formals: exp list) (state): runtime_s
   let empty_stores = 
     List.fold_left
       (fun empty s -> 
-         let store = (get_exp_from_str fname s (None, formals) state) in
+         let store = (get_mem_state_from_spec_str fname s (None, formals) state) in
            (Empty store)::empty
       )
       []
@@ -782,7 +572,7 @@ let verify_state_with_pre
   let _ = 
     List.iter
       (fun s -> 
-         let store = (get_exp_from_str fname s (eop_of_lvop(lvop), el) state) in
+         let store = (get_mem_state_from_spec_str fname s (eop_of_lvop(lvop), el) state) in
            if not (is_full_pre state current_stmt store) then 
              (E.error "%s %s %s %a%s" 
                 "Formal parameter with index"
@@ -798,7 +588,7 @@ let verify_state_with_pre
   let _ = 
     List.iter
       (fun s -> 
-         let store = (get_exp_from_str fname s (eop_of_lvop(lvop), el) state) in
+         let store = (get_mem_state_from_spec_str fname s (eop_of_lvop(lvop), el) state) in
            if not (is_empty state current_stmt store) then 
              (E.error "Store %a is not empty or not found in call to function %s" d_exp store fname)
       )
@@ -837,7 +627,7 @@ let update_state_with_post
     let new_state = 
       List.fold_left
         (fun new_state s -> 
-           let store = get_exp_from_str fname s (eop_of_lvop(lvop), el) state in
+           let store = get_mem_state_from_spec_str fname s (eop_of_lvop(lvop), el) state in
              fill_store store new_state current_stmt
         )
         new_state
@@ -847,7 +637,7 @@ let update_state_with_post
     let new_state = 
       List.fold_left
         (fun new_state s -> 
-           let store = get_exp_from_str fname s (eop_of_lvop(lvop), el) state in
+           let store = get_mem_state_from_spec_str fname s (eop_of_lvop(lvop), el) state in
              empty_store store new_state current_stmt
         )
         new_state
@@ -878,7 +668,7 @@ let verify_state_with_post
   let _ = 
     List.iter
       (fun s -> 
-         let store = (get_exp_from_str fname s (return, formals) state) in
+         let store = (get_mem_state_from_spec_str fname s (return, formals) state) in
            if not (is_full_post state current_stmt store) then 
              (E.error "%s %s %s %a" 
                 "Formal parameter with index"
@@ -893,7 +683,7 @@ let verify_state_with_post
   let _ = 
     List.iter
       (fun s -> 
-         let store = (get_exp_from_str fname s (return, formals) state) in
+         let store = (get_mem_state_from_spec_str fname s (return, formals) state) in
            if not (is_empty state current_stmt store) then 
              (E.error "Store %a is not empty or not found in call to function %s" d_exp store fname)
       )
