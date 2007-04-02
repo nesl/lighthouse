@@ -36,20 +36,20 @@ module Apollo_Dataflow = struct
   (* Vital stats for this dataflow. *)
   let name = "apollo";;
   let debug = dbg_apollo_df;;
-  type t = runtime_state;;
+  type t = mem_states;;
 
   (* Basic util functions to jumpstart dataflow. *)
   let stmtStartData: t IH.t = IH.create 17;;
   let copy (state: t) = state;;
   let pretty () (state: t) =
-    dprintf "%s" (State.state_to_string state);;
+    dprintf "%s" (State.mem_states_to_string state);;
 
 
   let computeFirstPredecessor (s: stmt) (state: t): t = state;;
 
 
   let combinePredecessors (s: stmt) ~(old: t) (new_state: t) = 
-
+(*
     let updated_state = ref false in
 
     (* Intersect the two heap sets *)
@@ -230,6 +230,8 @@ module Apollo_Dataflow = struct
       ) else (
         None
       )
+ *)
+    None
   ;;
 
 
@@ -252,85 +254,93 @@ module Apollo_Dataflow = struct
 
             match (lv_state_op, rh_state_op) with
                 
-                ((Empty_store, l_key), (Full_store er, r_key))
-              | ((Empty_store, l_key), (Nonheap_store er, r_key))
-              | ((Unknown_store, l_key), (Full_store er, r_key))
-              | ((Unknown_store, l_key), (Nonheap_store er, r_key))
-              | ((Nonheap_store _, l_key), (Full_store er, r_key)) 
-              | ((Nonheap_store _, l_key), (Nonheap_store er, r_key)) ->
-                  let new_state = remove_mem_state (Dummy, r_key) state !current_stmt in
-                  let new_state = add_mem_state (Empty_store, r_key) state !current_stmt in
-                  let new_state = remove_mem_state (Dummy, l_key) state !current_stmt in
-                  let new_state = add_mem_state (Full_store er, l_key) state !current_stmt in
+                (Some (Empty_store, l_key), Some (Full_store er, r_key))
+              | (Some (Empty_store, l_key), Some (Nonheap_store er, r_key))
+              | (Some (Unknown_store, l_key), Some (Full_store er, r_key))
+              | (Some (Unknown_store, l_key), Some (Nonheap_store er, r_key))
+              | (Some (Nonheap_store _, l_key), Some (Full_store er, r_key)) 
+              | (Some (Nonheap_store _, l_key), Some (Nonheap_store er, r_key)) ->
+                  let new_state = state in
+                  let new_state = remove_mem_state (Dummy, r_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Empty_store, r_key) new_state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, l_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Full_store er, l_key) new_state !current_stmt in
                     DF.Done new_state
              
 
-              | ((Empty_store, l_key), (Unknown_store, r_key))
-              | ((Unknown_store, l_key), (Unknown_store, r_key))
-              | ((Nonheap_store _, l_key), (Unknown_store, r_key)) ->
-                  let new_state = remove_mem_state (Dummy, r_key) state !current_stmt in
-                  let new_state = add_mem_state (Empty_store, r_key) state !current_stmt in
-                  let new_state = remove_mem_state (Dummy, l_key) state !current_stmt in
+              | (Some (Empty_store, l_key), Some (Unknown_store, r_key))
+              | (Some (Unknown_store, l_key), Some (Unknown_store, r_key))
+              | (Some (Nonheap_store _, l_key), Some (Unknown_store, r_key)) ->
+                  let new_state = state in
+                  let new_state = remove_mem_state (Dummy, r_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Empty_store, r_key) new_state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, l_key) new_state !current_stmt in
                   let new_state = 
-                    add_mem_state (Full_store IE.nullPtrU, l_key) state !current_stmt 
+                    add_mem_state (Full_store IE.nullPtr, l_key) new_state !current_stmt 
                   in
                     DF.Done new_state
 
 
-              | ((Empty_store, l_key), (Full_heap er, r_key))
-              | ((Unknown_store, l_key), (Full_heap er, r_key))
-              | ((Nonheap_store _, l_key), (Full_heap er, r_key)) ->
-                  let new_state = remove_mem_state (Dummy, r_key) state !current_stmt in
-                  let new_state = add_mem_state (Dead_heap er, r_key) state !current_stmt in
-                  let new_state = remove_mem_state (Dummy, l_key) state !current_stmt in
-                  let new_state = add_mem_state (Full_store er, l_key) state !current_stmt in
+              | (Some (Empty_store, l_key), Some (Full_heap er, r_key))
+              | (Some (Unknown_store, l_key), Some (Full_heap er, r_key))
+              | (Some (Nonheap_store _, l_key), Some (Full_heap er, r_key)) ->
+                  let new_state = state in
+                  let new_state = remove_mem_state (Dummy, r_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Dead_heap er, r_key) new_state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, l_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Full_store er, l_key) new_state !current_stmt in
                     DF.Done new_state
 
 
-              | ((Empty_store, l_key), None)
-              | ((Unknown_store, l_key), None)
-              | ((Nonheap_store _, l_key), (Nonheap_store er, r_key)) ->
-                  let new_state = remove_mem_state (Dummy, l_key) state !current_stmt in
-                  let new_state = add_mem_state (Nonheap_store er, l_key) state !current_stmt in
-                    new_state
+              | (Some (Empty_store, l_key), None)
+              | (Some (Unknown_store, l_key), None)
+              | (Some (Nonheap_store _, l_key), None) ->
+                  let new_state = state in
+                  let new_state = remove_mem_state (Dummy, l_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Nonheap_store e, l_key) new_state !current_stmt in
+                    DF.Done new_state
                   
 
-              | ((Dead_heap el, l_key), (Full_store er, r_key))
-              | ((Dead_heap el, l_key), (Nonheap_store _, r_key)) ->
-                  let new_state = remove_mem_state (Dummy, r_key) state !current_stmt in
-                  let new_state = add_mem_state (Empty_store, r_key) state !current_stmt in
-                  let new_state = remove_mem_state (Dummy, l_key) state !current_stmt in
-                  let new_state = add_mem_state (Full_heap er, l_key) state !current_stmt in
-                  let new_state = add_mem_state (Dead_heap el, el) state !current_stmt in
+              | (Some (Dead_heap el, l_key), Some (Full_store er, r_key))
+              | (Some (Dead_heap el, l_key), Some (Nonheap_store er, r_key)) ->
+                  let new_state = state in
+                  let new_state = remove_mem_state (Dummy, r_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Empty_store, r_key) new_state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, l_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Full_heap er, l_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Dead_heap el, el) new_state !current_stmt in
                     DF.Done new_state
 
 
-              | ((Dead_heap el, l_key), (Unknown_store, r_key)) ->
-                  let new_state = remove_mem_state (Dummy, r_key) state !current_stmt in
-                  let new_state = add_mem_state (Empty_store, r_key) state !current_stmt in
-                  let new_state = remove_mem_state (Dummy, l_key) state !current_stmt in
+              | (Some (Dead_heap el, l_key), Some (Unknown_store, r_key)) ->
+                  let new_state = state in
+                  let new_state = remove_mem_state (Dummy, r_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Empty_store, r_key) new_state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, l_key) new_state !current_stmt in
                   let new_state = 
-                    add_mem_state (Full_store IE.nullPtrU, l_key) state !current_stmt in
-                  let new_state = add_mem_state (Dead_heap el, el) state !current_stmt in
+                    add_mem_state (Full_store IE.nullPtr, l_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Dead_heap el, el) new_state !current_stmt in
                     DF.Done new_state
 
 
-              | ((Dead_heap el, l_key), (Full_heap er, r_key)) ->
-                  let new_state = remove_mem_state (Dummy, r_key) state !current_stmt in
-                  let new_state = add_mem_state (Dead_heap, r_key) state !current_stmt in
-                  let new_state = remove_mem_state (Dummy, l_key) state !current_stmt in
-                  let new_state = add_mem_state (Full_heap er, l_key) state !current_stmt in
-                  let new_state = add_mem_state (Dead_heap el, el) state !current_stmt in
-                    DF.Done new_state
-              
-              | ((Dead_heap el, l_key), None) ->
-                  let new_state = remove_mem_state (Dummy, l_key) state !current_stmt in
-                  let new_state = add_mem_state (Dead_heap el, el) state !current_stmt in
+              | (Some (Dead_heap el, l_key), Some (Full_heap er, r_key)) ->
+                  let new_state = state in
+                  let new_state = remove_mem_state (Dummy, r_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Dead_heap er, r_key) new_state !current_stmt in
+                  let new_state = remove_mem_state (Dummy, l_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Full_heap er, l_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Dead_heap el, el) new_state !current_stmt in
                     DF.Done new_state
               
+              | (Some (Dead_heap el, l_key), None) ->
+                  let new_state = state in
+                  let new_state = remove_mem_state (Dummy, l_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Dead_heap el, el) new_state !current_stmt in
+                    DF.Done new_state
+              
 
-              | (_, (Dead_heap _, _))
-              | (_, (Empty_store, _)) ->
+              | (_, Some (Dead_heap _, _))
+              | (_, Some (Empty_store, _)) ->
                   E.s (E.bug "%s %a %s at %a"
                          "Apollo.doInstr:"
                          d_exp e
@@ -338,8 +348,8 @@ module Apollo_Dataflow = struct
                          d_loc (get_stmtLoc !current_stmt.skind))
               
 
-              | ((Full_store _, _), _)
-              | ((Full_heap _, _), _) ->
+              | (Some (Full_store _, _), _)
+              | (Some (Full_heap _, _), _) ->
                   E.s (E.bug "%s %a %s at %a"
                          "Apollo.doInstr:"
                          d_exp (Lval lv)
@@ -347,8 +357,8 @@ module Apollo_Dataflow = struct
                          d_loc (get_stmtLoc !current_stmt.skind))
              
 
-              | (_, (Error_store, _))
-              | (_, (Error_heap _, _)) ->
+              | (_, Some (Error_store, _))
+              | (_, Some (Error_heap _, _)) ->
                   E.s (E.bug "%s %a %s at %a"
                          "Apollo.doInstr:"
                          d_exp e
@@ -356,8 +366,8 @@ module Apollo_Dataflow = struct
                          d_loc (get_stmtLoc !current_stmt.skind))
                 
                   
-              | ((Error_store, _), _)
-              | ((Error_heap _, _), _) ->
+              | (Some (Error_store, _), _)
+              | (Some (Error_heap _, _), _) ->
                   E.s (E.bug "%s %a %s at %a"
                          "Apollo.doInstr:"
                          d_exp (Lval lv)
@@ -365,9 +375,24 @@ module Apollo_Dataflow = struct
                          d_loc (get_stmtLoc !current_stmt.skind))
 
 
-              | (None, (Full_store er, r_key))
-              | (None, (Unknown_store, r_key))
-              | (None, (Nonheap_store er, r_key))
+              | (None, Some (Full_store _, r_key))
+              | (None, Some (Unknown_store, r_key))
+              | (None, Some (Nonheap_store _, r_key))
+                  when (is_field_of_mem_state (Lval lv) state !current_stmt) -> 
+                  
+                  E.warn "%s %a %s at %a"
+                    "Apollo.doInstr:"
+                    d_exp e
+                    "is stored into nested store and no longer tracked"
+                    d_loc (get_stmtLoc !current_stmt.skind);
+
+                  let new_state = state in 
+                  let new_state = remove_mem_state (Dummy, r_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Empty_store, r_key) new_state !current_stmt in
+                  DF.Done new_state
+                
+
+              | (None, Some (Full_heap er, r_key))
                   when (is_field_of_mem_state (Lval lv) state !current_stmt) -> 
                   
                   E.warn "%s %a %s at %a"
@@ -376,26 +401,14 @@ module Apollo_Dataflow = struct
                     "is stored into nested store and no longer tracked"
                     d_loc (get_stmtLoc !current_stmt.skind);
                   
-                  let new_state = remove_mem_state (Dummy, r_key) state !current_stmt in
-                  let new_state = add_mem_state (Empty_store, r_key) state !current_stmt in
+                  let new_state = state in 
+                  let new_state = remove_mem_state (Dummy, r_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Dead_heap er, r_key) new_state !current_stmt in
                   DF.Done new_state
                 
 
-              | (None, (Full_heap er, r_key))
-                  when (is_field_of_mem_state (Lval lv) state !current_stmt) -> 
-                  
-                  E.warn "%s %a %s at %a"
-                    "Apollo.doInstr:"
-                    d_exp e
-                    "is stored into nested store and no longer tracked"
-                    d_loc (get_stmtLoc !current_stmt.skind);
-                  
-                  let new_state = remove_mem_state (Dummy, r_key) state !current_stmt in
-                  let new_state = add_mem_state (Dead_heap er, r_key) state !current_stmt in
-                  DF.Done new_state
-                
-
-              | (None, _) -> DF.Default
+              (* TODO: Double check the rest of these default cases *)
+              | (_, _) -> DF.Default
           
           end
 
@@ -410,7 +423,9 @@ module Apollo_Dataflow = struct
 
           (* Verify that we are in a state that is valid for the function call
            *)
-          let proper_pre = verify_state_with_pre v.vname state !current_stmt (lvop, el) in
+          let proper_pre = 
+            verify_state_with_pre v.vname (lvop, el) state !current_stmt
+          in
 
           let _ =
             if not proper_pre then (
@@ -460,8 +475,8 @@ module Apollo_Dataflow = struct
      * target expression to a null pointer *)
     let is_target_and_null (e1: exp) (e2: exp) (s: stmt) : bool =
       let is_target = 
-        (is_heap e1 state !current_stmt) || 
-        (is_heap e2 state !current_stmt)
+        (is_heap_state e1 state !current_stmt) || 
+        (is_heap_state e2 state !current_stmt)
       in
       let is_null = 
         (IE.is_equiv_start e1 IE.nullPtr !current_stmt) || 
@@ -477,20 +492,20 @@ module Apollo_Dataflow = struct
     let transition = match e with
 
       | Lval lv 
-          when (is_heap (Lval lv) state !current_stmt) ->
+          when (is_heap_state (Lval lv) state !current_stmt) ->
           (* Unary check to see if item is NOT null.  Continue on with the
            * default action to ensure that the target is stored. *)
           DF.GDefault
 
       | UnOp (LNot, (Lval lv), _) 
-          when (is_heap (Lval lv) state !current_stmt) ->
+          when (is_heap_state (Lval lv) state !current_stmt) ->
           (* Unary check to see if item is Null.  Since we know that the target is
            * Null we can abort the check for this branch and directly insert the Null
            * state. *)
-          DF.GUse (remove_heap (Lval lv) state !current_stmt)
+          DF.GUse (kill_heap_state (Lval lv) state !current_stmt)
 
       | UnOp (LNot, (UnOp (LNot, (Lval lv), _)), _)
-          when (is_heap (Lval lv) state !current_stmt) ->
+          when (is_heap_state (Lval lv) state !current_stmt) ->
           (* Unary check to see if item is NOT Null.  This form results from the
            * elseGuard clause within the dataflow engine. Continue with default
            * action. *)
@@ -504,19 +519,19 @@ module Apollo_Dataflow = struct
       | BinOp (Eq, e1, e2, _)
           when (is_target_and_null e1 e2 !current_stmt) ->
           (* Binary check to see if item is Null *)
-          if (is_heap e1 state !current_stmt) then
-            DF.GUse (remove_heap e1 state !current_stmt)
+          if (is_heap_state e1 state !current_stmt) then
+            DF.GUse (kill_heap_state e1 state !current_stmt)
           else
-            DF.GUse (remove_heap e2 state !current_stmt)
+            DF.GUse (kill_heap_state e2 state !current_stmt)
          
       | UnOp (LNot, (BinOp (Ne, e1, e2, _)), _)
           when (is_target_and_null e1 e2 !current_stmt) ->
           (* Binary check to see if item is NOT NOT null.  This form results
            * from the elseGuard clause within the dataflow engine. *)
-          if (is_heap e1 state !current_stmt) then
-            DF.GUse (remove_heap e1 state !current_stmt)
+          if (is_heap_state e1 state !current_stmt) then
+            DF.GUse (kill_heap_state e1 state !current_stmt)
           else
-            DF.GUse (remove_heap e2 state !current_stmt)
+            DF.GUse (kill_heap_state e2 state !current_stmt)
 
       | UnOp (LNot, (BinOp (Eq, e1, e2, _)), _)
           when (is_target_and_null e1 e2 !current_stmt) ->
@@ -576,16 +591,16 @@ let apollo_func (f: fundec) (cfile: file) : bool =
 
   (* Create a dummy "initial_state" that has all stores in an unknown state and
    * an empty heap *)
-  let global_stores = List.map (fun e -> Unknown e) global_exps in
+  let global_stores = List.map (fun e -> (Unknown_store, e)) global_exps in
   let initial_heaps = [] in
-  let initial_state = {State.r_stores=global_stores; State.r_heaps=initial_heaps} in
+  let initial_states = initial_heaps @ global_stores in
   
   let formals = List.map (fun v -> (Lval (var v))) f.sformals in
 
   (* Update the state based on the pre-condition assumptions that we can assume
    * are true upon having entered a function *)
   let state = 
-    State.update_state_with_pre f.svar.vname formals initial_state
+    State.update_state_with_pre f.svar.vname formals initial_states
   in
 
     if !dbg_apollo then (   
@@ -620,7 +635,8 @@ let apollo_func (f: fundec) (cfile: file) : bool =
                Return (eop, _) -> eop
              | _ -> None
          in
-           if not (State.verify_state_with_post f.svar.vname return_eop formals return s) then
+           if not (verify_state_with_post f.svar.vname (return_eop, formals) return s) 
+           then
              E.error 
                "Return at %a fails to satisfy post- conditions for function %s"
                d_loc (get_stmtLoc s.skind) f.svar.vname

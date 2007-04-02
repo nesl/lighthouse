@@ -213,6 +213,18 @@ let is_field_of_mem_state (query_key: exp) (states: mem_states) (current_stmt: s
 ;;
 
 
+let is_heap_state (query_key: exp) (states: mem_states) (current_stmt: stmt): bool =
+  List.exists
+    (fun state -> match state with
+         Full_heap e, key
+       | Dead_heap e, key
+       | Error_heap e, key -> true
+       | _ -> false
+    )
+    states
+;;
+
+
 (** Removes mem_state indexed by key from the states being tracked. *)
 let remove_mem_state (kill_state: mem_state) (states: mem_states) (current_stmt: stmt): mem_states =
   let (_, query_key) = kill_state in
@@ -298,29 +310,6 @@ let lookup_mem_state (query_key: exp) (states: mem_states) (current_stmt: stmt):
 ;;
 
 
-let lookup_mem_state_by_name (sname: string) (states: mem_states): mem_state = 
-  let matches = 
-    List.filter
-      (fun state ->
-         match state with
-             (_, Lval (Var v, NoOffset)) when v.vname = sname -> true
-           | _ -> false
-      )
-      states
-  in
-
-    if (List.length matches = 1) then (
-      List.hd matches
-    ) else (
-      E.s (E.bug "%s %s %s"
-             "State.try_lookup_mem_state_by_name:"
-             sname 
-             "can not be found in tracked states"
-      )
-    )
-;;
-
-
 (* Lookup mem_state by name.  Note that this only works for tracked state with
  * simple variable types. *)
 let lookup_mem_state_by_name (sname: string) (states: mem_states): mem_state = 
@@ -349,6 +338,60 @@ let lookup_mem_state_by_name (sname: string) (states: mem_states): mem_state =
              sname 
              "is not currently being tracked")
     )
+;;
+
+
+let kill_heap_state 
+      (query_key: exp) 
+      (states: mem_states) 
+      (current_stmt: stmt): mem_states =
+
+  let state = lookup_mem_state query_key states current_stmt in
+  let new_states = states in
+    match state with
+        Full_heap e, key ->
+          let new_states = remove_mem_state state new_states current_stmt in
+          let new_states = add_mem_state (Dead_heap e, key) new_states current_stmt in
+            new_states
+      | _ ->
+          E.s (E.bug "%s %a %s"
+                 "State.kill_heap_state:"
+                 d_exp query_key
+                 "can not be killed since it is not full")
+;;
+
+(* Update mem_state by name.  Note that this only works for tracked state with
+ * simple variable types. *)
+let update_mem_state_by_name (sname: string) (new_state: mem_state) (states: mem_states): mem_states = 
+
+  let found = ref false in
+
+  let new_states = 
+    List.fold_left
+      (fun out state -> match state with
+           Empty_store, (Lval (Var v, NoOffset)) 
+         | Full_store _, (Lval (Var v, NoOffset))
+         | Nonheap_store _, (Lval (Var v, NoOffset))
+         | Unknown_store, (Lval (Var v, NoOffset))
+         | Error_store, (Lval (Var v, NoOffset))
+         | Full_heap _, (Lval (Var v, NoOffset))
+         | Dead_heap _, (Lval (Var v, NoOffset))
+         | Error_heap _, (Lval (Var v, NoOffset)) when v.vname = sname -> 
+             found := true;
+             new_state::out
+         | _ -> state::out
+      )
+      []
+      states
+  in
+
+    if not !found then (
+      E.s (E.bug "%s %s %s"
+             "State.update_mem_state_by_name:"
+             sname 
+             "could not be found to be updated")
+    );
+    new_states
 ;;
 
 
@@ -392,7 +435,7 @@ let spec_lookup_pre spec name = spec_lookup spec.pre name ;;
 let spec_lookup_post spec name = spec_lookup spec.post name ;;
 
 
-let get_mem_state_from_spec_str
+let get_key_from_spec_str
       (fname: string) 
       (s:string) 
       ((return: exp option), (el: exp list)) 
@@ -423,127 +466,82 @@ let get_mem_state_from_spec_str
  * - Force any stores listed in store.empty to be empty
  * - No update of heaps at this time
  *) 
-let update_state_with_pre (fname: string) (formals: exp list) (state): runtime_state =
+let update_state_with_pre (fname: string) (formals: exp list) (states): mem_states =
 
+  let incoming_heap_counter = ref 0 in
 
   let store = spec_lookup_pre !specification fname in
       
-  if not (List.length store.heap = 0) then 
-    E.s (E.bug "What...  I thought all heap specifications were zero...");
+  if not (List.length store.heap = 0) then (
+      E.s (E.bug "%s %s %s"
+             "State.update_state_with_pre:"
+             fname
+             "attempts to specify heap pre-state.")
+  );
 
-  let full_stores = 
+  let states = 
     List.fold_left
-      (fun full s -> 
-         let store = (get_mem_state_from_spec_str fname s (None, formals) state) in
-           (Full store)::full
+      (fun out s -> 
+         let key = (get_key_from_spec_str fname s (None, formals) states) in
+         let base_name = "incoming_heap_in_" in
+         let extended_name = 
+           base_name ^ fname ^ "_" ^ (string_of_int !incoming_heap_counter) 
+         in
+         let heap = makeVarinfo false extended_name voidPtrType in
+           incoming_heap_counter := !incoming_heap_counter + 5;
+           update_mem_state_by_name fname (Full_store (Lval (var heap)), key) out
       )
-      []
+      states
       store.full
   in
   
-  let empty_stores = 
+  let states = 
     List.fold_left
-      (fun empty s -> 
-         let store = (get_mem_state_from_spec_str fname s (None, formals) state) in
-           (Empty store)::empty
+      (fun out s -> 
+         let key = (get_key_from_spec_str fname s (None, formals) states) in
+           update_mem_state_by_name fname (Empty_store, key) states
       )
       []
       store.empty
   in
-      
-      
-    {r_stores=(full_stores @ empty_stores); r_heaps=[]}
+     
+    states 
 ;;
 
 
-let is_full_pre (state: runtime_state) (current_stmt: stmt) (store: exp) = 
-  let in_store =
-    List.exists
-      (fun st -> match st with
-           (Full e) when (IE.is_equiv_start store e current_stmt) -> true
-         | _ -> false
-      )
-      state.r_stores
-  in
+let is_full (query_key: exp) (states: mem_states) (current_stmt: stmt) = 
 
-  let in_heap =
-    List.exists
-      (fun e -> IE.is_equiv_start store e current_stmt)
-      state.r_heaps
-  in
-
-  let is_null = 
-    IE.is_equiv_start store IE.nullPtr current_stmt 
-  in
-
-  let is_field = 
-    let b =
-      (is_field_of_store store state current_stmt) || 
-      (is_field_of_heap store state current_stmt) 
-    in
-      if not in_store && not in_heap && not is_null && b then (
-        ignore (E.warn "%s %a %s (at %a)\n" 
-                  "Assuming that data referenced by"
-                  d_exp store
-                  "is nested heap data."
-                  d_loc (get_stmtLoc current_stmt.skind)
-        );
-      );
-      b
-  in
-
-    
-    (in_store || in_heap || is_null || is_field)
-
+  match try_lookup_mem_state query_key states current_stmt with
+      Some (Full_store e, key) 
+    | Some (Full_heap e, key) ->
+        true
+    | _ when IE.is_equiv_start query_key IE.nullPtr current_stmt -> 
+        true
+    | _ when is_field_of_mem_state query_key states current_stmt ->
+        ignore (E.warn "%s %a %s at %a"
+             "State.is_full:"
+             d_exp query_key 
+             "assumed to be reference to nested heap data"
+             d_loc (get_stmtLoc current_stmt.skind));
+        true
+    | _ -> false
 ;;
 
-let is_full_post (state: runtime_state) (current_stmt: stmt) (store: exp) = 
-  let in_store =
-    List.exists
-      (fun st -> match st with
-           (Full e) when (IE.is_equiv_start store e current_stmt) -> true
-         | _ -> false
-      )
-      state.r_stores
-  in
 
-  let in_heap =
-    List.exists
-      (fun e -> IE.is_equiv_start store e current_stmt)
-      state.r_heaps
-  in
+let is_empty (query_key: exp) (states: mem_states) (current_stmt: stmt) = 
 
-  let is_null = 
-    IE.is_equiv_start store IE.nullPtr current_stmt 
-  in
-
-    (in_store || in_heap || is_null)
-
-;;
-
-let is_empty (state: runtime_state) (current_stmt: stmt) (store: exp) = 
-
-  let not_full_store = 
-    List.for_all
-      (fun st -> 
-         match st with
-             (Empty e) when (IE.is_equiv_start store e current_stmt) -> true
-           | (Full e) when (IE.is_equiv_start store e current_stmt) -> false
-           | (Nonheap e) when (IE.is_equiv_start store e current_stmt) -> false
-           | (Unknown e) when (IE.is_equiv_start store e current_stmt) -> true
-           | (Error e) when (IE.is_equiv_start store e current_stmt) -> false
-           | _ -> true
-      )
-      state.r_stores
-  in
-
-  let not_heap =
-    List.for_all
-      (fun e -> not (IE.is_equiv_start store e current_stmt))
-      state.r_heaps
-  in
-
-    (not_full_store && not_heap)
+  match try_lookup_mem_state query_key states current_stmt with
+      Some (Empty_store, key) 
+    | Some (Unknown_store, key) ->
+        true
+    | Some (Dead_heap _, key) ->
+        ignore (E.warn "%s %a %s at %a"
+             "State.is_empty:"
+             d_exp query_key 
+             "is dead heap.  But did you really want to check this?"
+             d_loc (get_stmtLoc current_stmt.skind));
+        true
+    | _ -> false
 ;;
 
 
@@ -556,30 +554,36 @@ let eop_of_lvop (lvop: lval option): exp option =
 
 let verify_state_with_pre 
       (fname: string)
-      (state: runtime_state) 
-      (current_stmt: stmt)
-      (lvop, el): bool =
+      (lvop, el)
+      (states: mem_states) 
+      (current_stmt: stmt): bool =
+
+  let meets_pre = ref true in
 
   let store = spec_lookup_pre !specification fname in
       
-  if not (List.length store.heap = 0) then 
-    E.s (E.bug "%s %s %s"
-           "State.verify_state_with_pre:"
-           "Non-empty heap specification in post condition for function"
-           fname
-    );
+  if not (List.length store.heap = 0) then (
+      E.s (E.bug "%s %s %s"
+             "State.verify_state_with_pre:"
+             fname
+             "attempts to specify heap pre-state.")
+  );
 
   let _ = 
     List.iter
       (fun s -> 
-         let store = (get_mem_state_from_spec_str fname s (eop_of_lvop(lvop), el) state) in
-           if not (is_full_pre state current_stmt store) then 
-             (E.error "%s %s %s %a%s" 
-                "Formal parameter with index"
-                (String.sub s 1 ((String.length s) - 2))
-                "(in function call at"
-                d_loc (get_stmtLoc current_stmt.skind)
-                ") is not a full store and not heap data.")
+         let store = 
+           get_key_from_spec_str fname s (eop_of_lvop(lvop), el) states
+         in
+           if not (is_full store states current_stmt) then (
+             meets_pre := false;
+             E.error "%s %s %s %s at %a" 
+               "State.verify_state_with_pre:"
+               "Formal parameter"
+               (String.sub s 1 ((String.length s) - 2))
+               "is not a full store and not heap data"
+               d_loc (get_stmtLoc current_stmt.skind)
+           );
       )
       store.full
   in
@@ -588,93 +592,151 @@ let verify_state_with_pre
   let _ = 
     List.iter
       (fun s -> 
-         let store = (get_mem_state_from_spec_str fname s (eop_of_lvop(lvop), el) state) in
-           if not (is_empty state current_stmt store) then 
-             (E.error "Store %a is not empty or not found in call to function %s" d_exp store fname)
+         let store = 
+           get_key_from_spec_str fname s (eop_of_lvop(lvop), el) states
+         in
+           if not (is_empty store states current_stmt) then (
+             meets_pre := false;
+             E.error "%s %s %s %s at %a" 
+               "State.verify_state_with_pre:"
+               "Formal parameter"
+               (String.sub s 1 ((String.length s) - 2))
+               "is not empty"
+               d_loc (get_stmtLoc current_stmt.skind)
+           );
       )
       store.empty
   in
  
-   (* 
-  let _ =    
-    List.iter
-      (fun heap ->
-         E.error 
-           "Failed to store heap data %a in function %s before return at %a" 
-           d_exp heap fname d_loc (get_stmtLoc current_stmt.skind)
-      )
-      state.r_heaps
-  in
-    *)
-
-  true
+    !meets_pre
 ;;
+
 
 (* Update state based on post-conditions *)
 let update_state_with_post 
       (fname: string)
       ((lvop: lval option), (el: exp list))
-      (state: runtime_state) 
-      (current_stmt: stmt): runtime_state =
-  
+      (states: mem_states) 
+      (current_stmt: stmt): mem_states =
+    
+  let outgoing_heap_counter = ref 0 in
+
   let store = spec_lookup_post !specification fname in
 
-    if not (List.length store.heap = 0) then 
-      E.s (E.bug "What...  I thought all heap specifications were zero...");
+  if not (List.length store.heap = 0) then (
+      E.s (E.bug "%s %s %s"
+             "State.update_state_with_pre:"
+             fname
+             "attempts to specify heap pre-state.")
+  );
 
-    let new_state = state in
+  let states = 
+    List.fold_left
+      (fun states s -> 
+         let key = (get_key_from_spec_str fname s (eop_of_lvop(lvop), el) states) in
+         let state = lookup_mem_state key states current_stmt in
+        
+         let base_name = "outgoing_heap_in_" in
+         let extended_name = 
+           base_name ^ fname ^ "_" ^ (string_of_int !outgoing_heap_counter) 
+         in
+         let heap_var = makeVarinfo false extended_name voidPtrType in
+         let _ = outgoing_heap_counter := !outgoing_heap_counter + 5 in
+         let heap_exp = Lval (var heap_var) in
+         
+           match state with
+               Empty_store, key
+             | Unknown_store, key
+             | Nonheap_store _, key ->
+                 let states = remove_mem_state (Dummy, key) states current_stmt in
+                 let states = 
+                   add_mem_state (Full_store heap_exp, key) states current_stmt 
+                 in
+                   states
+             
+             | Dead_heap e, key ->
+                 let states = remove_mem_state (Dummy, key) states current_stmt in
+                 let states = 
+                   add_mem_state (Full_store heap_exp, key) states current_stmt 
+                 in
+                 let states = add_mem_state (Dead_heap e, e) states current_stmt in
+                   states
+             
+             | _ ->
+                 E.s (E.error "%s %s %s at %a" 
+                   "State.verify_state_with_pre:"
+                   fname
+                   "is not free to store heap data"
+                   d_loc (get_stmtLoc current_stmt.skind))
+      )
+      states
+      store.full
+  in
 
-    let new_state = 
-      List.fold_left
-        (fun new_state s -> 
-           let store = get_mem_state_from_spec_str fname s (eop_of_lvop(lvop), el) state in
-             fill_store store new_state current_stmt
-        )
-        new_state
-        store.full
-    in
+  let states = 
+    List.fold_left
+      (fun states s -> 
+         let key = (get_key_from_spec_str fname s (eop_of_lvop(lvop), el) states) in
+         let state = lookup_mem_state key states current_stmt in
+           match state with
+               Full_store _, key 
+             | Unknown_store, key ->
+                 let states = remove_mem_state (Dummy, key) states current_stmt in
+                 let states = add_mem_state (Empty_store, key) states current_stmt in
+                   states
+             
+             | Full_heap e, key ->
+                 let states = remove_mem_state (Dummy, key) states current_stmt in
+                 let states = add_mem_state (Dead_heap e, key) states current_stmt in
+                   states
+             
+             | _ ->
+                 E.s (E.error "%s %s %s at %a" 
+                   "State.verify_state_with_pre:"
+                   fname
+                   "is empty and may not be made empty again"
+                   d_loc (get_stmtLoc current_stmt.skind))
+      )
+      states
+      store.empty
+  in
 
-    let new_state = 
-      List.fold_left
-        (fun new_state s -> 
-           let store = get_mem_state_from_spec_str fname s (eop_of_lvop(lvop), el) state in
-             empty_store store new_state current_stmt
-        )
-        new_state
-        store.empty
-    in
-
-      new_state
+    states
 ;;
 
 
 (* Verify that state upholds post-conditions *)
 let verify_state_with_post 
       (fname: string)
-      (return: exp option)
-      (formals: exp list)
-      (state: runtime_state) 
+      ((return: exp option), (formals: exp list))
+      (states: mem_states) 
       (current_stmt: stmt): bool =
+  
+  let meets_post = ref true in
   
   let store = spec_lookup_post !specification fname in
       
-  if not (List.length store.heap = 0) then 
-    E.s (E.bug "%s %s %s"
-           "State.verify_state_with_post:"
-           "Non-empty heap specification in post condition for function"
-           fname
-    );
+  if not (List.length store.heap = 0) then (
+      E.s (E.bug "%s %s %s"
+             "State.verify_state_with_post:"
+             fname
+             "attempts to specify heap post-state.")
+  );
 
+  
   let _ = 
     List.iter
       (fun s -> 
-         let store = (get_mem_state_from_spec_str fname s (return, formals) state) in
-           if not (is_full_post state current_stmt store) then 
-             (E.error "%s %s %s %a" 
-                "Formal parameter with index"
-                (String.sub s 1 ((String.length s) - 2))
-                "is not a full store and not heap data at return point in")
-                d_loc (get_stmtLoc current_stmt.skind)
+         let store = get_key_from_spec_str fname s (return, formals) states in
+           if not (is_full store states current_stmt) then (
+             meets_post := false;
+             E.error "%s %s %s %s at %a" 
+               "State.verify_state_with_post:"
+               "Formal parameter"
+               (String.sub s 1 ((String.length s) - 2))
+               "is not a full store and not heap data at function return"
+               d_loc (get_stmtLoc current_stmt.skind)
+           );
       )
       store.full
   in
@@ -683,40 +745,43 @@ let verify_state_with_post
   let _ = 
     List.iter
       (fun s -> 
-         let store = (get_mem_state_from_spec_str fname s (return, formals) state) in
-           if not (is_empty state current_stmt store) then 
-             (E.error "Store %a is not empty or not found in call to function %s" d_exp store fname)
+         let store = get_key_from_spec_str fname s (return, formals) states in
+           if not (is_empty store states current_stmt) then (
+             meets_post := false;
+             E.error "%s %s %s %s at %a" 
+               "State.verify_state_with_post:"
+               "Formal parameter"
+               (String.sub s 1 ((String.length s) - 2))
+               "is not known to be empty at function return"
+               d_loc (get_stmtLoc current_stmt.skind)
+           );
       )
       store.empty
   in
+ 
 
   let _ =    
     List.iter
-      (fun heap ->
-         let safe_heap = 
-           match return with
-               Some e ->
-                 (* If the heap is being returned... *)
-                 let heap_returned = IE.is_equiv_start heap e current_stmt in
-
-                 (* And if the return value should be full... *)
-                 let should_be_full = List.mem "$return" store.full in
-
-                   (heap_returned && should_be_full)
-
-             | None -> false
-         in
-           
-           if not safe_heap then (
-             E.error 
-               "Failed to store heap data \"%a\" after function %s before return at %a" 
-               d_exp heap fname d_loc (get_stmtLoc current_stmt.skind)
-           );
+      (fun state -> match state with
+           Full_heap _, key 
+         | Error_heap _, key ->
+             begin
+               match return with
+                   Some ret when IE.is_equiv_start key ret current_stmt &&
+                                List.mem "$return" store.full -> ()
+                 | _ ->
+                     meets_post := false;
+                     E.error "%s %a %s at %a" 
+                       "State.verify_state_with_post:"
+                       d_exp key
+                       "referes to non-stored heap data at function return"
+                       d_loc (get_stmtLoc current_stmt.skind)
+             end
+         | _ -> ()
       )
-      state.r_heaps
+      states
   in
-
-    true
+    !meets_post
 ;;
 
 
