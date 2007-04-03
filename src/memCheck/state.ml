@@ -360,15 +360,13 @@ let kill_heap_state
                  "can not be killed since it is not full")
 ;;
 
-(* Update mem_state by name.  Note that this only works for tracked state with
+(* Add a state by name to the mem_states.  Note that this only works for tracked state with
  * simple variable types. *)
-let update_mem_state_by_name (sname: string) (new_state: mem_state) (states: mem_states): mem_states = 
+let add_mem_state_by_name (sname: string) (new_state: mem_state) (states: mem_states): mem_states = 
 
-  let found = ref false in
-
-  let new_states = 
-    List.fold_left
-      (fun out state -> match state with
+  let found = 
+    List.exists
+      (fun state -> match state with
            Empty_store, (Lval (Var v, NoOffset)) 
          | Full_store _, (Lval (Var v, NoOffset))
          | Nonheap_store _, (Lval (Var v, NoOffset))
@@ -376,22 +374,20 @@ let update_mem_state_by_name (sname: string) (new_state: mem_state) (states: mem
          | Error_store, (Lval (Var v, NoOffset))
          | Full_heap _, (Lval (Var v, NoOffset))
          | Dead_heap _, (Lval (Var v, NoOffset))
-         | Error_heap _, (Lval (Var v, NoOffset)) when v.vname = sname -> 
-             found := true;
-             new_state::out
-         | _ -> state::out
+         | Error_heap _, (Lval (Var v, NoOffset)) when v.vname = sname -> true
+         | _ -> false
       )
-      []
       states
   in
 
-    if not !found then (
+    if found then (
       E.s (E.bug "%s %s %s"
              "State.update_mem_state_by_name:"
              sname 
-             "could not be found to be updated")
+             "is already being tracked")
     );
-    new_states
+
+    new_state::states
 ;;
 
 
@@ -489,7 +485,7 @@ let update_state_with_pre (fname: string) (formals: exp list) (states): mem_stat
          in
          let heap = makeVarinfo false extended_name voidPtrType in
            incoming_heap_counter := !incoming_heap_counter + 5;
-           update_mem_state_by_name fname (Full_store (Lval (var heap)), key) out
+           add_mem_state_by_name fname (Full_store (Lval (var heap)), key) out
       )
       states
       store.full
@@ -499,9 +495,9 @@ let update_state_with_pre (fname: string) (formals: exp list) (states): mem_stat
     List.fold_left
       (fun out s -> 
          let key = (get_key_from_spec_str fname s (None, formals) states) in
-           update_mem_state_by_name fname (Empty_store, key) states
+           add_mem_state_by_name fname (Empty_store, key) states
       )
-      []
+      states
       store.empty
   in
      
@@ -634,7 +630,7 @@ let update_state_with_post
     List.fold_left
       (fun states s -> 
          let key = (get_key_from_spec_str fname s (eop_of_lvop(lvop), el) states) in
-         let state = lookup_mem_state key states current_stmt in
+         let state = try_lookup_mem_state key states current_stmt in
         
          let base_name = "outgoing_heap_in_" in
          let extended_name = 
@@ -645,29 +641,32 @@ let update_state_with_post
          let heap_exp = Lval (var heap_var) in
          
            match state with
-               Empty_store, key
-             | Unknown_store, key
-             | Nonheap_store _, key ->
+               Some (Empty_store, key)
+             | Some (Unknown_store, key)
+             | Some (Nonheap_store _, key) ->
                  let states = remove_mem_state (Dummy, key) states current_stmt in
                  let states = 
-                   add_mem_state (Full_store heap_exp, key) states current_stmt 
+                   add_mem_state (Full_store heap_exp, key) states current_stmt
                  in
                    states
              
-             | Dead_heap e, key ->
+             | Some (Dead_heap e, key) ->
                  let states = remove_mem_state (Dummy, key) states current_stmt in
                  let states = 
-                   add_mem_state (Full_store heap_exp, key) states current_stmt 
+                   add_mem_state (Full_heap heap_exp, key) states current_stmt 
                  in
-                 let states = add_mem_state (Dead_heap e, e) states current_stmt in
                    states
              
-             | _ ->
+             | Some _ ->
                  E.s (E.error "%s %s %s at %a" 
                    "State.verify_state_with_pre:"
                    fname
                    "is not free to store heap data"
                    d_loc (get_stmtLoc current_stmt.skind))
+             
+             | None ->
+                 let states = add_mem_state (Full_heap heap_exp, key) states current_stmt in
+                   states
       )
       states
       store.full

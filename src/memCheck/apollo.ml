@@ -286,7 +286,6 @@ module Apollo_Dataflow = struct
               | (Some (Nonheap_store _, l_key), Some (Full_heap er, r_key)) ->
                   let new_state = state in
                   let new_state = remove_mem_state (Dummy, r_key) new_state !current_stmt in
-                  let new_state = add_mem_state (Dead_heap er, r_key) new_state !current_stmt in
                   let new_state = remove_mem_state (Dummy, l_key) new_state !current_stmt in
                   let new_state = add_mem_state (Full_store er, l_key) new_state !current_stmt in
                     DF.Done new_state
@@ -304,38 +303,22 @@ module Apollo_Dataflow = struct
               | (Some (Dead_heap el, l_key), Some (Full_store er, r_key))
               | (Some (Dead_heap el, l_key), Some (Nonheap_store er, r_key)) ->
                   let new_state = state in
-                  let new_state = remove_mem_state (Dummy, r_key) new_state !current_stmt in
-                  let new_state = add_mem_state (Empty_store, r_key) new_state !current_stmt in
                   let new_state = remove_mem_state (Dummy, l_key) new_state !current_stmt in
-                  let new_state = add_mem_state (Full_heap er, l_key) new_state !current_stmt in
-                  let new_state = add_mem_state (Dead_heap el, el) new_state !current_stmt in
                     DF.Done new_state
 
 
               | (Some (Dead_heap el, l_key), Some (Unknown_store, r_key)) ->
                   let new_state = state in
-                  let new_state = remove_mem_state (Dummy, r_key) new_state !current_stmt in
-                  let new_state = add_mem_state (Empty_store, r_key) new_state !current_stmt in
+                  let new_state =
+                    add_mem_state (Full_store IE.nullPtr, r_key) new_state !current_stmt
+                  in
                   let new_state = remove_mem_state (Dummy, l_key) new_state !current_stmt in
-                  let new_state = 
-                    add_mem_state (Full_store IE.nullPtr, l_key) new_state !current_stmt in
-                  let new_state = add_mem_state (Dead_heap el, el) new_state !current_stmt in
                     DF.Done new_state
 
 
-              | (Some (Dead_heap el, l_key), Some (Full_heap er, r_key)) ->
-                  let new_state = state in
-                  let new_state = remove_mem_state (Dummy, r_key) new_state !current_stmt in
-                  let new_state = add_mem_state (Dead_heap er, r_key) new_state !current_stmt in
-                  let new_state = remove_mem_state (Dummy, l_key) new_state !current_stmt in
-                  let new_state = add_mem_state (Full_heap er, l_key) new_state !current_stmt in
-                  let new_state = add_mem_state (Dead_heap el, el) new_state !current_stmt in
-                    DF.Done new_state
-              
               | (Some (Dead_heap el, l_key), None) ->
                   let new_state = state in
                   let new_state = remove_mem_state (Dummy, l_key) new_state !current_stmt in
-                  let new_state = add_mem_state (Dead_heap el, el) new_state !current_stmt in
                     DF.Done new_state
               
 
