@@ -324,25 +324,40 @@ module Apollo_Dataflow = struct
 
               | (_, Some (Dead_heap _, _))
               | (_, Some (Empty_store, _)) ->
-                  E.s (E.bug "%s %a %s at %a"
+                  E.s (E.error "%s %a %s at %a"
                          "Apollo.doInstr:"
                          d_exp e
                          "is empty or dead and may not be dereferenced"
                          d_loc (get_stmtLoc !current_stmt.skind))
               
 
-              | (Some (Full_store _, _), _)
-              | (Some (Full_heap _, _), _) ->
-                  E.s (E.bug "%s %a %s at %a"
-                         "Apollo.doInstr:"
-                         d_exp (Lval lv)
-                         "stores heap data that is overwritten"
-                         d_loc (get_stmtLoc !current_stmt.skind))
+              | (Some (Full_store er, l_key), _) ->
+                  E.error "%s %a %s at %a"
+                    "Apollo.doInstr:"
+                    d_exp (Lval lv)
+                    "stores heap data that is overwritten"
+                    d_loc (get_stmtLoc !current_stmt.skind);
+                  let new_state = state in
+                  let new_state = remove_mem_state (Dummy, l_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Error_store, l_key) new_state !current_stmt in
+                    DF.Done new_state
+             
+
+              | (Some (Full_heap er, l_key), _) ->
+                  E.error "%s %a %s at %a"
+                    "Apollo.doInstr:"
+                    d_exp (Lval lv)
+                    "stores heap data that is overwritten"
+                    d_loc (get_stmtLoc !current_stmt.skind);
+                  let new_state = state in
+                  let new_state = remove_mem_state (Dummy, l_key) new_state !current_stmt in
+                  let new_state = add_mem_state (Error_heap er, l_key) new_state !current_stmt in
+                    DF.Done new_state
              
 
               | (_, Some (Error_store, _))
               | (_, Some (Error_heap _, _)) ->
-                  E.s (E.bug "%s %a %s at %a"
+                  E.s (E.error "%s %a %s at %a"
                          "Apollo.doInstr:"
                          d_exp e
                          "is in an error state and can not be used"
@@ -351,7 +366,7 @@ module Apollo_Dataflow = struct
                   
               | (Some (Error_store, _), _)
               | (Some (Error_heap _, _), _) ->
-                  E.s (E.bug "%s %a %s at %a"
+                  E.s (E.error "%s %a %s at %a"
                          "Apollo.doInstr:"
                          d_exp (Lval lv)
                          "is in an error state and can not be used"

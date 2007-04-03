@@ -4,6 +4,11 @@ module E = Errormsg;;
 module IE = IsEquivalent;;
 
 let dbg_state = ref false;;
+  
+(* Unique counters for tracking heap data flowing into or out of functions *)
+let incoming_heap_counter = ref 0;;
+let outgoing_heap_counter = ref 0;;
+
 
 (*
  * A function's state describes each store's and heap allocation point's state.
@@ -218,7 +223,9 @@ let is_heap_state (query_key: exp) (states: mem_states) (current_stmt: stmt): bo
     (fun state -> match state with
          Full_heap e, key
        | Dead_heap e, key
-       | Error_heap e, key -> true
+       | Error_heap e, key when (IE.is_equiv_start query_key key current_stmt) -> 
+           ignore (Pretty.printf "*** query_key %a matches state %a\n" d_exp query_key d_exp key);
+           true
        | _ -> false
     )
     states
@@ -464,8 +471,6 @@ let get_key_from_spec_str
  *) 
 let update_state_with_pre (fname: string) (formals: exp list) (states): mem_states =
 
-  let incoming_heap_counter = ref 0 in
-
   let store = spec_lookup_pre !specification fname in
       
   if not (List.length store.heap = 0) then (
@@ -511,9 +516,9 @@ let is_full (query_key: exp) (states: mem_states) (current_stmt: stmt) =
       Some (Full_store e, key) 
     | Some (Full_heap e, key) ->
         true
-    | _ when IE.is_equiv_start query_key IE.nullPtr current_stmt -> 
+    | None when IE.is_equiv_start query_key IE.nullPtr current_stmt -> 
         true
-    | _ when is_field_of_mem_state query_key states current_stmt ->
+    | None when is_field_of_mem_state query_key states current_stmt ->
         ignore (E.warn "%s %a %s at %a"
              "State.is_full:"
              d_exp query_key 
@@ -528,15 +533,15 @@ let is_empty (query_key: exp) (states: mem_states) (current_stmt: stmt) =
 
   match try_lookup_mem_state query_key states current_stmt with
       Some (Empty_store, key) 
-    | Some (Unknown_store, key) ->
-        true
+    | Some (Unknown_store, key) -> true
     | Some (Dead_heap _, key) ->
         ignore (E.warn "%s %a %s at %a"
              "State.is_empty:"
              d_exp query_key 
-             "is dead heap.  But did you really want to check this?"
+             "is dead heap.  Technically it is empty.  But do you really want to use it?"
              d_loc (get_stmtLoc current_stmt.skind));
         true
+    | None -> true
     | _ -> false
 ;;
 
@@ -615,7 +620,6 @@ let update_state_with_post
       (states: mem_states) 
       (current_stmt: stmt): mem_states =
     
-  let outgoing_heap_counter = ref 0 in
 
   let store = spec_lookup_post !specification fname in
 
@@ -676,19 +680,27 @@ let update_state_with_post
     List.fold_left
       (fun states s -> 
          let key = (get_key_from_spec_str fname s (eop_of_lvop(lvop), el) states) in
-         let state = lookup_mem_state key states current_stmt in
+         let state = try_lookup_mem_state key states current_stmt in
            match state with
-               Full_store _, key 
-             | Unknown_store, key ->
+               Some (Full_store _, key) 
+             | Some (Unknown_store, key) ->
                  let states = remove_mem_state (Dummy, key) states current_stmt in
                  let states = add_mem_state (Empty_store, key) states current_stmt in
                    states
              
-             | Full_heap e, key ->
+             | Some (Full_heap e, key) ->
                  let states = remove_mem_state (Dummy, key) states current_stmt in
                  let states = add_mem_state (Dead_heap e, key) states current_stmt in
                    states
              
+             | None when is_full key states current_stmt ->
+                 ignore (E.warn "%s %a %s at %a"
+                           "State.update_state_with_post:"
+                           d_exp key 
+                           "assumed to be reference to nested heap data that now becomes empty"
+                           d_loc (get_stmtLoc current_stmt.skind));
+                 states
+
              | _ ->
                  E.s (E.error "%s %s %s at %a" 
                    "State.verify_state_with_pre:"
