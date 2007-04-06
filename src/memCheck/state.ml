@@ -224,7 +224,6 @@ let is_heap_state (query_key: exp) (states: mem_states) (current_stmt: stmt): bo
          Full_heap e, key
        | Dead_heap e, key
        | Error_heap e, key when (IE.is_equiv_start query_key key current_stmt) -> 
-           ignore (Pretty.printf "*** query_key %a matches state %a\n" d_exp query_key d_exp key);
            true
        | _ -> false
     )
@@ -293,12 +292,73 @@ let try_lookup_mem_state (query_key: exp) (states: mem_states) (current_stmt: st
     ) else if (List.length matches = 0) then (
       None
     ) else (
+      (* Try to refine the search *)
+      let matches = 
+        List.filter
+          (fun s -> match s with
+               _, key when (compare query_key key = 0) -> true
+             | _ -> false
+          )
+          matches
+      in
+        if (List.length matches = 1) then (
+          (* 
+           E.warn "%s %a %s at %a"
+                 "State.try_lookup_mem_state:"
+                 d_exp query_key 
+                 "required refinement to match"
+                 d_loc (get_stmtLoc current_stmt.skind);
+           *)
+          Some (List.hd matches)
+        ) else (
+          E.s (E.bug "%s %a %s at %a"
+                 "State.try_lookup_mem_state:"
+                 d_exp query_key 
+                 "has more than one entry"
+                 d_loc (get_stmtLoc current_stmt.skind))
+        )
+    )
+;;
+
+
+(** Returns the state indexed by key *)
+let invalid_store_dereference (query_key: exp) (states: mem_states) (current_stmt: stmt): 
+                                                                       bool =
+
+  let matches_field =
+    List.filter
+      (fun state -> 
+         let (_, key) = state in 
+           is_equiv_to_field_of query_key [key] current_stmt)
+      states
+  in
+
+    if (List.length matches_field = 1) then (
+      match (List.hd matches_field) with
+        | Empty_store, key
+        | Error_store, key
+        | Dead_heap _, key
+        | Error_heap _, key
+        | Dummy, key when not (compare query_key key = 0) ->
+            true
+        | Full_store _, key
+        | Nonheap_store _, key 
+        | Unknown_store, key
+        | Full_heap _, key ->
+            false
+        | _ -> 
+            false
+    )
+    else if (List.length matches_field = 0) then (
+      false
+    ) else (
       E.s (E.bug "%s %a %s at %a"
-             "State.try_lookup_mem_state:"
+             "State.invalid_store_dereference:"
              d_exp query_key 
-             "has more than one entry in"
+             "has more than one entry"
              d_loc (get_stmtLoc current_stmt.skind))
     )
+
 ;;
 
 
@@ -399,6 +459,43 @@ let add_mem_state_by_name (sname: string) (new_state: mem_state) (states: mem_st
 
 
 
+let remove_mem_state_by_name (sname: string) (states: mem_states): mem_states = 
+
+  let found = ref false in
+
+  let new_states =
+    List.fold_left
+      (fun out s -> match s with
+           Empty_store, (Lval (Var v, NoOffset)) 
+         | Full_store _, (Lval (Var v, NoOffset))
+         | Nonheap_store _, (Lval (Var v, NoOffset))
+         | Unknown_store, (Lval (Var v, NoOffset))
+         | Error_store, (Lval (Var v, NoOffset))
+         | Full_heap _, (Lval (Var v, NoOffset))
+         | Dead_heap _, (Lval (Var v, NoOffset))
+         | Error_heap _, (Lval (Var v, NoOffset)) when v.vname = sname ->
+             found := true;
+             out
+         | _ -> 
+             s::out
+
+      )
+      []
+      states
+  in
+
+    if not !found then (
+      E.s (E.bug "%s %s %s"
+             "State.remove_mem_state_by_name:"
+             sname 
+             "can not be found for removal")
+    );
+
+    new_states
+;;
+
+
+
 type spec_store = {
   full:string list;
   empty:string list;
@@ -437,7 +534,6 @@ let spec_lookup_pre spec name = spec_lookup spec.pre name ;;
 
 let spec_lookup_post spec name = spec_lookup spec.post name ;;
 
-
 let get_key_from_spec_str
       (fname: string) 
       (s:string) 
@@ -457,7 +553,24 @@ let get_key_from_spec_str
 ;;
 
 
-(*** TODO: Start cleaning up pre- and post- here ***)
+let pre_get_key_from_spec_str
+      (fname: string) 
+      (s:string) 
+      ((return: exp option), (el: exp list)) 
+      (states: mem_states): (exp * bool) =
+
+  if s = "$return" then (
+    match return with
+        Some e -> (e, true)
+      | None -> E.s (E.error "Instruction needs a return value in function: %s" fname)
+  ) else if s.[0] = '$' then (
+    (List.nth el (int_of_string (String.sub s 1 (String.length s - 2)) - 1), true)
+  ) else (
+    let (_, key) = lookup_mem_state_by_name s states in
+      (key, false)
+  )
+;;
+
 
 
 (* Update state based on pre-conditions *)
@@ -483,7 +596,11 @@ let update_state_with_pre (fname: string) (formals: exp list) (states): mem_stat
   let states = 
     List.fold_left
       (fun out s -> 
-         let key = (get_key_from_spec_str fname s (None, formals) states) in
+         let (key, is_formal) = (pre_get_key_from_spec_str fname s (None, formals) out) in
+         let out =
+           if not is_formal then remove_mem_state_by_name s out
+           else out
+         in
          let base_name = "incoming_heap_in_" in
          let extended_name = 
            base_name ^ fname ^ "_" ^ (string_of_int !incoming_heap_counter) 
@@ -499,8 +616,12 @@ let update_state_with_pre (fname: string) (formals: exp list) (states): mem_stat
   let states = 
     List.fold_left
       (fun out s -> 
-         let key = (get_key_from_spec_str fname s (None, formals) states) in
-           add_mem_state_by_name fname (Empty_store, key) states
+         let (key, is_formal) = (pre_get_key_from_spec_str fname s (None, formals) out) in
+         let out =
+           if not is_formal then remove_mem_state_by_name s out
+           else out
+         in
+           add_mem_state_by_name fname (Empty_store, key) out
       )
       states
       store.empty
@@ -570,6 +691,69 @@ let verify_state_with_pre
              "attempts to specify heap pre-state.")
   );
 
+
+  let _ = 
+            
+    (* Check for invalid memory dereferences *)
+    ignore (
+      match lvop with
+          Some lv -> 
+            if invalid_store_dereference (mkAddrOf lv) states current_stmt then (
+              E.error "%s %a %s at %a"
+                "Apollo.doInstr:"
+                d_lval lv
+                "is dead so it may not be dereferenced"
+                d_loc (get_stmtLoc current_stmt.skind)
+            )
+        | None -> ()
+    );
+
+    let count = ref 0 in
+      List.iter
+        (fun e ->
+           count := !count + 1;
+           (* An formal variable equivalent to a dead / error store may not be
+            * passed to a function unless the function assumes that the
+            * parameter is empty.  So we assume the function dereferences the
+            * formal at some point. *)
+           if not (List.exists 
+                     (fun s -> 
+                        try 
+                          let s_index = (String.sub s 1 ((String.length s) - 2)) in
+                          let n_index = int_of_string s_index in
+                            n_index = !count
+                        with 
+                            Failure "int_of_string" -> false
+                     ) 
+                     store.empty
+           ) then (
+             if invalid_store_dereference e states current_stmt then (
+               E.error "%s %a %s at %a"
+                 "State.verify_state_with_pre:"
+                 d_exp e
+                 "is dead so it may not be dereferenced"
+                 d_loc (get_stmtLoc current_stmt.skind)
+             );
+             match try_lookup_mem_state e states current_stmt with
+                 None -> ()
+               | Some (Empty_store, key)
+               | Some (Error_store, key)
+               | Some (Dead_heap _, key)
+               | Some (Error_heap _, key)
+               | Some (Dummy, key) ->
+                   E.error "%s %a %s at %a"
+                     "State.verify_state_with_pre:"
+                     d_exp e
+                     "is dead so it may not be dereferenced"
+                     d_loc (get_stmtLoc current_stmt.skind)
+               | _ -> ()
+             
+           )
+        )
+        el
+  in
+
+
   let _ = 
     List.iter
       (fun s -> 
@@ -581,7 +765,7 @@ let verify_state_with_pre
              E.error "%s %s %s %s at %a" 
                "State.verify_state_with_pre:"
                "Formal parameter"
-               (String.sub s 1 ((String.length s) - 2))
+               (String.sub s 0 ((String.length s) - 1))
                "is not a full store and not heap data"
                d_loc (get_stmtLoc current_stmt.skind)
            );
@@ -601,7 +785,7 @@ let verify_state_with_pre
              E.error "%s %s %s %s at %a" 
                "State.verify_state_with_pre:"
                "Formal parameter"
-               (String.sub s 1 ((String.length s) - 2))
+               (String.sub s 0 ((String.length s) - 1))
                "is not empty"
                d_loc (get_stmtLoc current_stmt.skind)
            );
@@ -662,11 +846,12 @@ let update_state_with_post
                    states
              
              | Some _ ->
-                 E.s (E.error "%s %s %s at %a" 
+                 E.error "%s %s %s at %a" 
                    "State.verify_state_with_pre:"
                    fname
                    "is not free to store heap data"
-                   d_loc (get_stmtLoc current_stmt.skind))
+                   d_loc (get_stmtLoc current_stmt.skind);
+                 states
              
              | None ->
                  let states = add_mem_state (Full_heap heap_exp, key) states current_stmt in
@@ -702,11 +887,12 @@ let update_state_with_post
                  states
 
              | _ ->
-                 E.s (E.error "%s %s %s at %a" 
+                 E.error "%s %a %s at %a" 
                    "State.verify_state_with_pre:"
-                   fname
+                   d_exp key
                    "is empty and may not be made empty again"
-                   d_loc (get_stmtLoc current_stmt.skind))
+                   d_loc (get_stmtLoc current_stmt.skind);
+                 states
       )
       states
       store.empty
@@ -744,7 +930,7 @@ let verify_state_with_post
              E.error "%s %s %s %s at %a" 
                "State.verify_state_with_post:"
                "Formal parameter"
-               (String.sub s 1 ((String.length s) - 2))
+               (String.sub s 0 ((String.length s) - 1))
                "is not a full store and not heap data at function return"
                d_loc (get_stmtLoc current_stmt.skind)
            );
@@ -762,7 +948,7 @@ let verify_state_with_post
              E.error "%s %s %s %s at %a" 
                "State.verify_state_with_post:"
                "Formal parameter"
-               (String.sub s 1 ((String.length s) - 2))
+               (String.sub s 0 ((String.length s) - 1))
                "is not known to be empty at function return"
                d_loc (get_stmtLoc current_stmt.skind)
            );

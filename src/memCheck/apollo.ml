@@ -247,6 +247,24 @@ module Apollo_Dataflow = struct
         Set (lv, e, _) ->
           begin
 
+            (* Check for invalid memory dereferences *)
+            let _ = 
+              if invalid_store_dereference e state !current_stmt then (
+                  E.error "%s %a %s at %a"
+                    "Apollo.doInstr:"
+                    d_exp e
+                    "is dead so it may not appaer on RHS of Set"
+                    d_loc (get_stmtLoc !current_stmt.skind)
+              );
+              if invalid_store_dereference (mkAddrOf lv) state !current_stmt then (
+                  E.error "%s %a %s at %a"
+                    "Apollo.doInstr:"
+                    d_lval lv
+                    "is dead so it may not be dereferenced"
+                    d_loc (get_stmtLoc !current_stmt.skind)
+              );
+            in
+
             let lv_state_op = try_lookup_mem_state (Lval lv) state !current_stmt in
             let rh_state_op = try_lookup_mem_state e state !current_stmt in
 
@@ -324,11 +342,13 @@ module Apollo_Dataflow = struct
 
               | (_, Some (Dead_heap _, _))
               | (_, Some (Empty_store, _)) ->
-                  E.s (E.error "%s %a %s at %a"
-                         "Apollo.doInstr:"
-                         d_exp e
-                         "is empty or dead and may not be dereferenced"
-                         d_loc (get_stmtLoc !current_stmt.skind))
+                  E.error "%s %a %s at %a"
+                    "Apollo.doInstr:"
+                    d_exp e
+                    "is empty or dead and may not be dereferenced"
+                    d_loc (get_stmtLoc !current_stmt.skind);
+                  DF.Done state
+
               
 
               | (Some (Full_store er, l_key), _) ->
@@ -427,10 +447,10 @@ module Apollo_Dataflow = struct
 
           let _ =
             if not proper_pre then (
-              E.s (E.error "%s %s %a"
-                     "Apollo.Apollo_Dataflow.doInstr:"
-                     "Unsafe precondition found in call %a\n" 
-                     d_instr i)
+              E.error "%s %s %a"
+                "Apollo.Apollo_Dataflow.doInstr:"
+                "Unsafe precondition found in call" 
+                d_instr i
             )
           in
 
@@ -459,7 +479,19 @@ module Apollo_Dataflow = struct
 
   let doStmt (s: stmt) (state: t) =
     current_stmt := s;
-    DF.SDefault
+
+    match s.skind with 
+        If (e, _, _, _)
+      | Switch (e, _, _, _) ->
+          if invalid_store_dereference e state !current_stmt then (
+            E.error "%s %a %s at %a"
+              "Apollo.doStmt:"
+              d_exp e
+              "is dead so it may not be dereferenced"
+              d_loc (get_stmtLoc !current_stmt.skind)
+          );
+          DF.SDefault
+      | _ -> DF.SDefault
   ;;
 
   

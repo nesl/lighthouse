@@ -269,3 +269,57 @@ bad_c.post {
     global_buff.full();
 }
 
+
+
+store_a.pre {
+    store.mpty();
+    $1.full();
+}
+
+store_a.post {
+    store.full();
+    $1.mpty();
+}
+
+store_b.pre {
+    store.mpty();
+    $1.full();
+}
+
+store_b.post {
+    store.full();
+    $1.mpty();
+}
+
+store_c.pre {
+    $1.full();
+}
+
+store_c.post {
+    $1.mpty();
+}
+
+store_d.pre {
+    $1.full();
+    $2.mpty();
+}
+
+store_d.post {
+    $1.mpty();
+    $2.full();
+}
+
+bad_store_a.pre {
+    $1.full();
+}
+
+bad_store_a.post {
+    $1.mpty();
+}
+
+no_release.pre {
+}
+
+no_release.post {
+}
+
