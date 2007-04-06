@@ -15,8 +15,8 @@ void store_c(int *scp __attribute__((sos_release))) {
     local_store = scp;
 }
 
-void store_d(int *scp __attribute__((sos_release)), int* store __attribute__((sos_store))) {
-    store = scp;
+void store_d(int *sdp __attribute__((sos_release)), int* store __attribute__((sos_store))) {
+    store = sdp;
 }
 
 void bad_store_a(int *fap __attribute__((sos_release))) {
