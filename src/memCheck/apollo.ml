@@ -471,7 +471,10 @@ module Apollo_Dataflow = struct
             )
 
       | Call _ ->
-          E.s (E.bug "Have not implemented this form of call")
+          E.bug "Have not implemented this form of call at %a"
+            d_loc (get_stmtLoc !current_stmt.skind);
+          DF.Default
+
 
       | _ -> DF.Default
   ;;
