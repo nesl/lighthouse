@@ -126,7 +126,7 @@ module ListSet = struct
             ignore (printf "Expression %a is already in table:\n" d_exp e);
             print_equiv_table eqsl;
             flush stdout;
-            E.s (E.error "isEquivalent: ListSet.add_pair: Invalid list set state\n")
+            E.s (E.error "isEquivalent: ListSet.singleton: Invalid list set state\n")
   ;;
 
   
