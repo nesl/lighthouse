@@ -15,6 +15,7 @@ let dbg_is_equiv_c = ref false;;
 let dbg_is_equiv_get_aliases = ref false;;
 let dbg_is_equiv_get_equiv_set = ref false;;
 let dbg_is_equiv_stmt_summary = ref false;;
+let dbg_is_equiv_testing = ref true;;
 let verbose = ref false;;
 
 (* Dataflow specific debugging *)
@@ -97,21 +98,36 @@ module ListSet = struct
       eqsl1
   ;;
 
+  let compare (eqsl1 : EquivSet.t list) (eqsl2 : EquivSet.t list) : bool =
+    try
+      List.fold_left2 
+        (fun b eq1 eq2 -> b && EquivSet.equal eq1 eq2)
+        true
+        (List.sort EquivSet.compare eqsl1)
+        (List.sort EquivSet.compare eqsl2)
+    with
+        Invalid_argument _ -> false
+  ;;
+
   (* Remove element or child element from all sets. *)
   let remove (parent : exp) (eqsl: EquivSet.t list) : (EquivSet.t list) =
-    List.fold_left
-      (fun result eq ->
-         let new_set = 
-           EquivSet.filter 
-             (fun child -> not (U.is_parent_of parent child)) 
-             eq 
-         in
-           if EquivSet.is_empty new_set then 
-             result
-           else
-             new_set::result
-      )
-      [] eqsl
+    let new_eqsl = 
+      List.fold_left
+        (fun result eq ->
+           let new_set = 
+             EquivSet.filter 
+               (fun child -> not (U.is_parent_of parent child)) 
+               eq 
+           in
+             if EquivSet.is_empty new_set then 
+               result
+             else
+               new_set::result
+        )
+        [] eqsl
+    in
+      (* List.sort EquivSet.compare new_eqsl *)
+      new_eqsl
   ;;
 
 
@@ -120,6 +136,7 @@ module ListSet = struct
       try Some (List.find (fun eq -> EquivSet.mem e eq) eqsl)
       with Not_found -> None
     in
+    let new_eqsl = 
       match eq_op with
           None -> (EquivSet.singleton e)::eqsl
         | Some _ -> 
@@ -127,6 +144,9 @@ module ListSet = struct
             print_equiv_table eqsl;
             flush stdout;
             E.s (E.error "isEquivalent: ListSet.singleton: Invalid list set state\n")
+    in
+      (* List.sort EquivSet.compare new_eqsl *)
+      new_eqsl
   ;;
 
   
@@ -154,6 +174,7 @@ module ListSet = struct
         [] eqsl
     in
 
+    let new_eqsl = 
       match (eq1_op, eq2_op) with
           (None, None) -> 
             (EquivSet.add e1 (EquivSet.singleton e2))::eqsl
@@ -163,6 +184,9 @@ module ListSet = struct
             update e1 eq2 eqsl
         | (Some _, Some _) -> 
             E.s (E.error "isEquivalent: ListSet.add_pair: Invalid list set state\n")
+    in 
+      (* List.sort EquivSet.compare new_eqsl *)
+      new_eqsl
   ;;
 
 end
@@ -177,22 +201,26 @@ let set_intersect (s1:equiv_table) (s2:equiv_table): equiv_table =
   (* Else, find the intersection of the set containing the expression from
    * ..the old state and each set in the new state and add this
    * ..intersection to the merged output. *)
-  List.fold_left
-    (fun merged_list eq ->
-       (EquivSet.fold
-          (fun e tmp_merged_list -> 
-             if ((ListSet.e_mem e merged_list) || 
-                 (ListSet.e_mem e tmp_merged_list)) then 
-               tmp_merged_list
-             else (
-               let new_set = ListSet.intersection e eq s2 in
-                 if EquivSet.is_empty new_set then tmp_merged_list
-                 else new_set::tmp_merged_list
-             )
-          ) eq []
-       ) @ merged_list
-    )
-    [] s1
+  let new_eqsl =
+    List.fold_left
+      (fun merged_list eq ->
+         (EquivSet.fold
+            (fun e tmp_merged_list -> 
+               if ((ListSet.e_mem e merged_list) || 
+                   (ListSet.e_mem e tmp_merged_list)) then 
+                 tmp_merged_list
+               else (
+                 let new_set = ListSet.intersection e eq s2 in
+                   if EquivSet.is_empty new_set then tmp_merged_list
+                   else new_set::tmp_merged_list
+               )
+            ) eq []
+         ) @ merged_list
+      )
+      [] s1
+  in 
+    (* List.sort EquivSet.compare new_eqsl *)
+    new_eqsl
 ;;
 
 
@@ -224,8 +252,10 @@ module DFM = struct
 
   (* Merge points take the intersection of the two sets *)
   let combinePredecessors (s: stmt) ~(old: t) (in_state: t) : t option =  
-
+    (*
     if (ListSet.subset in_state old) && (ListSet.subset old in_state) then (
+    *)
+    if ListSet.compare in_state old then (
       if (!dbg_is_equiv_c) then (
         ignore (printf "IS_EQUIV COMBINE: Merge point at state %d (%a) with same states:\n" 
                    s.sid d_loc (get_stmtLoc s.skind))
@@ -258,13 +288,16 @@ module DFM = struct
 
         (* It could be that the merged state ends up being the old state.  In
          * this case we do not need to release the "new" state. *)
+        (*
         if (ListSet.subset out_state old) && (ListSet.subset old out_state) then (
+        *)
+        if ListSet.compare out_state old then (
           if (!dbg_is_equiv_c) then (
             ignore (printf "IS_EQUIV COMBINE: Merged down to same as old state\n")
           );
           None
         ) else (
-          Some out_state
+          Some (List.sort EquivSet.compare out_state)
         )
     )
   ;;
@@ -687,6 +720,17 @@ module TrackF = DF.ForwardsDataFlow(DFM);;
  * jump start the dataflow with information about global variables and formals.
  *)
 let generate_equiv (f:fundec) (cilFile:file): unit =
+
+
+  let _ =
+    if !dbg_is_equiv_testing then (
+      E.warn "Woha Cowboy!  You realize your running with experimental code?";
+      E.warn "Yup.  We are testing a new compare routien. I recommend that";
+      E.warn "..you remove the extra compare operation from ListSet before";
+      E.warn "..running this horse for real.  Have a good ride."
+    )
+  in
+
 
   (* TODO: I am guessing that the crashes from sched.c and sos_info.c are coming
    * from here. *)
