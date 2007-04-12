@@ -68,13 +68,21 @@ module ListSet = struct
    * expression), intersect the equiv set with each element of a list of
    * equiv sets (aka equiv set list or eqsl).  Choose from these sets the
    * non-empty set containing the expression. *)
+  (* TODO: This assumes that e is a member of eq!!!  Perhaps check this? *)
   let intersection (e : exp) (eq : EquivSet.t) (eqsl : EquivSet.t list) : EquivSet.t =
     let intersections = 
       List.fold_left  
         (fun eq_list eq_new -> 
+           if  (EquivSet.mem e eq_new) then (
+             (EquivSet.inter eq eq_new)::eq_list
+           ) else (
+             eq_list
+           )
+           (* 
            let i = (EquivSet.inter eq eq_new) in
              if (EquivSet.mem e i) then (i::eq_list)
              else eq_list
+            *)
         )
         [] eqsl
     in
@@ -201,23 +209,27 @@ let set_intersect (s1:equiv_table) (s2:equiv_table): equiv_table =
   (* Else, find the intersection of the set containing the expression from
    * ..the old state and each set in the new state and add this
    * ..intersection to the merged output. *)
+
+
+  let intersect_eq_with_eqsl eq eqsl merged =
+    EquivSet.fold
+      (fun e tmp_merged_list -> 
+         if ListSet.e_mem e tmp_merged_list then (
+           tmp_merged_list
+         ) else (
+           (ListSet.intersection e eq s2)::tmp_merged_list
+         )
+      ) 
+      eq 
+      merged
+  in
+
+
   let new_eqsl =
     List.fold_left
-      (fun merged_list eq ->
-         (EquivSet.fold
-            (fun e tmp_merged_list -> 
-               if ((ListSet.e_mem e merged_list) || 
-                   (ListSet.e_mem e tmp_merged_list)) then 
-                 tmp_merged_list
-               else (
-                 let new_set = ListSet.intersection e eq s2 in
-                   if EquivSet.is_empty new_set then tmp_merged_list
-                   else new_set::tmp_merged_list
-               )
-            ) eq []
-         ) @ merged_list
-      )
-      [] s1
+      (fun merged_list eq -> intersect_eq_with_eqsl eq s2 merged_list)
+      [] 
+      s1
   in 
     (* List.sort EquivSet.compare new_eqsl *)
     new_eqsl
@@ -727,7 +739,8 @@ let generate_equiv (f:fundec) (cilFile:file): unit =
       E.warn "Woha Cowboy!  You realize your running with experimental code?";
       E.warn "Yup.  We are testing a new compare routien. I recommend that";
       E.warn "..you remove the extra compare operation from ListSet before";
-      E.warn "..running this horse for real.  Have a good ride."
+      E.warn "..running this horse for real.  Have a good ride.";
+      E.warn "..We are also testing the intersect routien that has extra code."
     )
   in
 
