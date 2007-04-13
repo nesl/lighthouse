@@ -15,7 +15,7 @@ let dbg_is_equiv_c = ref false;;
 let dbg_is_equiv_get_aliases = ref false;;
 let dbg_is_equiv_get_equiv_set = ref false;;
 let dbg_is_equiv_stmt_summary = ref false;;
-let dbg_is_equiv_testing = ref true;;
+let dbg_is_equiv_testing = ref false;;
 let verbose = ref false;;
 
 (* Dataflow specific debugging *)

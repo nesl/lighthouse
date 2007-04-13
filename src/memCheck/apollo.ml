@@ -265,8 +265,8 @@ module Apollo_Dataflow = struct
               );
             in
 
-            let lv_state_op = try_lookup_mem_state (Lval lv) state !current_stmt in
-            let rh_state_op = try_lookup_mem_state e state !current_stmt in
+            let lv_state_op = try_lookup_must_mem_state (Lval lv) state !current_stmt in
+            let rh_state_op = try_lookup_must_mem_state e state !current_stmt in
 
 
 
@@ -396,7 +396,7 @@ module Apollo_Dataflow = struct
               | (None, Some (Full_store _, r_key))
               | (None, Some (Unknown_store, r_key))
               | (None, Some (Nonheap_store _, r_key))
-                  when (is_field_of_mem_state (Lval lv) state !current_stmt) -> 
+                  when (must_be_field_of_mem_state (Lval lv) state !current_stmt) -> 
                   
                   E.warn "%s %a %s at %a"
                     "Apollo.doInstr:"
@@ -411,7 +411,7 @@ module Apollo_Dataflow = struct
                 
 
               | (None, Some (Full_heap er, r_key))
-                  when (is_field_of_mem_state (Lval lv) state !current_stmt) -> 
+                  when (must_be_field_of_mem_state (Lval lv) state !current_stmt) -> 
                   
                   E.warn "%s %a %s at %a"
                     "Apollo.doInstr:"

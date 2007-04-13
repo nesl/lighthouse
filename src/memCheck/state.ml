@@ -2,6 +2,7 @@ open Cil;;
 
 module E = Errormsg;;
 module IE = IsEquivalent;;
+module MA = MayAliasWrapper;;
 
 let dbg_state = ref false;;
   
@@ -200,39 +201,21 @@ let is_equiv_to_field_of (e: exp) (targets: exp list) (s: stmt) : bool =
 
 (** Return true if query_key expression is equivalent some of the memory state that
   * is being tracked. *)
-let is_mem_state (query_key: exp) (states: mem_states) (current_stmt: stmt): bool =
+let must_be_mem_state (query_key: exp) (states: mem_states) (current_stmt: stmt): bool =
   List.exists
     (fun state -> 
        let (_, key) = state in
-       IE.is_equiv_start query_key key current_stmt)
-    states
-;;
-
-
-let is_field_of_mem_state (query_key: exp) (states: mem_states) (current_stmt: stmt): bool = 
-  List.exists
-    (fun state -> 
-       let (_, key) = state in
-         is_equiv_to_field_of query_key [key] current_stmt)
-    states
-;;
-
-
-let is_heap_state (query_key: exp) (states: mem_states) (current_stmt: stmt): bool =
-  List.exists
-    (fun state -> match state with
-         Full_heap e, key
-       | Dead_heap e, key
-       | Error_heap e, key when (IE.is_equiv_start query_key key current_stmt) -> 
-           true
-       | _ -> false
-    )
+         IE.is_equiv_start query_key key current_stmt)
     states
 ;;
 
 
 (** Removes mem_state indexed by key from the states being tracked. *)
-let remove_mem_state (kill_state: mem_state) (states: mem_states) (current_stmt: stmt): mem_states =
+let remove_mem_state 
+      (kill_state: mem_state) 
+      (states: mem_states) 
+      (current_stmt: stmt): mem_states =
+
   let (_, query_key) = kill_state in
   let found = ref false in
   let out_states = 
@@ -264,7 +247,7 @@ let add_mem_state (state: mem_state) (states: mem_states) (current_stmt: stmt): 
   
   let (_, key) = state in
  
-    if is_mem_state key states current_stmt then (
+    if must_be_mem_state key states current_stmt then (
       E.s (E.bug "%s %a %s at %a"
              "State.add_mem_state:"
              d_exp key 
@@ -277,7 +260,10 @@ let add_mem_state (state: mem_state) (states: mem_states) (current_stmt: stmt): 
 
 
 (** Returns the state indexed by key *)
-let try_lookup_mem_state (query_key: exp) (states: mem_states) (current_stmt: stmt): mem_state option =
+let try_lookup_must_mem_state 
+      (query_key: exp) 
+      (states: mem_states) 
+      (current_stmt: stmt): mem_state option =
 
   let matches = 
     List.filter
@@ -292,7 +278,7 @@ let try_lookup_mem_state (query_key: exp) (states: mem_states) (current_stmt: st
     ) else if (List.length matches = 0) then (
       None
     ) else (
-      (* Try to refine the search *)
+      (* Try to refine the search using match by name *)
       let matches = 
         List.filter
           (fun s -> match s with
@@ -302,17 +288,10 @@ let try_lookup_mem_state (query_key: exp) (states: mem_states) (current_stmt: st
           matches
       in
         if (List.length matches = 1) then (
-          (* 
-           E.warn "%s %a %s at %a"
-                 "State.try_lookup_mem_state:"
-                 d_exp query_key 
-                 "required refinement to match"
-                 d_loc (get_stmtLoc current_stmt.skind);
-           *)
           Some (List.hd matches)
         ) else (
           E.s (E.bug "%s %a %s at %a"
-                 "State.try_lookup_mem_state:"
+                 "State.try_lookup_must_mem_state:"
                  d_exp query_key 
                  "has more than one entry"
                  d_loc (get_stmtLoc current_stmt.skind))
@@ -322,17 +301,22 @@ let try_lookup_mem_state (query_key: exp) (states: mem_states) (current_stmt: st
 
 
 (** Returns the state indexed by key *)
-let invalid_store_dereference (query_key: exp) (states: mem_states) (current_stmt: stmt): 
-                                                                       bool =
+let invalid_store_dereference 
+      (query_key: exp) 
+      (states: mem_states) 
+      (current_stmt: stmt): bool =
 
   let matches_field =
     List.filter
       (fun state -> 
          let (_, key) = state in 
-           is_equiv_to_field_of query_key [key] current_stmt)
+           MA.may_alias_wrapper query_key key
+           (* is_equiv_to_field_of query_key [key] current_stmt) *)
+      )
       states
   in
 
+    (*
     if (List.length matches_field = 1) then (
       match (List.hd matches_field) with
         | Empty_store, key
@@ -358,6 +342,25 @@ let invalid_store_dereference (query_key: exp) (states: mem_states) (current_stm
              "has more than one entry"
              d_loc (get_stmtLoc current_stmt.skind))
     )
+     *)
+    List.fold_left
+      (fun b state -> match state with
+        | Empty_store, key
+        | Error_store, key
+        | Dead_heap _, key
+        | Error_heap _, key
+        | Dummy, key when not (compare query_key key = 0) ->
+            true
+        | Full_store _, key
+        | Nonheap_store _, key 
+        | Unknown_store, key
+        | Full_heap _, key ->
+            b
+        | _ -> 
+            b
+      )
+      false
+      matches_field
 
 ;;
 
@@ -365,7 +368,7 @@ let invalid_store_dereference (query_key: exp) (states: mem_states) (current_stm
 (** Returns the state indexed by key *)
 let lookup_mem_state (query_key: exp) (states: mem_states) (current_stmt: stmt): mem_state =
 
-  let state_op = try_lookup_mem_state query_key states current_stmt in
+  let state_op = try_lookup_must_mem_state query_key states current_stmt in
     match state_op with 
         Some state -> state
       | None ->
@@ -407,6 +410,18 @@ let lookup_mem_state_by_name (sname: string) (states: mem_states): mem_state =
     )
 ;;
 
+
+let is_heap_state (query_key: exp) (states: mem_states) (current_stmt: stmt): bool =
+  List.exists
+    (fun state -> match state with
+         Full_heap e, key
+       | Dead_heap e, key
+       | Error_heap e, key when (IE.is_equiv_start query_key key current_stmt) -> 
+           true
+       | _ -> false
+    )
+    states
+;;
 
 let kill_heap_state 
       (query_key: exp) 
@@ -631,28 +646,43 @@ let update_state_with_pre (fname: string) (formals: exp list) (states): mem_stat
 ;;
 
 
-let is_full (query_key: exp) (states: mem_states) (current_stmt: stmt) = 
 
-  match try_lookup_mem_state query_key states current_stmt with
-      Some (Full_store e, key) 
-    | Some (Full_heap e, key) ->
-        true
-    | None when IE.is_equiv_start query_key IE.nullPtr current_stmt -> 
-        true
-    | None when is_field_of_mem_state query_key states current_stmt ->
-        ignore (E.warn "%s %a %s at %a"
-             "State.is_full:"
-             d_exp query_key 
-             "assumed to be reference to nested heap data"
-             d_loc (get_stmtLoc current_stmt.skind));
-        true
-    | _ -> false
+let must_be_field_of_mem_state 
+      (query_key: exp) 
+      (states: mem_states) 
+      (current_stmt: stmt): bool = 
+
+  List.exists
+    (fun state -> 
+       let (_, key) = state in
+         is_equiv_to_field_of query_key [key] current_stmt)
+    states
+;;
+
+
+let must_be_full (query_key: exp) (states: mem_states) (current_stmt: stmt) = 
+
+
+    match try_lookup_must_mem_state query_key states current_stmt with
+        Some (Full_store e, key) 
+      | Some (Full_heap e, key) ->
+          true
+      | None when IE.is_equiv_start query_key IE.nullPtr current_stmt -> 
+          true
+      | None when must_be_field_of_mem_state query_key states current_stmt ->
+          ignore (E.warn "%s %a %s at %a"
+                    "State.must_be_full:"
+                    d_exp query_key 
+                    "assumed to be reference to nested heap data"
+                    d_loc (get_stmtLoc current_stmt.skind));
+          true
+      | _ -> false
 ;;
 
 
 let is_empty (query_key: exp) (states: mem_states) (current_stmt: stmt) = 
 
-  match try_lookup_mem_state query_key states current_stmt with
+  match try_lookup_must_mem_state query_key states current_stmt with
       Some (Empty_store, key) 
     | Some (Unknown_store, key) -> true
     | Some (Dead_heap _, key) ->
@@ -734,7 +764,7 @@ let verify_state_with_pre
                  "is dead so it may not be dereferenced"
                  d_loc (get_stmtLoc current_stmt.skind)
              );
-             match try_lookup_mem_state e states current_stmt with
+             match try_lookup_must_mem_state e states current_stmt with
                  None -> ()
                | Some (Empty_store, key)
                | Some (Error_store, key)
@@ -760,7 +790,7 @@ let verify_state_with_pre
          let store = 
            get_key_from_spec_str fname s (eop_of_lvop(lvop), el) states
          in
-           if not (is_full store states current_stmt) then (
+           if not (must_be_full store states current_stmt) then (
              meets_pre := false;
              E.error "%s %s %s %s at %a" 
                "State.verify_state_with_pre:"
@@ -818,7 +848,7 @@ let update_state_with_post
     List.fold_left
       (fun states s -> 
          let key = (get_key_from_spec_str fname s (eop_of_lvop(lvop), el) states) in
-         let state = try_lookup_mem_state key states current_stmt in
+         let state = try_lookup_must_mem_state key states current_stmt in
         
          let base_name = "outgoing_heap_in_" in
          let extended_name = 
@@ -865,7 +895,7 @@ let update_state_with_post
     List.fold_left
       (fun states s -> 
          let key = (get_key_from_spec_str fname s (eop_of_lvop(lvop), el) states) in
-         let state = try_lookup_mem_state key states current_stmt in
+         let state = try_lookup_must_mem_state key states current_stmt in
            match state with
                Some (Full_store _, key) 
              | Some (Unknown_store, key) ->
@@ -878,7 +908,7 @@ let update_state_with_post
                  let states = add_mem_state (Dead_heap e, key) states current_stmt in
                    states
              
-             | None when is_full key states current_stmt ->
+             | None when must_be_full key states current_stmt ->
                  ignore (E.warn "%s %a %s at %a"
                            "State.update_state_with_post:"
                            d_exp key 
@@ -925,7 +955,7 @@ let verify_state_with_post
     List.iter
       (fun s -> 
          let store = get_key_from_spec_str fname s (return, formals) states in
-           if not (is_full store states current_stmt) then (
+           if not (must_be_full store states current_stmt) then (
              meets_post := false;
              E.error "%s %s %s %s at %a" 
                "State.verify_state_with_post:"
