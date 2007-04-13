@@ -1,0 +1,43 @@
+Developing software for the lowest tier of sensor networks is difficult.
+%
+Directly manipulating low level hardware motivates using languages notorious
+for providing minimal safety to developers.
+%
+Nontrivial software logic, ranging from routing logic to to sensor driver
+state, are also common in these bottom tier systems.
+%
+These risks are amplified by limited hardware support for handling software
+failures.
+%
+In recognition of these risks is current work applying traditional static
+analysis to software developed for bottom tier the sensor devices.
+
+
+Static analysis of sensor network systems is often limited by reactive
+nature of these systems.
+%
+A senor node's physical ties to the environment create a reactive system
+where one of many different events can fire and any time.
+%
+Direct application of a static analysis to these reactive systems requires
+overly conservative analysis to handle the nondeterministic event ordering.
+%
+This work explores extending standard static analysis with event ordering
+assumptions built into the system being analyzed.
+
+
+We present an extended version of the Lighthouse memory checker for the SOS
+operating system.
+%
+Lighthouse uses dataflow analysis to look for incorrect use of dynamic
+memory within a single event.
+%
+Our work uses event ordering specifications provided by system developers to
+augment this analysis.
+%
+The refined analysis is able to reason about dynamic memory usage across
+event firings.
+%
+We apply the extend Lighthouse memory analysis to both user code and kernel
+code distributed with the SOS operating system.
+
