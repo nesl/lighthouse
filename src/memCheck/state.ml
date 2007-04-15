@@ -160,19 +160,39 @@ let is_equiv_to_field_of (e: exp) (targets: exp list) (s: stmt) : bool =
 
   let l0 = ref [] in
   let l1 = ref [] in
+  let already_reduced = ref [] in
 
     l0 := IE.get_equiv_set_start e s;
     l1 := List.fold_left (fun l e -> (reduce_expression e) @ l) !l0 !l0;
     l1 := MemUtil.sort_and_uniq !l1;
     l1 := List.fold_left (fun l e -> (IE.get_equiv_set_start e s) @ l) [] !l1;
     l1 := MemUtil.sort_and_uniq !l1;
-      
+     
+
+    (** TODO: Check the use of already_reduced **)
+
     while not ((compare !l0 !l1) = 0) do
     
       l0 := !l1;
-      l1 := List.fold_left (fun l e -> (reduce_expression e) @ l) !l0 !l0;
+      l1 := List.fold_left 
+              (fun l e -> 
+                 if (List.memq e !already_reduced) then (
+                   e::l
+                 ) else (reduce_expression e) @ l) 
+              [] 
+              !l0;
       l1 := MemUtil.sort_and_uniq !l1;
-      l1 := List.fold_left (fun l e -> (IE.get_equiv_set_start e s) @ l) [] !l1;
+      l1 := List.fold_left 
+              (fun l e -> 
+                 if (List.memq e !already_reduced) then (
+                   e::l
+                 ) else (
+                   already_reduced := (e::(!already_reduced)); 
+                   (IE.get_equiv_set_start e s) @ l
+                 )
+              ) 
+              [] 
+              !l1;
       l1 := MemUtil.sort_and_uniq !l1;
     
     done;
