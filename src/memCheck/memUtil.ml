@@ -94,6 +94,7 @@ let get_return_statements (f: fundec) : stmt list =
 ;;
 
 
+(*
 let get_return_exp_with_attribute (i:instr) (attr_name:string): exp list =
 
   match i with
@@ -133,6 +134,7 @@ let get_return_exp_with_attribute (i:instr) (attr_name:string): exp list =
        
     | _ -> []
 ;;
+ *)
 
 
 (* Takes an instruction and the name of an attribute.  This function checks to
@@ -141,6 +143,8 @@ let get_return_exp_with_attribute (i:instr) (attr_name:string): exp list =
  * of the formals or return value of the attribute named [s] set.  For each such
  * formal or return value, the corresponding expressions from the instruction
  * are returned. *)
+
+(*
 let get_formal_exps_with_attribute (i:instr) (attr_name:string): exp list =
 
   match i with
@@ -188,26 +192,33 @@ let get_formal_exps_with_attribute (i:instr) (attr_name:string): exp list =
        
     | _ -> []
 ;;
-
+ *)
 
 (* Return list of expressions in function call that have the "sos_claim"
  * attribute set *)
+(*
 let get_claim (i:instr): exp list =
   (get_return_exp_with_attribute i "sos_claim") @ (get_formal_exps_with_attribute i "sos_claim")
 ;;
+ *)
 
-
+(*
 let get_claim_formals (i:instr): exp list =
   (get_formal_exps_with_attribute i "sos_claim")
 ;;
+ *)
 
+(*
 let returns_alloc (i: instr): bool = 
   (List.length (get_return_exp_with_attribute i "sos_claim")) > 0
 ;;
+ *)
+
 
 (* Given an instruction return a list of expressions corresponding to
  * foramal paramaters that have the 'sos_release' flag set, or that have the
  * 'sos_may_release' flag set and pass a may release test. *)
+(*
 let get_released (i:instr): exp list =
 
   let must_release = get_formal_exps_with_attribute i "sos_release" in
@@ -257,7 +268,7 @@ let get_released (i:instr): exp list =
 
     may_release @ must_release
 ;;
-
+ *)
 
 (* Return a list of functions name and formal number (zero for return value)
  * pairs for return / foramls that have the attr_name attribute set. *)

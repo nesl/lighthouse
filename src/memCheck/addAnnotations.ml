@@ -129,7 +129,12 @@ let tryAddFunAttributes annotTable global =
 ;;
 
 
-(* Get annotations from a file. *)
+(** Read annotations from the specified file into a hashtable.  Lines of the
+  * file should be formatted as: 
+  *     function_name(formal_var_action1, formal_var_action2, ...)
+  * and store a list of string options describing the formal variable attribuets
+  * in a hash table indexed by function name.
+  *)
 let getAnnotations file =
 
   (* Open a file and read each line into a list *)
