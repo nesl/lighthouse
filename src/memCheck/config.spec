@@ -1,3 +1,41 @@
+allocation_functions {
+    malloc 0
+    ker_malloc 0
+    blk_mem_alloc 0
+    ker_msg_take_data 0
+    msg_duplicate 0
+    msg_create 0
+    pop_new_mod_op 0
+    ker_change_own 1
+    sys_msg_take_data 0
+    sys_malloc 0
+}
+
+deallocation_functions {
+    free 1
+    ker_free 1
+    blk_mem_free 1
+    handle_incoming_msg 1
+    sched_msg_alloc 1
+    mq_enqueue 2
+    ker_cam_add 2
+    msg_dispatch 1
+    fetcher_restart 1
+    sos_msg_dispatch 1
+    ker_sensor_control 3
+    sys_free 1
+    post_long 5
+    post_link 5
+    post_auto 5
+    post_net 5
+    post_uart 5
+    post_i2c 5
+    post_spi 5
+}
+
+
+}
+
 malloc.pre {}
 
 malloc.post {

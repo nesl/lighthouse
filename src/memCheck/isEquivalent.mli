@@ -31,7 +31,9 @@ val dbg_is_equiv_df : bool ref;;
 (** Enable verbose output during dataflow to alert user when the analysis does
   * not understand a construct. *)
 val verbose : bool ref;;
-  
+ 
+val alloc_funcs : (string * int) list ref;;
+val free_funcs : (string * int) list ref;;
 
 (** {b Types} Base type used to describe equivalency information. *)
 

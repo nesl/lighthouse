@@ -759,12 +759,6 @@ let generate_equiv (f:fundec) (cilFile:file): unit =
       []
   in
 
-    alloc_funcs := [("malloc", 0)];
-    free_funcs := [("free", 1)];
-
-    alloc_funcs := !alloc_funcs @ (U.get_alloc_funcs cilFile);
-    free_funcs := !free_funcs @ (U.get_free_funcs cilFile);
-
     let start_state = 
       List.fold_left
         (fun start_state v -> ListSet.add_singleton (Lval (var v)) start_state)

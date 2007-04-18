@@ -28,12 +28,17 @@ let keywords = [
   "mpty";
   "full";
   "heap";
+
+  "allocation_functions";
+  "deallocation_functions";
 ];;
 
 type spec_block = 
     Stores of string list
   | Pre of (string * spec_store)
   | Post of (string * spec_store)
+  | Alloc of (string * int) list
+  | Dealloc of (string * int) list
 ;;
 
 
@@ -97,6 +102,16 @@ let parse_spec_block s =
           raise Parse_error
   in
 
+  let rec parse_memory s (mem_funcs: (string * int) list): (string * int) list =
+    match s with parser 
+      | [<'Ident f_name; 'Float index>] ->
+          parse_memory s ((f_name, int_of_float index)::mem_funcs)
+      | [<'Kwd "}">] ->
+          mem_funcs
+      | [<>] -> 
+          raise Parse_error
+  in
+
   let parse_pre f_name s = 
     Pre (f_name, parse_pre_post s [] [] [])
   in
@@ -105,9 +120,21 @@ let parse_spec_block s =
     Post (f_name, parse_pre_post s [] [] [])
   in
 
+  let parse_alloc s = 
+    Alloc (parse_memory s [])
+  in
+
+  let parse_dealloc s = 
+    Dealloc (parse_memory s [])
+  in
+
     match s with parser
       | [<'Kwd "stores"; 'Kwd "{">] ->
           parse_stores s
+      | [<'Kwd "allocation_functions"; 'Kwd "{">] ->
+          parse_alloc s
+      | [<'Kwd "deallocation_functions"; 'Kwd "{">] ->
+          parse_dealloc s
       | [<'Ident f_name; 'Kwd ".">] -> begin
           match s with parser 
             | [<'Kwd "pre"; 'Kwd "{">] ->
@@ -140,6 +167,21 @@ let pretty_print_block b =
         ignore (printf "  Empty stores:\n");
         List.iter (fun s -> ignore (printf "    %s\n" s)) state.empty;
         ()
+    | Alloc mem_funcs ->
+        ignore (printf "Found allocation functions:\n");
+        List.iter 
+          (fun (f_name, id) -> 
+             ignore (printf "    Function %s allocates formal %d\n" f_name id)
+        )
+          mem_funcs
+    | Dealloc mem_funcs ->
+        ignore (printf "Found deallocation functions:\n");
+        List.iter 
+          (fun (f_name, id) -> 
+             ignore (printf "    Function %s frees formal %d\n" f_name id)
+        )
+          mem_funcs
+
 ;;
 
 
@@ -149,6 +191,8 @@ let parse_spec file_name =
   let block_num = ref 0 in
 
   let specification = {stores=[]; pre=[]; post=[]} in
+  let alloc_funcs = ref [] in
+  let free_funcs = ref [] in
 
   let spec_stream = spec_lexer (open_in file_name) in
  
@@ -159,12 +203,14 @@ let parse_spec file_name =
             Stores stores -> specification.stores <- stores@(specification.stores)
           | Pre pre -> specification.pre <- pre::(specification.pre)
           | Post post -> specification.post <- post::(specification.post)
+          | Alloc funcs -> alloc_funcs :=  funcs@(!alloc_funcs)
+          | Dealloc funcs -> free_funcs :=  funcs@(!free_funcs)
       done;
       assert false
     with
       | Parse_error ->
             Stream.empty spec_stream;
-            specification
+            (specification, (!alloc_funcs, !free_funcs))
 
       | Stream.Error s -> 
           E.error "*** Error in block %d ***\n" !block_num;

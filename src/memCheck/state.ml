@@ -545,7 +545,9 @@ type spec_type = {
 };;
 
 (* Reference to the pre- / post- condition specifications *)
-let specification : spec_type ref = ref {stores=[]; pre=[]; post=[]} ;;
+let specification : spec_type ref = 
+  ref {stores=[]; pre=[]; post=[]} 
+;;
 
 
 let spec_lookup (blocks: (string * spec_store) list) (name: string): spec_store =

@@ -16,18 +16,5 @@ val get_parents_of: Cil.exp -> Cil.exp list;;
 
 val get_return_statements: Cil.fundec -> Cil.stmt list;;
 
-(*
-val get_claim: Cil.instr -> Cil.exp list;;
-
-val get_claim_formals: Cil.instr -> Cil.exp list;;
-
-val returns_alloc: Cil.instr -> bool;;
-
-val get_released: Cil.instr -> Cil.exp list;;
- *)
-
-val get_alloc_funcs: Cil.file -> (string * int) list;;
-
-val get_free_funcs: Cil.file -> (string * int) list;;
-
 val sort_and_uniq: 'a list -> 'a list;;
+

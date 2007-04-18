@@ -68,9 +68,6 @@ let outChannel : out_channel option ref = ref None;;
 (** Descrimption of the command line interface to Lighthouse. *)
 let argDescr = [
   
-  ("--config", Arg.String (fun config -> AddAnnotations.config_file := config),
-   "Use custom configuration file for alias annotations");
-
   ("--spec", Arg.String (fun spec -> spec_file := spec),
    "Use specification file for pre- / post- condition specifications");
 
@@ -128,7 +125,6 @@ let doFile (file_name: string) : unit =
   ignore (Simplify.feature.fd_doit !cil_file);
   ignore (MakeOneCFG.make_one_cfg !cil_file);
   ignore (Ptranal.feature.fd_doit !cil_file);
-  ignore (AddAnnotations.feature.fd_doit !cil_file);
 
   (* If requested dump the transformed code to file. *)
   (match !outChannel with
@@ -169,12 +165,19 @@ let mainFunction () =
       exit 0;
     );
 
-    State.specification := (
-      if (!spec_file = "") then {State.stores=[]; State.pre=[]; State.post=[]}
-      else (SpecParse.parse_spec !spec_file)
-    );
+    let (spec, (alloc_funcs, free_funcs)) = 
+      if (!spec_file = "") then (
+        ({State.stores=[]; State.pre=[]; State.post=[]}, ([], []))
+      ) else (
+        SpecParse.parse_spec !spec_file 
+      )
+    in
+    
+      State.specification := spec;
+      IsEquivalent.alloc_funcs := alloc_funcs;
+      IsEquivalent.free_funcs := free_funcs;
       
-    List.iter doFile !fileNames;
+      List.iter doFile !fileNames;
 ;;
     
     
