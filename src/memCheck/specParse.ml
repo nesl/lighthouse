@@ -104,8 +104,8 @@ let parse_spec_block s =
 
   let rec parse_memory s (mem_funcs: (string * int) list): (string * int) list =
     match s with parser 
-      | [<'Ident f_name; 'Float index>] ->
-          parse_memory s ((f_name, int_of_float index)::mem_funcs)
+      | [<'Ident f_name; 'Int index>] ->
+          parse_memory s ((f_name, index)::mem_funcs)
       | [<'Kwd "}">] ->
           mem_funcs
       | [<>] -> 
@@ -143,7 +143,8 @@ let parse_spec_block s =
                 parse_post f_name s
             | [<>] -> raise Parse_error
         end
-      | [<>] -> raise Parse_error
+      | [<>] -> 
+          raise Parse_error
 ;;
 
 
