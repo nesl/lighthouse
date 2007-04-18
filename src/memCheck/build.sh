@@ -11,8 +11,6 @@ ocamlc -c -I $CIL_LIB isEquivalent.mli
 ocamlc -c -I $CIL_LIB isEquivalent.ml
 ocamlc -c -I $CIL_LIB mayAliasWrapper.mli
 ocamlc -c -I $CIL_LIB mayAliasWrapper.ml
-ocamlc -c -I $CIL_LIB addAnnotations.mli
-ocamlc -c -I $CIL_LIB addAnnotations.ml
 ocamlc -c -I $CIL_LIB makeOneCFG.mli
 ocamlc -c -I $CIL_LIB makeOneCFG.ml
 ocamlc -c -I $CIL_LIB state.ml
@@ -23,7 +21,7 @@ ocamlc -c -I $CIL_LIB rocket.ml
 echo "Linking object files..."
 ocamlc \
     -I $CIL_LIB unix.cma str.cma cil.cma -o lighthouse \
-    memUtil.cmo isEquivalent.cmo mayAliasWrapper.cmo addAnnotations.cmo \
+    memUtil.cmo isEquivalent.cmo mayAliasWrapper.cmo \
     makeOneCFG.cmo state.cmo specParse.cmo apollo.cmo rocket.cmo
 
 echo "Done. Now ready to run lighthouse."
