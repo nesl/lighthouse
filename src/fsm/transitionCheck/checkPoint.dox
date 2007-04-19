@@ -1,0 +1,502 @@
+/**
+\page checkPoint Check Point for Extended Software Safety
+
+
+
+\section verification Verification of Sensor Network Applications
+
+Writing software is hard.  Writing software that works and does what it should
+is even harder.  Adding embedded systems into the above mix results in a
+nearly hopeless conundrum.  Verification is one tool that helps lead
+developers out of this confusion.
+
+Light House is a tool used to statically verify resource usage within embedded
+software.  Light House takes as input a program written in C and a small
+interface file that describes how functions effect memory usage.  It then
+attempts to find instances of resource usage that violate a simple model in
+which a process must own a resource to use it and each resource must have
+exactly one owner.
+
+An extension to this work is Check Point.  Check Point takes as input a
+collection of state transitions written as a directed graph.  This digraph
+could represent a protocol followed by a piece of software or how an
+application is using memory during its execution.  Each state is associated
+with one or more line numbers within the source file implementation.  The
+Check Point tool uses the digraph to generate checks that are inserted into
+the code to verify state transitions at run time.  Further, the digraph can be
+annotated with pre- and post- conditions or "assumptions" that will be
+verified at compile time and used to extend the analysis used within Light
+House.
+
+At this time, the Light House tool has a preliminary implementation that
+provides usable feedback to users.  A preliminary version of Check Point has
+been written (but not tested!) to instrument a program with checkpoints derived
+from a state graph.
+
+Next steps include:
+
+\li Finding a less slippery definition of "state" (line numbers do not feel
+correct)
+
+\li Adding pre- and post- conditions to the state graph
+
+\li Verifying these pre- and post- conditions
+
+\li Using the state graph with pre- and post- condition information within
+Light House
+
+
+
+\section lightHouse Static Verification with Light House
+
+Light House preforms static analysis to detect incorrect resource usage in
+applications.  The tool sits upon the assumption that a resource will have
+exactly one owner at any given time, and that only a resource's owner can use
+the resource.  The current implementation focuses on memory management.
+
+Users supply Light House with a program to verify and a file containing
+interface information describing functions that create or destroy memory
+references.  Data flow analysis is used to look for sections of code that leak
+memory or attempt to access data through an invalid handle.
+
+This analysis is limited to a "single line" through a program.  Many programs,
+such as SOS modules, include persistent state that evolves throughout the
+life of the module.  Light House currently assumes that the persistent state
+within a module is in the "correct" configuration for a given memory operation
+to succeeds.  For example, if Light House sees a program saving a reference to
+newly allocated memory into a global pointer, it will assume that this
+operation does not over right a prior reference.  Similarly, if a module
+attempts to deference a global pointer that has not been modified given the
+current (functional) view of the program, it will assume that the pointer
+references valid data.
+
+This can result in incorrect behavior for various types of programs.  A
+simple example is a "alloc / free" program that receives events to:
+
+\li allocate data and store a reference to the data in pointer \c ptr
+
+\li release data that is referenced by the pointer \c ptr
+
+This module will operate correctly as long as allocate and release events
+alternate.  However, if two allocate events occur in a row the program will
+leak memory.  Since Light House may only view one event at a time during
+verification, it will not detect this problem.  
+
+
+
+\section checkPoint Extending Verification with Check Points
+
+Check Point attempts to overcome the limitations described above.  With Check
+Point, the developer supplies a model of "proper" application execution.  It
+is hoped that this extra step is not an excessive burden on developers, who
+often already use state diagrams to reason about programs.  
+
+At this time (but looking for something better!) States correspond to
+locations within the program where the program transitions between two states.
+This could correspond to a logical transition (from listening to receive with a
+socket) to physical (this process now controls the I2C bus).  Check Point
+currently uses a \c dot description of the digraph corresponding to
+application model.  
+
+
+\subsection runTime Run Time Verification of Model Conformance
+
+The model is parsed to create a function that can be called at locations of
+state transition to verify that the transition is valid.  A \c dfs_state
+enumeration is created for the states that the application can occupy.  The
+verification function is called at time of state change to check that the
+previous state allows a transition to the upcoming state.  This intuitively
+corresponds to "looking backward" along edges in the module digraph to verify
+that the previous state has an edge to the current state, thus allowing the
+transition.  Calls to this function are then embedded within the source code
+of the program.  These checks provide run time monitoring of the application. 
+
+At this time, tools have been written to extract information from the
+application model, create the verification function, and extend C code with
+calls to this function.  Resulting code does compile (with minimal changes),
+but has not yet been run.
+
+Upcoming steps include:
+
+\li Run time testing of built code
+
+\li Rethinking the model specification to better define what states are and
+how they correspond to a program source code
+
+\li Potentially adding more information to the edges between states
+
+
+\subsection static Extending Static Verification Through Pre and Post Conditions
+
+A next step is to extend the Light House verification with information from
+the application model.  Upcoming steps:
+
+\li Type of pre- and post- conditions to specify
+
+\li Verifying pre- and post- conditions
+
+\li Using these pre- and post- conditions within Light House
+
+
+\section example Illustrative Example: Alloc / Free Module
+
+The following is an example of a module that alternates between allocating and
+freeing data:
+
+\code
+#include <module.h>
+#define LED_DEBUG
+#include <led_dbg.h>
+
+#define MEMORY_TID 1
+
+typedef struct {
+    uint8_t pid;
+    uint8_t state;
+    uint8_t *buffer;
+} app_state_t;
+
+
+static int8_t memory_msg_handler(void *start, Message *e);
+
+static mod_header_t mod_header SOS_MODULE_HEADER = {
+    .mod_id         = DFLT_APP_ID0,
+    .state_size     = sizeof(app_state_t),
+    .num_timers     = 1,
+    .num_sub_func   = 0,
+    .num_prov_func  = 0,
+    .platform_type  = HW_TYPE /* or PLATFORM_ANY */,
+    .processor_type = MCU_TYPE,
+    .code_id        = ehtons(DFLT_APP_ID0),
+    .module_handler = memory_msg_handler,
+};
+
+
+static int8_t memory_msg_handler(void *state, Message *msg)
+{
+    app_state_t *s = (app_state_t*)state;
+
+    switch (msg->type){
+
+        case MSG_INIT:
+            {
+                // I'm alive!
+                LED_DBG(LED_GREEN_TOGGLE);
+
+                s->pid = msg->did;
+                s->state = 0;
+
+                ker_timer_init(s->pid, MEMORY_TID, TIMER_REPEAT);
+                ker_timer_start(s->pid, MEMORY_TID, 1000);
+                break;
+            }
+
+
+        case MSG_FINAL:
+            {
+                // Bye bye!
+                ker_timer_stop(s->pid, MEMORY_TID);
+                
+                if (s->state != 0) {
+                    ker_free(s->buffer);
+                } else {
+                    // Do nothing!
+                }
+                
+                break;
+            }
+
+
+        case MSG_TIMER_TIMEOUT:
+            {
+                MsgParam* params = (MsgParam*)(msg->data);
+
+                if (params->byte == MEMORY_TID)
+                {
+
+                    // Blink the LED
+                    if (s->state == 0) {
+                        s->buffer = (uint8_t *) ker_malloc(sizeof(uint8_t), s->pid);
+                        *(s->buffer) = 0x42;
+                        LED_DBG(LED_YELLOW_OFF);
+                    } else {
+                        ker_free(s->buffer);
+                        LED_DBG(LED_YELLOW_ON);
+                    }
+                    
+                    // Update the state
+                    s->state++;
+                    if (s->state > 1) {
+                        s->state = 0;
+                    }
+
+                }
+
+                break;
+            }
+
+        default:
+            return -EINVAL;
+    }
+
+    return SOS_OK;
+}
+
+#ifndef _MODULE_
+mod_header_ptr memory_get_header()
+{
+    return sos_get_header_address(mod_header);
+}
+#endif
+\endcode
+
+A collection of valid state transitions is provided in the followind \c dot
+file:
+
+\code
+digraph simple {
+
+    // 69
+    start -> MSG_INIT;
+
+    // 104
+    MSG_INIT -> MSG_TIMER_TIMEOUT__MEMORY_TID__S0;
+
+    // 108
+    MSG_TIMER_TIMEOUT__MEMORY_TID__S0 -> MSG_TIMER_TIMEOUT__MEMORY_TID__S1;
+
+    // 104
+    MSG_TIMER_TIMEOUT__MEMORY_TID__S1 -> MSG_TIMER_TIMEOUT__MEMORY_TID__S0;
+
+    // 88 
+    MSG_TIMER_TIMEOUT__MEMORY_TID__S0 -> MSG_FINAL__S0;
+
+    // 86
+    MSG_TIMER_TIMEOUT__MEMORY_TID__S1 -> MSG_FINAL__S1;
+
+    // 91
+    MSG_FINAL__S0 -> end;
+
+    // 91
+    MSG_FINAL__S1 -> end;
+
+}
+
+\endcode
+
+Using the \c dot2calls module generates an updated version of this program
+with embedded checks:
+
+\code
+#include <module.h>
+#define LED_DEBUG
+#include <led_dbg.h>
+
+#define MEMORY_TID 1
+
+typedef struct {
+    uint8_t pid;
+    uint8_t state;
+    uint8_t *buffer;
+} app_state_t;
+
+
+static int8_t memory_msg_handler(void *start, Message *e);
+
+static mod_header_t mod_header SOS_MODULE_HEADER = {
+    .mod_id         = DFLT_APP_ID0,
+    .state_size     = sizeof(app_state_t),
+    .num_timers     = 1,
+    .num_sub_func   = 0,
+    .num_prov_func  = 0,
+    .platform_type  = HW_TYPE /* or PLATFORM_ANY */,
+    .processor_type = MCU_TYPE,
+    .code_id        = ehtons(DFLT_APP_ID0),
+    .module_handler = memory_msg_handler,
+};
+
+
+static int8_t memory_msg_handler(void *state, Message *msg)
+{
+    app_state_t *s = (app_state_t*)state;
+
+    switch (msg->type){
+
+        case MSG_INIT:
+            {
+                // I'm alive!
+                LED_DBG(LED_GREEN_TOGGLE);
+if (valid_transition(s->dfs_state, dfs_MSG_INIT) != true)
+{
+    exit(-1);
+}
+
+                s->pid = msg->did;
+                s->state = 0;
+
+                ker_timer_init(s->pid, MEMORY_TID, TIMER_REPEAT);
+                ker_timer_start(s->pid, MEMORY_TID, 1000);
+                break;
+            }
+
+
+        case MSG_FINAL:
+            {
+                // Bye bye!
+                ker_timer_stop(s->pid, MEMORY_TID);
+                
+                if (s->state != 0) {
+                    ker_free(s->buffer);
+if (valid_transition(s->dfs_state, dfs_MSG_FINAL__S1) != true)
+{
+    exit(-1);
+}
+                } else {
+                    // Do nothing!
+if (valid_transition(s->dfs_state, dfs_MSG_FINAL__S0) != true)
+{
+    exit(-1);
+}
+                }
+                
+                break;
+if (valid_transition(s->dfs_state, dfs_end) != true)
+{
+    exit(-1);
+}
+            }
+
+
+        case MSG_TIMER_TIMEOUT:
+            {
+                MsgParam* params = (MsgParam*)(msg->data);
+
+                if (params->byte == MEMORY_TID)
+                {
+
+                    // Blink the LED
+                    if (s->state == 0) {
+                        s->buffer = (uint8_t *) ker_malloc(sizeof(uint8_t), s->pid);
+if (valid_transition(s->dfs_state, dfs_MSG_TIMER_TIMEOUT__MEMORY_TID__S0) != true)
+{
+    exit(-1);
+}
+                        *(s->buffer) = 0x42;
+                        LED_DBG(LED_YELLOW_OFF);
+                    } else {
+                        ker_free(s->buffer);
+if (valid_transition(s->dfs_state, dfs_MSG_TIMER_TIMEOUT__MEMORY_TID__S1) != true)
+{
+    exit(-1);
+}
+                        LED_DBG(LED_YELLOW_ON);
+                    }
+                    
+                    // Update the state
+                    s->state++;
+                    if (s->state > 1) {
+                        s->state = 0;
+                    }
+
+                }
+
+                break;
+            }
+
+        default:
+            return -EINVAL;
+    }
+
+    return SOS_OK;
+}
+
+#ifndef _MODULE_
+mod_header_ptr memory_get_header()
+{
+    return sos_get_header_address(mod_header);
+}
+#endif
+\endcode
+
+And using the \c dot2transCheck module generates the following function:
+
+\code
+enum State {
+    dfs_MSG_INIT,
+    dfs_end,
+    dfs_MSG_TIMER_TIMEOUT__MEMORY_TID__S0,
+    dfs_MSG_TIMER_TIMEOUT__MEMORY_TID__S1,
+    dfs_MSG_FINAL__S0,
+    dfs_start,
+    dfs_MSG_FINAL__S1,
+};
+
+bool valid_transition(enum State old, enum State new) {
+
+    if (old == dfs_MSG_INIT) {
+        if (new == dfs_MSG_TIMER_TIMEOUT__MEMORY_TID__S0) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    if (old == dfs_end) {
+        {
+            return false;
+        }
+    }
+
+    if (old == dfs_MSG_TIMER_TIMEOUT__MEMORY_TID__S0) {
+        if (new == dfs_MSG_FINAL__S0) {
+            return true;
+        } else if (new == dfs_MSG_TIMER_TIMEOUT__MEMORY_TID__S1) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    if (old == dfs_MSG_TIMER_TIMEOUT__MEMORY_TID__S1) {
+        if (new == dfs_MSG_FINAL__S1) {
+            return true;
+        } else if (new == dfs_MSG_TIMER_TIMEOUT__MEMORY_TID__S0) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    if (old == dfs_MSG_FINAL__S0) {
+        if (new == dfs_end) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    if (old == dfs_start) {
+        if (new == dfs_MSG_INIT) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    if (old == dfs_MSG_FINAL__S1) {
+        if (new == dfs_end) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    return false;
+}
+\endcode
+
+*/
+
+Written by: Roy Shea in Oct 2006
+Last review by: Nobody
+

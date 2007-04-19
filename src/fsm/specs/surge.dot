@@ -1,0 +1,101 @@
+digraph surge_simple {
+
+    // Start the the module with a backoff timer
+    // 121
+    start [shape=diamond];
+    start -> 1 [label="MSG_INIT"];
+
+    // One time backoff timer
+    // 146 
+    1 -> 2 [label="MSG_TIMER_TIMEOUT__SURGE_BACKOFF_TID"];
+   
+    // Periodic timer to request samples of data
+    // 135 
+    2 -> 3 [label="MSG_TIMER_TIMEOUT__SURGE_TIMER_TID"];
+    3 -> 3 [label="MSG_TIMER_TIMEOUT__SURGE_TIMER_TID"];
+
+    // Module is shutdown
+    // 215
+    end [shape=doublecircle];
+    3 -> end [label="MSG_FINAL"];
+}
+
+
+digraph surge_in_order {
+
+    // Start the the module with a backoff timer
+    // 121
+    start [shape=diamond];
+    start -> 1 [label="MSG_INIT"];
+
+    // One time backoff timer
+    // 146 
+    1 -> 2 [label="MSG_TIMER_TIMEOUT__SURGE_BACKOFF_TID"];
+   
+    // Periodic timer to request samples of data
+    // 135 
+    2 -> 3 [label="MSG_TIMER_TIMEOUT__SURGE_TIMER_TID"];
+    4 -> 3 [label="MSG_TIMER_TIMEOUT__SURGE_TIMER_TID"];
+
+    // Data is ready
+    // 159 
+    3 -> 4 [label="MSG_DATA_READY"];
+   
+    // Incoming data (does not effect other parts of system)
+    1 -> 51 [label="MSG_TR_DATA_PKT", style=dotted];
+    51 -> 1 [label="MSG_TR_DATA_PKT__DONE", style=dotted];
+    2 -> 52 [label="MSG_TR_DATA_PKT", style=dotted];
+    52 -> 2 [label="MSG_TR_DATA_PKT__DONE", style=dotted];
+    3 -> 53 [label="MSG_TR_DATA_PKT", style=dotted];
+    53 -> 3 [label="MSG_TR_DATA_PKT__DONE", style=dotted];
+    4 -> 54 [label="MSG_TR_DATA_PKT", style=dotted];
+    54 -> 4 [label="MSG_TR_DATA_PKT__DONE", style=dotted];
+    
+    // Module is shutdown
+    // 215
+    end [shape=doublecircle];
+    3 -> end [label="MSG_FINAL"];
+    4 -> end [label="MSG_FINAL"];
+}
+
+
+digraph surge_full {
+
+    // Start the the module with a backoff timer
+    // 121
+    start [shape=diamond];
+    start -> 1 [label="MSG_INIT"];
+
+    // One time backoff timer
+    // 146 
+    1 -> 2 [label="MSG_TIMER_TIMEOUT__SURGE_BACKOFF_TID"];
+   
+    // Periodic timer to request samples of data
+    // 135 
+    2 -> 3 [label="MSG_TIMER_TIMEOUT__SURGE_TIMER_TID"];
+    3 -> 3 [label="MSG_TIMER_TIMEOUT__SURGE_TIMER_TID"];
+    4 -> 3 [label="MSG_TIMER_TIMEOUT__SURGE_TIMER_TID"];
+
+    // Data is ready
+    // 159 
+    3 -> 4 [label="MSG_DATA_READY"];
+    4 -> 4 [label="MSG_DATA_READY"];
+   
+    // Incoming data (does not effect other parts of system)
+    1 -> 51 [label="MSG_TR_DATA_PKT", style=dotted];
+    51 -> 1 [label="MSG_TR_DATA_PKT__DONE", style=dotted];
+    2 -> 52 [label="MSG_TR_DATA_PKT", style=dotted];
+    52 -> 2 [label="MSG_TR_DATA_PKT__DONE", style=dotted];
+    3 -> 53 [label="MSG_TR_DATA_PKT", style=dotted];
+    53 -> 3 [label="MSG_TR_DATA_PKT__DONE", style=dotted];
+    4 -> 54 [label="MSG_TR_DATA_PKT", style=dotted];
+    54 -> 4 [label="MSG_TR_DATA_PKT__DONE", style=dotted];
+    
+    // Module is shutdown
+    // 215
+    end [shape=doublecircle];
+    3 -> end [label="MSG_FINAL"];
+    4 -> end [label="MSG_FINAL"];
+}
+
+

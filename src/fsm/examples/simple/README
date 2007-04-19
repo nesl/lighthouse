@@ -1,0 +1,36 @@
+\section overview Overview
+
+Simple module that uses a dynamically allocated buffer to store a state
+variable.  The buffer is allocated during INIT.  During the life of the
+module, a timer periodically fires resulting in the state updating and an LED
+toggling.  The FINAL message causes the module to release the buffer.
+
+\section spec Specification
+
+\subsection states States
+
+digraph simple {
+    start -> MSG_INIT;
+    MSG_INIT -> MSG_TIMER_TIMEOUT.SIMPLE_TID;
+    MSG_TIMER_TIMEOUT.SIMPLE_TID -> MSG_TIMER_TIMEOUT.SIMPLE_TID;
+    MSG_TIMER_TIMEOUT.SIMPLE_TID -> MSG_FINAL;
+    MSG_FINAL -> end;
+}
+
+\subsection conditions Pre- and Post-Conditions
+
+MSG_INIT
+
+\li Pre: s->state is NULL
+\li Post: s->state is valid
+
+MSG_TIMER_TIMEOUT.SIMPLE_TID
+
+\li Pre: s->state is valid
+\li Post: s->state is valid
+
+MSG_FINAL
+
+\li Pre: s->state is valid
+\li Post: s->state is NULL
+

@@ -1,0 +1,137 @@
+digraph i2c_system_simple {
+
+    // Set up the driver sate
+    start [shape=diamond];
+    start -> 1 [label="i2c_system_init"];
+
+    // Prepare to transmit
+    1 -> 2 [label="ker_i2c_reserve_bus__TX"]; 
+
+    // Send data then get signal from system that send is done
+    2 -> 3 [label="ker_i2c_send_data"];
+    3 -> 2 [label="i2c_send_done"];
+
+    // Prepare to read data
+    1 -> 4 [label="ker_i2c_reserve_bus__RX"];
+
+    // Read data then get signal from system that read is done
+    4 -> 5 [label="ker_i2c_read_data"];
+    5 -> 4 [label="i2c_read_done"];
+
+    // Release the buss
+    end [shape=doublecircle];
+    2 -> end [label="ker_i2c_release_bus"];
+    4 -> end [label="ker_i2c_release_bus"];
+    end -> start [style=dashed];
+}
+
+
+digraph i2c_system {
+
+    // Set up the driver sate
+    start [shape=diamond];
+    start -> 1 [label="i2c_system_init"];
+
+    // Prepare to transmit
+    1 -> 2 [label="ker_i2c_reserve_bus__TX"]; 
+
+    // Send data then get signal from system that send is done
+    2 -> 3 [label="ker_i2c_send_data"];
+    3 -> 2 [label="i2c_send_done"];
+
+    // Read data (from TX reserved bus)
+    3 -> 53 [label="ker_i2c_read_data"];
+    53 -> 3 [label="i2c_read_done"];
+
+    // Prepare to read data
+    1 -> 4 [label="ker_i2c_reserve_bus__RX"];
+
+    // Read data then get signal from system that read is done
+    4 -> 54 [label="ker_i2c_read_data"];
+    54 -> 4 [label="i2c_read_done"];
+
+    // Release the buss
+    end [shape=doublecircle];
+    2 -> end [label="ker_i2c_release_bus"];
+    4 -> end [label="ker_i2c_release_bus"];
+    end -> start [style=dashed];
+}
+
+
+digraph i2c_driver_simple {
+
+    // Set up the driver sate
+    start [shape=diamond];
+    start -> 1 [label="i2c_hardware_init"];
+
+    // Start the tranciever
+    1 -> 2 [label="i2c_initTransceiver"];
+
+    // Send data
+    2 -> 3 [label="i2c_startTransceiverTx"];
+    3 -> 53 [label="i2c_interrupt", style=dotted];
+    53 -> 53 [label="i2c_interrupt", style=dotted];
+    53 -> 3 [label="i2c_interrupt", style=dotted];
+
+    // Receive data
+    2 -> 4 [label="i2c_startTransceiverRx"];
+    4 -> 54 [label="i2c_interrupt", style=dotted];
+    54 -> 54 [label="i2c_interrupt", style=dotted];
+    54 -> 4 [label="i2c_interrupt", style=dotted];
+
+    // Bus may be "released" at some point and then later reinitialized
+    end [shape=doublecircle];
+    3 -> end [style=dashed];
+    4 -> end [style=dashed];
+    end -> start [style=dashed];
+}
+
+
+digraph i2c_all {
+
+    // Set up the driver sate
+    start [shape=diamond];
+    start -> sys_start[style=dashed];
+    sys_start -> driver_start [label="i2c_system_init"];
+    driver_start -> sys_1 [label="i2c_hardware_init"];
+
+    // Prepare to transmit
+    sys_1 -> driver_12 [label="ker_i2c_reserve_bus__TX"]; 
+    driver_12 -> sys_2 [label="i2c_initTransceiver"];
+
+    // Send data then get signal from system that send is done
+    sys_2 -> driver_23 [label="ker_i2c_send_data"];
+    driver_23 -> driver_3 [label="i2c_startTransceiverTx"];
+    driver_3 -> driver_51 [label="i2c_interrupt", style=dotted];
+    driver_51 -> driver_51 [label="i2c_interrupt", style=dotted];
+    driver_51 -> sys_3 [label="i2c_interrupt", style=dotted];
+    sys_3 -> sys_2 [label="i2c_send_done"];
+
+    // Read data (from TX reserved bus)
+    sys_2 -> driver_24 [label="ker_i2c_read_data"];
+    driver_24 -> driver_41 [label="i2c_startTransceiverRx"];
+    driver_41 -> driver_52 [label="i2c_interrupt", style=dotted];
+    driver_52 -> driver_52 [label="i2c_interrupt", style=dotted];
+    driver_52 -> sys_52 [label="i2c_interrupt", style=dotted];
+    driver_52 -> sys_2 [label="i2c_read_done"];
+
+    // Prepare to read data
+    sys_1 -> driver_14 [label="ker_i2c_reserve_bus__RX"];
+    driver_14 -> sys_4 [label="i2c_initTransceiver"];
+
+    // Read data then get signal from system that read is done
+    sys_4 -> driver_25 [label="ker_i2c_read_data"];
+    driver_25 -> driver_42 [label="i2c_startTransceiverRx"];
+    driver_42 -> driver_53 [label="i2c_interrupt", style=dotted];
+    driver_53 -> driver_53[label="i2c_interrupt", style=dotted];
+    driver_53 -> sys_54 [label="i2c_interrupt", style=dotted];
+    sys_54 -> sys_4 [label="i2c_read_done"];
+
+    // Release the bus
+    sys_end [shape=doublecircle];
+    sys_2 -> driver_end [label="ker_i2c_release_bus"];
+    sys_4 -> driver_end [label="ker_i2c_release_bus"];
+    driver_end -> sys_end [style=dashed];
+    sys_end -> sys_start [style=dashed];
+
+}

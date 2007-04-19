@@ -1,0 +1,49 @@
+\section overview Overview
+
+A module that alternates between allocating a buffer for data use and freeing
+that buffer.  A state variable is used to describe if the buffer is allocated
+or not.  The assumption is that when the state is 1 the buffer is allocated,
+and when the state is 0 the buffer is NULL.
+
+\section spec Specification
+
+\subsection states States
+
+digraph simple {
+    start -> MSG_INIT;
+    MSG_INIT -> MSG_TIMER_TIMEOUT.MEMORY_TID.S0;
+    MSG_TIMER_TIMEOUT.MEMORY_TID.SO -> MSG_TIMER_TIMEOUT.MEMORY_TID.S1;
+    MSG_TIMER_TIMEOUT.MEMORY_TID.S1 -> MSG_TIMER_TIMEOUT.MEMORY_TID.S0;
+    MSG_TIMER_TIMEOUT.MEMORY_TID.SO -> MSG_FINAL.S0;
+    MSG_TIMER_TIMEOUT.MEMORY_TID.S1 -> MSG_FINAL.S1;
+    MSG_FINAL.S0 -> end;
+    MSG_FINAL.S1 -> end;
+}
+
+\subsection conditions Pre- and Post-Conditions
+
+MSG_INIT
+
+\li Pre: s->buffer is NULL
+\li Post: s->state is 0 and s->buffer is NULL
+
+MSG_TIMER_TIMEOUT.MEMORY_TID.S0
+
+\li Pre: s->state is 0 and s->buffer is NULL
+\li Post: s->state is 1 and s->buffer is valid
+
+MSG_TIMER_TIMEOUT.MEMORY_TID.S1
+
+\li Pre: s->state is 1 and s->buffer is valid
+\li Post: s->state is 0 and s->buffer is NULL
+
+MSG_FINAL.S0
+
+\li Pre: s->state is 0 and s->buffer is NULL
+\li Post: s->buffer is NULL
+
+MSG_FINAL.S1
+
+\li Pre: s->state is 1 and s->buffer is valid
+\li Post: s->buffer is NULL
+

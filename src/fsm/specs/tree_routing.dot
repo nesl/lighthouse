@@ -1,0 +1,83 @@
+digraph tree_routing_simple {
+
+    // Start the the module with a backoff timer
+    // 123
+    start [shape=diamond];
+    start -> 1 [label="MSG_INIT"];
+
+    // Backoff timer triggers transition to periodic neighbor computation
+    // 172
+    1 -> 2 [label="MSG_TIMER_TIMEOUT__TREE_BACKOFF_TIMER"];
+
+    // Compute neighbors and send beacon
+    // 189
+    2 -> 3 [label="MSG_TIMER_TIMEOUT__TREE_NEIGHBOR_TIMER"];
+
+    // Send a beacon
+    // 258
+    3 -> 2 [label="MSG_BEACON_SEND"];
+
+    // Shutdown
+    // 272
+    end [shape=doublecircle];
+    2 -> end [label="MSG_FINAL"];
+    3 -> end [label="MSG_FINAL"];
+    
+}
+
+
+digraph tree_routing {
+
+    // Start the the module with a backoff timer
+    // 123
+    start [shape=diamond];
+    start -> 1 [label="MSG_INIT"];
+
+    // Backoff timer triggers transition to periodic neighbor computation
+    // 172
+    1 -> 2 [label="MSG_TIMER_TIMEOUT__TREE_BACKOFF_TIMER"];
+
+    // Compute neighbors and send beacon
+    // 189
+    2 -> 3 [label="MSG_TIMER_TIMEOUT__TREE_NEIGHBOR_TIMER"];
+
+    // Send a beacon
+    // 258
+    3 -> 2 [label="MSG_BEACON_SEND"];
+
+    // Get data to send from application
+    // 208
+    1 -> 41 [label="MSG_TR_DATA_PKT", style=dotted];
+    41 -> 1 [label="MSG_TR_DATA_PKT__DONE", style=dotted];
+    2 -> 42 [label="MSG_TR_DATA_PKT", style=dotted];
+    42 -> 2 [label="MSG_TR_DATA_PKT__DONE", style=dotted];
+    3 -> 43 [label="MSG_TR_DATA_PKT", style=dotted];
+    43 -> 3 [label="MSG_TR_DATA_PKT__DONE", style=dotted];
+    
+    // Get data to contirue routing from network
+    // 242
+    1 -> 51 [label="MSG_SEND_PACKET", style=dotted];
+    51 -> 1 [label="MSG_SEND_PACKET__DONE", style=dotted];
+    2 -> 52 [label="MSG_SEND_PACKET", style=dotted];
+    52 -> 2 [label="MSG_SEND_PACKET__DONE", style=dotted];
+    3 -> 53 [label="MSG_SEND_PACKET", style=dotted];
+    53 -> 3 [label="MSG_SEND_PACKET__DONE", style=dotted];
+    
+    // Becon from neigboring node
+    // 258
+    1 -> 61 [label="MSG_BEACON_SEND", style=dotted];
+    61 -> 1 [label="MSG_BEACON_SEND__DONE", style=dotted];
+    2 -> 62 [label="MSG_BEACON_SEND", style=dotted];
+    62 -> 2 [label="MSG_BEACON_SEND__DONE", style=dotted];
+    3 -> 63 [label="MSG_BEACON_SEND", style=dotted];
+    63 -> 3 [label="MSG_BEACON_SEND__DONE", style=dotted];
+    
+    // Shutdown
+    // 272
+    end [shape=doublecircle];
+    2 -> end [label="MSG_FINAL"];
+    3 -> end [label="MSG_FINAL"];
+    
+}
+
+
