@@ -9,6 +9,9 @@ let now = ref (Sys.time ());;
 (* Specification file *)
 let spec_file = ref "";;
 
+(* Function to check *)
+let func_name = ref "";;
+
 (** [cil_file] CIL file being analyzed. *)
 let cil_file: file ref = ref dummyFile;;
 
@@ -78,6 +81,9 @@ let argDescr = [
   
   ("--spec", Arg.String (fun spec -> spec_file := spec),
    "Use specification file for pre- / post- condition specifications");
+
+  ("--func_name", Arg.String (fun name -> func_name := name),
+   "Name of function to verify (default is all functions)");
 
   ("--out", Arg.String (openFile "output" (fun oc -> outChannel := Some oc)),
    "Name of the output CIL file");
