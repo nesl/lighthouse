@@ -140,7 +140,8 @@ let is_equiv_to_field_of (e: exp) (targets: exp list) (s: stmt) : bool =
 
       | BinOp (PlusA, e1, e2, _) 
       | BinOp (MinusA, e1, e2, _)
-      | BinOp (MinusPP, e1, e2, _) -> e1::e1::(reduce_expression e1)@(reduce_expression e2)
+      | BinOp (MinusPP, e1, e2, _) -> 
+          e1::e2::(reduce_expression e1)@(reduce_expression e2)
 
       | UnOp (_, e, _) -> e::(reduce_expression e)
 
@@ -201,7 +202,8 @@ let is_equiv_to_field_of (e: exp) (targets: exp list) (s: stmt) : bool =
     if true then (
      *)
     if !dbg_state then (
-      ignore (Pretty.printf "IsStored.is_equiv_to_field_of: %a is related to:\n" d_exp e);
+      ignore 
+        (Pretty.printf "IsStored.is_equiv_to_field_of: %a is related to:\n" d_exp e);
       List.iter (fun e -> ignore (Pretty.printf "    %a\n" d_exp e)) !l0;
       flush stdout;
     );
@@ -263,7 +265,10 @@ let remove_mem_state
 
 
 (** Adds mem_state indexed by key to the states being tracked *)
-let add_mem_state (state: mem_state) (states: mem_states) (current_stmt: stmt): mem_states =
+let add_mem_state 
+      (state: mem_state) 
+      (states: mem_states) 
+      (current_stmt: stmt): mem_states =
   
   let (_, key) = state in
  
@@ -386,7 +391,10 @@ let invalid_store_dereference
 
 
 (** Returns the state indexed by key *)
-let lookup_mem_state (query_key: exp) (states: mem_states) (current_stmt: stmt): mem_state =
+let lookup_mem_state 
+      (query_key: exp) 
+      (states: mem_states) 
+      (current_stmt: stmt): mem_state =
 
   let state_op = try_lookup_must_mem_state query_key states current_stmt in
     match state_op with 
@@ -464,7 +472,10 @@ let kill_heap_state
 
 (* Add a state by name to the mem_states.  Note that this only works for tracked state with
  * simple variable types. *)
-let add_mem_state_by_name (sname: string) (new_state: mem_state) (states: mem_states): mem_states = 
+let add_mem_state_by_name 
+      (sname: string) 
+      (new_state: mem_state) 
+      (states: mem_states): mem_states = 
 
   let found = 
     List.exists
@@ -633,7 +644,9 @@ let update_state_with_pre (fname: string) (formals: exp list) (states): mem_stat
   let states = 
     List.fold_left
       (fun out s -> 
-         let (key, is_formal) = (pre_get_key_from_spec_str fname s (None, formals) out) in
+         let (key, is_formal) = 
+           (pre_get_key_from_spec_str fname s (None, formals) out) 
+         in
          let out =
            if not is_formal then remove_mem_state_by_name s out
            else out
@@ -653,7 +666,9 @@ let update_state_with_pre (fname: string) (formals: exp list) (states): mem_stat
   let states = 
     List.fold_left
       (fun out s -> 
-         let (key, is_formal) = (pre_get_key_from_spec_str fname s (None, formals) out) in
+         let (key, is_formal) = 
+           (pre_get_key_from_spec_str fname s (None, formals) out) 
+         in
          let out =
            if not is_formal then remove_mem_state_by_name s out
            else out
@@ -906,7 +921,9 @@ let update_state_with_post
                  states
              
              | None ->
-                 let states = add_mem_state (Full_heap heap_exp, key) states current_stmt in
+                 let states = 
+                   add_mem_state (Full_heap heap_exp, key) states current_stmt 
+                 in
                    states
       )
       states

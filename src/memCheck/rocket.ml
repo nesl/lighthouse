@@ -3,9 +3,6 @@ open Pretty;;
 open Cil;;
 module E = Errormsg;;
 
-
-let now = ref (Sys.time ());;
-
 (* Specification file *)
 let spec_file = ref "";;
 
@@ -25,33 +22,31 @@ class rocketVisitor = object inherit nopCilVisitor
 
   method vfunc (f: fundec) =
 
-    (** Check to see if we can skip this function since it may be defined in a
-      * header file *)
-      
-    if (not !check_headers) &&
-       (String.get !currentLoc.file ((String.length !currentLoc.file) -1)) = 'h' &&
-       (String.get !currentLoc.file ((String.length !currentLoc.file) -2)) = '.'
-    then (
+    let check () =
+      IsEquivalent.generate_equiv f !cil_file;
+      try 
+        ignore (Apollo.apollo_func f !cil_file);
+      with 
+          E.Error -> flush stdout; ignore (printf "####\n# Bummer!\n####\n\n\n");
+    in
+
+      (** Check to see if we can skip this function since it may be defined in a
+        * header file *)
+
+      if !func_name = f.svar.vname then (
+        check()
+      ) else if ((!func_name = "") && (!check_headers)) then (
+        check()
+      ) else if ((!func_name = "") && (not !check_headers) &&
+                not ((String.get !currentLoc.file ((String.length !currentLoc.file) -1)) = 'h') &&
+                not ((String.get !currentLoc.file ((String.length !currentLoc.file) -2)) = '.'))
+      then (
+        check ()
+      ) else (
+        ()
+      );
+         
       DoChildren
-    ) else (
-      
-        now := Sys.time ();
-        IsEquivalent.generate_equiv f !cil_file;
-        ignore (printf "IsEquivalent.generate_equiv for %s runtime: %f\n" 
-                  f.svar.vname (Sys.time () -. !now)
-        );
-        flush stdout;
-
-        ignore (
-          try 
-            ignore (Apollo.apollo_func f !cil_file)
-          with 
-              E.Error -> flush stdout; ignore (printf "####\n# Bummer!\n####\n\n\n");
-        );
-
-
-        DoChildren
-    )
 
 end
 
@@ -137,25 +132,11 @@ let doFile (file_name: string) : unit =
 
 
   (* Execute other modules in the correct order *) 
-  now := Sys.time ();
-  ignore (printf "Starting analysis:\n");
-  
   ignore (Simplemem.feature.fd_doit !cil_file);
-  ignore (printf "Simplemem runtime: %f\n" (Sys.time () -. !now));
-  now := Sys.time ();
-
   ignore (Simplify.feature.fd_doit !cil_file);
-  ignore (printf "Simplify runtime: %f\n" (Sys.time () -. !now));
-  now := Sys.time ();
-  
   ignore (MakeOneCFG.make_one_cfg !cil_file);
-  ignore (printf "MakeOneCFG runtime: %f\n" (Sys.time () -. !now));
-  now := Sys.time ();
-  
   ignore (Ptranal.feature.fd_doit !cil_file);
-  ignore (printf "Ptranal runtime: %f\n" (Sys.time () -. !now));
-  now := Sys.time ();
-
+  
   (* If requested dump the transformed code to file. *)
   (match !outChannel with
        None -> ()
