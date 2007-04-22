@@ -607,7 +607,7 @@ module Track = DF.ForwardsDataFlow(Apollo_Dataflow);;
 (****************************************)
 (****************************************)
 
-let apollo_func (f: fundec) (cfile: file) : bool =
+let apollo_func_simple (f: fundec) (cfile: file) : bool =
 
   cil_file := cfile;
 
@@ -650,12 +650,88 @@ let apollo_func (f: fundec) (cfile: file) : bool =
 
   let return_stmts = MemUtil.get_return_statements f in
 
+  (* For each return point verify that the post conditions required by the
+   * function are satisfied by the state *)
+    List.iter 
+      (fun s -> 
+       try
+         let return = (IH.find Apollo_Dataflow.stmtStartData s.sid) in 
+         
+         let _ = 
+           if !dbg_apollo then (   
+             ignore (printf "State leaving function %s at %a is:\n%a\n" 
+                       f.svar.vname 
+                       d_loc (get_stmtLoc s.skind) 
+                       Apollo_Dataflow.pretty return);
+             flush stdout;
+           )
+         in
+
+
+         let return_eop = 
+           match s.skind with
+               Return (eop, _) -> eop
+             | _ -> None
+         in
+           if not (verify_state_with_post f.svar.vname (return_eop, formals) return s) 
+           then
+             E.error 
+               "Return at %a fails to satisfy post- conditions for function %s"
+               d_loc (get_stmtLoc s.skind) f.svar.vname
+       with Not_found -> 
+         E.error "Unable to find state for return statement %d" s.sid;
+
+      )
+      return_stmts;
+
+    true
+;;
+
+
+
+
+let apollo_func_fsm (f: fundec) (cfile: file) (edge: string * string * string) : bool =
+
+  cil_file := cfile;
+
+  (* Collect the global variables together *)
+
+  let global_exps = 
+    foldGlobals !cil_file
+      (fun s g -> match g with
+           GVarDecl (v, l) | GVar (v, _, l) -> (Lval (var v))::s
+         | _ -> s
+      ) 
+      []
+  in
+
+  (* Create a dummy "initial_state" that has all stores in an unknown state and
+   * an empty heap *)
+  let global_stores = List.map (fun e -> (Unknown_store, e)) global_exps in
+  let initial_heaps = [] in
+  let initial_states = initial_heaps @ global_stores in
+  
+  let formals = List.map (fun v -> (Lval (var v))) f.sformals in
+
+  (* Update the state based on the pre-condition assumptions that we can assume
+   * are true upon having entered a function *)
+  let state = 
+    State.update_state_with_pre_fsm f.svar.vname formals initial_states
+  in
+
     if !dbg_apollo then (   
-      ignore (printf "State leaving function %s is:\n%a\n" 
+      ignore (printf "State coming into function %s is:\n%a\n" 
                 f.svar.vname Apollo_Dataflow.pretty state);
       flush stdout;
     );
 
+
+  (* Run dataflow for function *)
+  IH.clear Apollo_Dataflow.stmtStartData;
+  IH.add Apollo_Dataflow.stmtStartData (List.hd f.sbody.bstmts).sid  state;
+  Track.compute [List.hd f.sbody.bstmts];
+
+  let return_stmts = MemUtil.get_return_statements f in
 
   (* For each return point verify that the post conditions required by the
    * function are satisfied by the state *)
@@ -663,12 +739,25 @@ let apollo_func (f: fundec) (cfile: file) : bool =
       (fun s -> 
        try
          let return = (IH.find Apollo_Dataflow.stmtStartData s.sid) in 
+         
+         let _ = 
+           if !dbg_apollo then (   
+             ignore (printf "State leaving function %s at %a is:\n%a\n" 
+                       f.svar.vname 
+                       d_loc (get_stmtLoc s.skind) 
+                       Apollo_Dataflow.pretty return);
+             flush stdout;
+           )
+         in
+
+
          let return_eop = 
            match s.skind with
                Return (eop, _) -> eop
              | _ -> None
          in
-           if not (verify_state_with_post f.svar.vname (return_eop, formals) return s) 
+           if not (verify_state_with_post_fsm 
+                     f.svar.vname (return_eop, formals) return s) 
            then
              E.error 
                "Return at %a fails to satisfy post- conditions for function %s"

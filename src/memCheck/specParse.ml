@@ -42,11 +42,6 @@ type spec_block =
 ;;
 
 
-let spec_lexer (c: in_channel) = 
-  Genlex.make_lexer keywords (Stream.of_channel c)
-;;
-
-
 let parse_spec_block s =
 
   let parse_stores s =
@@ -186,16 +181,13 @@ let pretty_print_block b =
 ;;
 
 
-
-let parse_spec file_name =
+let parse_spec_stream spec_stream =
 
   let block_num = ref 0 in
 
   let specification = {stores=[]; pre=[]; post=[]} in
   let alloc_funcs = ref [] in
   let free_funcs = ref [] in
-
-  let spec_stream = spec_lexer (open_in file_name) in
  
     try 
       while true do
@@ -218,4 +210,20 @@ let parse_spec file_name =
           raise (Stream.Error s)
                          
 ;;
+
+
+let parse_spec_file file_name = 
+  let file_in = open_in file_name in
+  let spec_stream = Genlex.make_lexer keywords (Stream.of_channel file_in) in
+   parse_spec_stream spec_stream 
+;;
+
+
+
+let parse_spec_string str = 
+  let spec_stream = Genlex.make_lexer keywords (Stream.of_string str) in
+   parse_spec_stream spec_stream 
+;;
+
+
 

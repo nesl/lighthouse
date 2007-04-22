@@ -506,10 +506,12 @@ module DFM = struct
         match (stripCasts e) with
             Lval lv -> Some (mkAddrOf lv)
           | _ when isIntegralType (typeOf e) -> None
-          | _ -> 
+          | _ ->
+             (* 
               E.warn 
                 "IsEquivalent.DFM.doInstr: Unable to make address of non-lval expression %a." 
                 d_exp e;
+              *)
               None
       in
 
