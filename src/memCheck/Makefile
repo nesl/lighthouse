@@ -8,10 +8,10 @@ OCAMLMAKEFILE = OCamlMakefile
 
 
 SOURCES	= memUtil.ml isEquivalent.ml mayAliasWrapper.ml makeOneCFG.ml\
-		  state.ml specParse.ml apollo.ml rocket.ml
+		  state.ml specParse.ml apollo.ml dot2transCheck.ml rocket.ml
 RESULT	= rocket
 
-LIBS = unix str cil
+LIBS = unix str odot cil
 INCDIRS = /home/rshea/mote/cil-1.3.5/obj/x86_LINUX
 #INCDIRS = /home/rshea/research/cil-1.3.5/obj/x86_LINUX
 
