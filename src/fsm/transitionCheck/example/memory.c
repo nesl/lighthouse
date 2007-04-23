@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <time.h>
 
+const int NULL = 0;
+const int stderr = 1;
+
 enum {
     INIT = 0,
     FINAL = 1,
