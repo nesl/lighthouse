@@ -54,7 +54,14 @@ typedef struct accel_sensor_state {
 char accel_data_ready_cb(func_cb_ptr cb, unsigned char port, unsigned short value, unsigned char flags);
 static char accel_control(func_cb_ptr cb, unsigned char cmd, void *data);
 static char accel_msg_handler(void *state, Message *msg);
-
+void msg_init();
+void msg_final();
+void sensor_data_ready_fid();
+void sensor_control_fid();
+char sensor_get_data_cmd(unsigned char ctx);
+void sensor_endable_cmd();
+void sensor_disable_cmd();
+void sensor_config_cmd(unsigned char *data);
 
 
 // Dummy functions implmented in other parts of the system
@@ -98,27 +105,19 @@ static char accel_control(func_cb_ptr cb, unsigned char cmd, void* data) {\
 
     switch (cmd) {
         case SENSOR_GET_DATA_CMD:
-            // get ready to read accel sensor
-            if ((ctx & 0xC0) == ACCEL_0_SENSOR_ID) {
-                return ker_adc_proc_getData(MTS310_ACCEL_0_SID, ACCEL_0_SENSOR_ID);
-            } else {
-                return ker_adc_proc_getData(MTS310_ACCEL_1_SID, ACCEL_1_SENSOR_ID);
-            }
+            return sensor_get_data_cmd(ctx);
             break;
 
         case SENSOR_ENABLE_CMD:
-            accel_on();
+            sensor_endable_cmd();
             break;
 
         case SENSOR_DISABLE_CMD:
-            accel_off();
+            sensor_disable_cmd();
             break;
 
         case SENSOR_CONFIG_CMD:
-            // no configuation
-            if (data != NULL) {
-                sys_free(data);
-            }
+            sensor_config_cmd(data);
             break;
 
         default:
@@ -137,28 +136,10 @@ char accel_msg_handler(void *state, Message *msg)
     switch (msg->type) {
 
         case MSG_INIT:
+            msg_init(s);
             
-            // bind adc channel and register callback pointer
-            ker_adc_proc_bindPort(MTS310_ACCEL_0_SID, MTS310_ACCEL_0_HW_CH, ACCEL_SENSOR_PID,  SENSOR_DATA_READY_FID);
-            ker_adc_proc_bindPort(MTS310_ACCEL_1_SID, MTS310_ACCEL_1_HW_CH, ACCEL_SENSOR_PID,  SENSOR_DATA_READY_FID);
-           
-            // register with kernel sensor interface
-            s->accel_0_state = ACCEL_0_SENSOR_ID;
-            ker_sensor_register(ACCEL_SENSOR_PID, MTS310_ACCEL_0_SID, SENSOR_CONTROL_FID, (void*)(&s->accel_0_state));
-            s->accel_1_state = ACCEL_1_SENSOR_ID;
-            ker_sensor_register(ACCEL_SENSOR_PID, MTS310_ACCEL_1_SID, SENSOR_CONTROL_FID, (void*)(&s->accel_1_state));
-            break;
-
         case MSG_FINAL:
-            // shutdown sensor
-            accel_off();
-            //  unregister ADC port
-            ker_adc_proc_unbindPort(ACCEL_SENSOR_PID, MTS310_ACCEL_0_SID);
-            ker_adc_proc_unbindPort(ACCEL_SENSOR_PID, MTS310_ACCEL_1_SID);
-            // unregister sensor
-            ker_sensor_deregister(ACCEL_SENSOR_PID, MTS310_ACCEL_0_SID);
-            ker_sensor_deregister(ACCEL_SENSOR_PID, MTS310_ACCEL_1_SID);
-            break;
+            msg_final();
 
         default:
             return -EINVAL;
@@ -167,4 +148,64 @@ char accel_msg_handler(void *state, Message *msg)
     return SOS_OK;
 }
 
+
+
+void msg_init(accel_sensor_state_t *s) {
+
+    // bind adc channel and register callback pointer
+    ker_adc_proc_bindPort(MTS310_ACCEL_0_SID, MTS310_ACCEL_0_HW_CH, ACCEL_SENSOR_PID,  SENSOR_DATA_READY_FID);
+    ker_adc_proc_bindPort(MTS310_ACCEL_1_SID, MTS310_ACCEL_1_HW_CH, ACCEL_SENSOR_PID,  SENSOR_DATA_READY_FID);
+
+    // register with kernel sensor interface
+    s->accel_0_state = ACCEL_0_SENSOR_ID;
+    ker_sensor_register(ACCEL_SENSOR_PID, MTS310_ACCEL_0_SID, SENSOR_CONTROL_FID, (void*)(&s->accel_0_state));
+    s->accel_1_state = ACCEL_1_SENSOR_ID;
+    ker_sensor_register(ACCEL_SENSOR_PID, MTS310_ACCEL_1_SID, SENSOR_CONTROL_FID, (void*)(&s->accel_1_state));
+    return;
+}
+
+
+void msg_final() {
+    // shutdown sensor
+    accel_off();
+    //  unregister ADC port
+    ker_adc_proc_unbindPort(ACCEL_SENSOR_PID, MTS310_ACCEL_0_SID);
+    ker_adc_proc_unbindPort(ACCEL_SENSOR_PID, MTS310_ACCEL_1_SID);
+    // unregister sensor
+    ker_sensor_deregister(ACCEL_SENSOR_PID, MTS310_ACCEL_0_SID);
+    ker_sensor_deregister(ACCEL_SENSOR_PID, MTS310_ACCEL_1_SID);
+    return;
+}
+
+
+void sensor_data_ready_fid() {};
+void sensor_control_fid() {};
+
+char sensor_get_data_cmd(unsigned char ctx) {
+    // get ready to read accel sensor
+    if ((ctx & 0xC0) == ACCEL_0_SENSOR_ID) {
+        return ker_adc_proc_getData(MTS310_ACCEL_0_SID, ACCEL_0_SENSOR_ID);
+    } else {
+        return ker_adc_proc_getData(MTS310_ACCEL_1_SID, ACCEL_1_SENSOR_ID);
+    }
+}
+
+
+void sensor_endable_cmd() {
+    accel_on();
+    return;
+}
+
+
+void sensor_disable_cmd() {
+    accel_off();
+    return;
+}
+
+void sensor_config_cmd(unsigned char *data) {
+    if (data != NULL) {
+        sys_free(data);
+    }
+    return;
+}
 
