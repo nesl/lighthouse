@@ -1,0 +1,22 @@
+digraph memory {
+
+    start -> init 
+        [label="init",taillabel="",headlabel=""];
+    
+    init -> create
+        [label="create",taillabel="state.mpty();",headlabel="state.full();"];
+    
+    init -> final
+        [label="final",taillabel="",headlabel=""];
+
+    create -> destroy
+        [label="destroy",taillabel="state.full();",headlabel="state.mpty();"];
+
+    destroy -> create
+        [label="create",taillabel="state.mpty();",headlabel="state.full();"];
+
+    destroy -> final
+        [label="final",taillabel="",headlabel=""];
+
+}
+
