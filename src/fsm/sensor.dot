@@ -1,0 +1,29 @@
+digraph sensor {
+
+   start -> msg_init 
+        [label="msg_init",taillabel="",headlabel=""];
+
+   msg_init -> msg_init
+        [label="sensor_config_cmd",taillabel="1.full();",headlabel="1.mpty();"];
+
+   msg_init -> msg_final
+        [label="msg_final",taillabel="",headlabel=""];
+
+   msg_init -> sensor_enable_cmd
+        [label="sensor_enable_cmd",taillabel="",headlabel=""];
+
+   sensor_enable_cmd -> sensor_enable_cmd
+        [label="sensor_config_cmd",taillabel="1.full();",headlabel="1.mpty();"];
+
+   sensor_enable_cmd -> msg_init
+        [label="sensor_disable_cmd",taillabel="",headlabel=""];
+
+   sensor_enable_cmd -> sensor_get_data_cmd
+        [label="sensor_get_data_cmd",taillabel="",headlabel=""];
+
+   sensor_get_data_cmd -> sensor_enable_cmd
+        [label="sensor_data_ready_fid",taillabel="",headlabel=""];
+
+}
+
+
