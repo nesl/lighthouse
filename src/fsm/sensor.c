@@ -9,7 +9,7 @@ enum {SENSOR_DATA_READY_FID,
 };
 
 
-const void* NULL = 0;
+const int NULL = 0;
 const int ACCEL_0_SENSOR_ID = 1;
 const int ACCEL_1_SENSOR_ID = 2;
 const int MTS310_ACCEL_0_SID = 3;
@@ -209,9 +209,9 @@ void sensor_disable_cmd() {
 }
 
 void sensor_config_cmd(unsigned char *data) {
-    if (data != NULL) {
+    //if (data != (void *)NULL) {
         sys_free(data);
-    }
+    //}
     return;
 }
 
