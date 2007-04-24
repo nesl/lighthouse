@@ -54,6 +54,9 @@ typedef struct accel_sensor_state {
 char accel_data_ready_cb(func_cb_ptr cb, unsigned char port, unsigned short value, unsigned char flags);
 static char accel_control(func_cb_ptr cb, unsigned char cmd, void *data);
 static char accel_msg_handler(void *state, Message *msg);
+
+
+
 void msg_init();
 void msg_final();
 void sensor_data_ready_fid();
@@ -137,13 +140,14 @@ char accel_msg_handler(void *state, Message *msg)
 
         case MSG_INIT:
             msg_init(s);
+            break;
             
         case MSG_FINAL:
             msg_final();
+            break;
 
         default:
             return -EINVAL;
-            break;
     }
     return SOS_OK;
 }
@@ -179,6 +183,8 @@ void msg_final() {
 
 
 void sensor_data_ready_fid() {};
+
+
 void sensor_control_fid() {};
 
 char sensor_get_data_cmd(unsigned char ctx) {

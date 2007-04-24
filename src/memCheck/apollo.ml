@@ -679,7 +679,9 @@ let apollo_func_simple (f: fundec) (cfile: file) : bool =
                "Return at %a fails to satisfy post- conditions for function %s"
                d_loc (get_stmtLoc s.skind) f.svar.vname
        with Not_found -> 
-         E.error "Unable to find state for return statement %d" s.sid;
+         E.error "Unable to find state for return statement %d (%a)" 
+           s.sid
+           d_loc (get_stmtLoc s.skind) ;
 
       )
       return_stmts;
