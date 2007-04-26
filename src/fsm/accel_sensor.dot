@@ -1,0 +1,30 @@
+digraph accel_sensor {
+
+    start -> sensor_off 
+        [label="accel_msg_handler",taillabel="",headlabel=""];
+
+    sensor_off -> final
+        [label="accel_msg_handler",taillabel="",headlabel=""];
+
+    sensor_off -> sensor_off
+        [label="accel_control",taillabel="$3.full();",headlabel="$3.mpty();"];
+
+    sensor_off -> sensor_on
+        [label="accel_control",taillabel="",headlabel=""];
+
+    sensor_on -> sensor_on
+        [label="accel_control",taillabel="$3.full();",headlabel="$3.mpty();"];
+
+    sensor_on -> sensor_off
+        [label="accel_control",taillabel="",headlabel=""];
+
+    sensor_on -> getting_data
+        [label="accel_control",taillabel="",headlabel=""];
+
+    getting_data -> sensor_on
+        [label="sensor_data_ready_cb",taillabel="",headlabel=""];
+
+}
+
+
+
