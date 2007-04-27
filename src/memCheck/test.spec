@@ -31,13 +31,13 @@ deallocation_functions {
     post_uart 5
     post_i2c 5
     post_spi 5
-    post_long 4
-    post_link 4
-    post_auto 4
-    post_net 4
-    post_uart 4
-    post_i2c 4
-    post_spi 4
+    sys_post_long 4
+    sys_post_link 4
+    sys_post_auto 4
+    sys_post_net 4
+    sys_post_uart 4
+    sys_post_i2c 4
+    sys_post_spi 4
 }
 
 
