@@ -31,6 +31,13 @@ deallocation_functions {
     post_uart 5
     post_i2c 5
     post_spi 5
+    post_long 4
+    post_link 4
+    post_auto 4
+    post_net 4
+    post_uart 4
+    post_i2c 4
+    post_spi 4
 }
 
 
@@ -130,6 +137,62 @@ post_spi.pre {
 
 post_spi.post {
     $5.mpty();
+}
+
+sys_post_long.pre {
+    $4.full();
+}
+
+sys_post_long.post {
+    $4.mpty();
+}
+
+sys_post_link.pre {
+    $4.full();
+}
+
+sys_post_link.post {
+    $4.mpty();
+}
+
+sys_post_auto.pre {
+    $4.full();
+}
+
+sys_post_auto.post {
+    $4.mpty();
+}
+
+sys_post_net.pre {
+    $4.full();
+}
+
+sys_post_net.post {
+    $4.mpty();
+}
+
+sys_post_uart.pre {
+    $4.full();
+}
+
+sys_post_uart.post {
+    $4.mpty();
+}
+
+sys_post_i2c.pre {
+    $4.full();
+}
+
+sys_post_i2c.post {
+    $4.mpty();
+}
+
+sys_post_spi.pre {
+    $4.full();
+}
+
+sys_post_spi.post {
+    $4.mpty();
 }
 
 ker_msg_take_data.pre {}

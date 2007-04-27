@@ -761,12 +761,15 @@ let generate_equiv (f:fundec) (cilFile:file): unit =
       []
   in
 
+    (*
     let start_state = 
       List.fold_left
         (fun start_state v -> ListSet.add_singleton (Lval (var v)) start_state)
         []
         (global_vars @ f.slocals)
     in
+     *)
+  let start_state = [] in
 
     let start_state = 
       List.fold_left
