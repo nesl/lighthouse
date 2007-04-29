@@ -1,0 +1,34 @@
+digraph sensor {
+    
+    size="12,8";
+    nodesep="1.0";
+    ranksep="0.33"
+    fontsize="12";
+
+    start -> sensor_disabled 
+        [label="msg_init",taillabel="",headlabel=""];
+
+    sensor_disabled -> sensor_disabled
+        [label="sensor_config_cmd\npre=store.full()\npost=store.empty()",taillabel="",headlabel=""];
+
+    sensor_disabled -> final
+        [label="msg_final",taillabel="",headlabel=""];
+
+    sensor_disabled -> sensor_enabled
+        [label="sensor_enable_cmd",taillabel="",headlabel=""];
+
+    sensor_enabled -> sensor_enabled
+        [label="sensor_config_cmd\npre=store.empty()\npost=store=full()",taillabel="",headlabel=""];
+
+    sensor_enabled -> sensor_disabled
+        [label="sensor_disable_cmd",taillabel="",headlabel=""];
+
+    sensor_enabled -> sensor_getting_data
+        [label="sensor_get_data_cmd",taillabel="",headlabel=""];
+
+    sensor_getting_data -> sensor_enabled
+        [label="sensor_data_ready_fid",taillabel="",headlabel=""];
+
+}
+
+

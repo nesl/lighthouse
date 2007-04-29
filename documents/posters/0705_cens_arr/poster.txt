@@ -1,0 +1,50 @@
+Lighthouse
+==========
+
+Goals
+-----
+
+- Make programming easier and more reliable
+- Provide developers with a more structured design framework
+- Develop new verification techniques
+
+
+History of Lighthouse
+---------------------
+
+- Began as basic style checkers (rewrite these?)
+- Observed common mistake of using released pointers
+- Lighthouse used to track ownership of resources / memory
+- Now merging analysis with a FSM driven framework 
+
+
+Related Work
+------------
+
+- Ownership types 
+    * Statically binds object ownership to a dynamic context
+    * Lighthouse wants to statically defines a dynamically changing ownership
+- Limiting aliases with linear types or alias burying
+- Embedded protocols 
+    * Often encode complex protocols where Lighthouse wants to develop a
+      simple development framework
+    * Overshoot the target required by Lighthouse
+- General analysis is good at finding "bugs"
+
+
+Crazy Cool Idea
+---------------
+
+- Embedded system are reactive
+- Events can fire at any time
+- Causes woes for verification efforts
+- But the programmer has an idea of what is desired...
+
+- Formal design folk have used FSM type layout for a long time
+- Specified the desired behavior of a sensor network application using FSM
+- Use this FSM to help drive a traditional static analysis
+
+- Valuable for programs with complex state changes
+    * Buffers conditionally need to be released
+    * State stored between calls to function
+
