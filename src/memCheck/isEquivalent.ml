@@ -749,6 +749,11 @@ let generate_equiv (f:fundec) (cilFile:file): unit =
 
   (* TODO: I am guessing that the crashes from sched.c and sos_info.c are coming
    * from here. *)
+  (* Also, I am currently disabling this, since the many global variables that
+   * are not being used cause very slow run times. Analysis should still be
+   * correct without this. *)
+
+    (*
   let global_vars = 
     foldGlobals 
       cilFile
@@ -758,10 +763,8 @@ let generate_equiv (f:fundec) (cilFile:file): unit =
          | GVarDecl (v, _) -> v::s
          | _ -> s
       ) 
-      []
   in
 
-    (*
     let start_state = 
       List.fold_left
         (fun start_state v -> ListSet.add_singleton (Lval (var v)) start_state)
@@ -769,7 +772,8 @@ let generate_equiv (f:fundec) (cilFile:file): unit =
         (global_vars @ f.slocals)
     in
      *)
-  let start_state = [] in
+
+    let start_state = [] in
 
     let start_state = 
       List.fold_left

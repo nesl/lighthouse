@@ -22,7 +22,7 @@ let check_headers = ref false;;
 class rocketVisitor = object inherit nopCilVisitor
 
   method vfunc (f: fundec) =
-
+      
     let fsm_graph file_name = 
       Dot2transCheck.get_fsm_graph file_name
     in
@@ -32,7 +32,7 @@ class rocketVisitor = object inherit nopCilVisitor
       try 
         ignore (Apollo.apollo_func_simple f !cil_file);
       with 
-          E.Error -> flush stdout; ignore (printf "####\n# Bummer!\n####\n\n\n");
+          E.Error -> ignore (printf "####\n# Bummer!\n####\n\n\n");
     in
 
 
@@ -47,7 +47,7 @@ class rocketVisitor = object inherit nopCilVisitor
       try 
         ignore (Apollo.apollo_func_fsm f !cil_file edge);
       with 
-          E.Error -> flush stdout; ignore (printf "####\n# Bummer!\n####\n\n\n");
+          E.Error -> ignore (printf "####\n# Bummer!\n####\n\n\n");
     in
 
 
@@ -84,7 +84,7 @@ class rocketVisitor = object inherit nopCilVisitor
       ) else (
         ()
       );
-         
+        
       DoChildren
 
 end
