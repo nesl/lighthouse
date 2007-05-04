@@ -85,6 +85,12 @@ color: #39812C;
     margin-left: 1.0em;
 }
 
+div.listingblock > div.content {
+  border: 1px solid silver;
+  background: #f4f4f4;
+  padding: 0.5em;
+}
+
 @media print {
     #layout-banner { display: none; }
     #layout-menu { display: none; }

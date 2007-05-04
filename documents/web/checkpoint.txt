@@ -1,0 +1,651 @@
+Checkpoint
+==========
+
+
+Checkpoint helps refine static analysis by bringing external event ordering
+information into static analysis.  This work is used to drive the Lighthouse
+analysis.
+
+
+Overview
+--------
+
+An embedded sensing node is often designed as a system that reacts to external
+events.  Example events include environmental conditions that cause a sensor
+to pass a threshold, messages arriving over a radio, or on board timer
+firings.  These events trigger action from the underlying system.  A
+naive static analysis without additional information must assume that any
+event can fire at any time.  This leads to unfortunate false positives.
+Imagine the following simple program.
+
+[c,numbered]
+^^^^^^^^
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+const int NULL = 0;
+const int stderr = 1;
+
+enum {
+    INIT = 0,
+    FINAL = 1,
+    CREATE = 2,
+    DESTROY = 3,
+};
+
+
+char *state;
+
+void init();
+void final();
+void create();
+void destroy();
+
+int main() {
+
+    int seed;
+    seed = time(NULL);
+    printf("Using seed: %d\n", seed);
+    srandom(seed);
+
+    state = NULL;
+
+    for (;;) {
+    
+        switch (random() % 4) {
+
+            case INIT: 
+                init();
+                break;
+
+            case FINAL:
+                final();
+                return 0;
+                break;
+
+
+            case CREATE:
+                create();
+                break;
+
+            case DESTROY:
+                destroy();
+                break;
+
+            default:
+                fprintf(stderr, "Oops.\n");
+                return -1;
+        }
+    }
+
+    return -1;
+}
+
+
+void init() {
+    printf("Init\n");
+    return;
+}
+
+
+void final() {
+    printf("Final\n");
+    return;
+}
+
+
+void create() {
+    printf("Create\n");
+    state = (char *) malloc(100 * sizeof(char));
+    return;
+}
+
+
+void destroy() {
+    printf("Destroy\n");
+    free(state);
+    return;
+}
+^^^^^^^^
+
+
+Many programs have a similar view of the world.  Random events happening.
+This is unfortunate since calling the `create` event twice in a
+row causes a memory leak.  This is only one of many potential problems with
+this program.  However, if the program can guarantee a fixed ordering of the
+events called (rather than the random ordering seen here) the program would be
+sound.  The following is a finite state machine that describes such a valid
+event ordering.  
+
+image:memory.dot.png[FSM of Valid Memory Program]
+
+States are simply bubbles.  No state really.  That should probably be fixed.
+But edges are cool!  An edge label is the function call that causes the
+transition.  The edge tail describes pre-conditions for the function while the
+edge head describes the post-conditions for the function.
+
+
+So What?
+--------
+
+Running Lighthouse on the memory program listed above causes the following
+error:
+
+----
+./rocket --spec test.spec ../fsm/memory.c 
+
+Error: Unable to find state for return statement 39 (memory.c:60)
+
+Error: State.verify_state_with_pre: Formal parameter $1 is not a full store
+and not heap data at memory.c:85
+
+Error: Apollo.Apollo_Dataflow.doInstr: Unsafe precondition found in call #line
+85 "memory.c"
+free(state);
+----
+
+Note: Why isn't there a warning for the `malloc` in the prior paragraph?  Need
+to nail this down.
+
+The call to free at line 85 is recognized as potentially freeing data from a
+store that we know nothing about.  This is no good.  If the static analysis
+know more about the ordering of events and the corresponding pre- and post-
+conditions, this would not be a problem.  Thus, we updated 'rocket' to take as
+input a FSM description to drive the analysis:
+
+----
+./rocket --spec test.spec ../fsm/memory.c --fsm ../fsm/memory.dot
+----
+
+This time the analysis only examines functions that label FSM edges and uses
+the pre- and post- conditions from the edge.  This helps to clarify the
+behavior of the programmer is expecting.
+
+
+Moving Onto SOS
+---------------
+
+The same argument applies to SOS.  The following code listing is a heavily
+modified SOS sensor driver.  Parts of the program have been broken out into
+dedicated functions to ease the specification process.
+
+
+[c,numbered]
+^^^^^^^^
+enum {SENSOR_DATA_READY_FID,
+    SENSOR_CONTROL_FID,
+    SENSOR_GET_DATA_CMD,
+    SENSOR_ENABLE_CMD,
+    SENSOR_DISABLE_CMD,
+    SENSOR_CONFIG_CMD,
+    MSG_INIT,
+    MSG_FINAL,
+};
+
+
+const int NULL = 0;
+const int ACCEL_0_SENSOR_ID = 1;
+const int ACCEL_1_SENSOR_ID = 2;
+const int MTS310_ACCEL_0_SID = 3;
+const int MTS310_ACCEL_1_SID = 4;
+const int SOS_MSG_PAYLOAD_LENGTH = 5;
+const int MTS310_ACCEL_0_HW_CH = 8;
+const int MTS310_ACCEL_1_HW_CH = 9;
+const unsigned short ACCEL_SENSOR_PID = 10;
+const char SOS_OK = 17;
+const int EINVAL = 18;
+
+
+
+typedef unsigned int func_cb_ptr;
+
+
+
+typedef struct Message {
+	unsigned short  did;                           //!< module destination id
+	unsigned short  sid;                           //!< module source id
+	unsigned short daddr;                          //!< node destination address
+	unsigned short saddr;                          //!< node source address
+	unsigned char  type;                           //!< module specific message type
+	unsigned char  len;                            //!< payload length 
+	unsigned char  *data;                          //!< actual payload
+	unsigned short flag;                           //!< flag to indicate the status of message, see below
+	unsigned char payload[4];                      //!< statically allocated payload
+	struct Message *next;                          //!< link list for the Message
+} Message;
+
+
+
+typedef struct accel_sensor_state {
+    unsigned char accel_0_state;
+    unsigned char accel_1_state;
+    unsigned char options;
+    unsigned char state;
+} accel_sensor_state_t;
+
+
+
+char accel_data_ready_cb(func_cb_ptr cb, unsigned char port, unsigned short value, unsigned char flags);
+static char accel_control(func_cb_ptr cb, unsigned char cmd, void *data);
+static char accel_msg_handler(void *state, Message *msg);
+
+
+
+void msg_init();
+void msg_final();
+void sensor_data_ready_fid();
+void sensor_control_fid();
+char sensor_get_data_cmd(unsigned char ctx);
+void sensor_endable_cmd();
+void sensor_disable_cmd();
+void sensor_config_cmd(unsigned char *data);
+
+
+// Dummy functions implmented in other parts of the system
+void ker_sensor_data_ready(int sid, unsigned short value, unsigned char flags);
+void ker_adc_proc_bindPort(unsigned int w, unsigned int x, unsigned int y,  unsigned int z);
+void ker_sensor_register(unsigned short pid, unsigned int sid, unsigned int fid, void *state);
+void ker_adc_proc_unbindPort(unsigned short pid, int sid);
+void ker_sensor_deregister(unsigned short pid, int sid);
+char ker_adc_proc_getData(int sid, int id);
+void sys_free(void * buf);
+
+
+// data ready callback registered with adc driver
+char accel_data_ready_cb(func_cb_ptr cb, unsigned char port, unsigned short value, unsigned char flags) {
+
+    if (port == MTS310_ACCEL_0_SID) {
+        ker_sensor_data_ready(MTS310_ACCEL_0_SID, value, flags);
+    } else {
+        ker_sensor_data_ready(MTS310_ACCEL_1_SID, value, flags);
+    }
+    return SOS_OK;
+}
+
+
+
+static inline void accel_on() {
+    // SET_ACCEL_EN();
+    // SET_ACCEL_EN_DD_OUT();
+}
+static inline void accel_off() {
+    // SET_ACCEL_EN_DD_IN();
+    // CLR_ACCEL_EN();
+}
+
+
+
+// function registered with kernel sensor component
+static char accel_control(func_cb_ptr cb, unsigned char cmd, void* data) {\
+
+    unsigned char ctx = *(unsigned char*)data;
+
+    switch (cmd) {
+        case SENSOR_GET_DATA_CMD:
+            return sensor_get_data_cmd(ctx);
+            break;
+
+        case SENSOR_ENABLE_CMD:
+            sensor_endable_cmd();
+            break;
+
+        case SENSOR_DISABLE_CMD:
+            sensor_disable_cmd();
+            break;
+
+        case SENSOR_CONFIG_CMD:
+            sensor_config_cmd(data);
+            break;
+
+        default:
+            return -EINVAL;
+    }
+    return SOS_OK;
+}
+
+
+// message handler called by kernel
+char accel_msg_handler(void *state, Message *msg)
+{
+
+    accel_sensor_state_t *s = (accel_sensor_state_t*)state;
+
+    switch (msg->type) {
+
+        case MSG_INIT:
+            msg_init(s);
+            break;
+            
+        case MSG_FINAL:
+            msg_final();
+            break;
+
+        default:
+            return -EINVAL;
+    }
+    return SOS_OK;
+}
+
+
+
+void msg_init(accel_sensor_state_t *s) {
+
+    // bind adc channel and register callback pointer
+    ker_adc_proc_bindPort(MTS310_ACCEL_0_SID, MTS310_ACCEL_0_HW_CH, ACCEL_SENSOR_PID,  SENSOR_DATA_READY_FID);
+    ker_adc_proc_bindPort(MTS310_ACCEL_1_SID, MTS310_ACCEL_1_HW_CH, ACCEL_SENSOR_PID,  SENSOR_DATA_READY_FID);
+
+    // register with kernel sensor interface
+    s->accel_0_state = ACCEL_0_SENSOR_ID;
+    ker_sensor_register(ACCEL_SENSOR_PID, MTS310_ACCEL_0_SID, SENSOR_CONTROL_FID, (void*)(&s->accel_0_state));
+    s->accel_1_state = ACCEL_1_SENSOR_ID;
+    ker_sensor_register(ACCEL_SENSOR_PID, MTS310_ACCEL_1_SID, SENSOR_CONTROL_FID, (void*)(&s->accel_1_state));
+    return;
+}
+
+
+void msg_final() {
+    // shutdown sensor
+    accel_off();
+    //  unregister ADC port
+    ker_adc_proc_unbindPort(ACCEL_SENSOR_PID, MTS310_ACCEL_0_SID);
+    ker_adc_proc_unbindPort(ACCEL_SENSOR_PID, MTS310_ACCEL_1_SID);
+    // unregister sensor
+    ker_sensor_deregister(ACCEL_SENSOR_PID, MTS310_ACCEL_0_SID);
+    ker_sensor_deregister(ACCEL_SENSOR_PID, MTS310_ACCEL_1_SID);
+    return;
+}
+
+
+void sensor_data_ready_fid() {};
+
+
+void sensor_control_fid() {};
+
+char sensor_get_data_cmd(unsigned char ctx) {
+    // get ready to read accel sensor
+    if ((ctx & 0xC0) == ACCEL_0_SENSOR_ID) {
+        return ker_adc_proc_getData(MTS310_ACCEL_0_SID, ACCEL_0_SENSOR_ID);
+    } else {
+        return ker_adc_proc_getData(MTS310_ACCEL_1_SID, ACCEL_1_SENSOR_ID);
+    }
+}
+
+
+void sensor_endable_cmd() {
+    accel_on();
+    return;
+}
+
+
+void sensor_disable_cmd() {
+    accel_off();
+    return;
+}
+
+void sensor_config_cmd(unsigned char *data) {
+    //if (data != (void *)NULL) {
+        sys_free(data);
+    //}
+    return;
+}
+^^^^^^^^
+
+A little ugly, but it compiles.  The corresponding FSM looks like:
+
+image:sensor.dot.fsm
+
+So far everything is still going well.  But problems arise as soon as we begin
+using the actual C program that the user provided.  Looking at the unmodified
+SOS driver:
+
+
+[c,numbered]
+^^^^^^^^
+enum {SENSOR_DATA_READY_FID,
+    SENSOR_CONTROL_FID,
+    SENSOR_GET_DATA_CMD,
+    SENSOR_ENABLE_CMD,
+    SENSOR_DISABLE_CMD,
+    SENSOR_CONFIG_CMD,
+    MSG_INIT,
+    MSG_FINAL,
+    ACCEL_SENSOR_PID,
+    HW_TYPE,
+    MCU_TYPE,
+};
+
+
+typedef unsigned int func_cb_ptr;
+typedef unsigned char uint8_t;
+typedef unsigned short uint16_t;
+typedef char int8_t;
+typedef short sos_pid_t;
+typedef short sos_code_id_t;
+
+const int NULL = 0;
+const int ACCEL_0_SENSOR_ID = 1;
+const int ACCEL_1_SENSOR_ID = 2;
+const int MTS310_ACCEL_0_SID = 3;
+const int MTS310_ACCEL_1_SID = 4;
+const int SOS_MSG_PAYLOAD_LENGTH = 5;
+const int MTS310_ACCEL_0_HW_CH = 8;
+const int MTS310_ACCEL_1_HW_CH = 9;
+const char SOS_OK = 17;
+const int EINVAL = 18;
+
+
+typedef struct func_cb {
+  void *ptr;        //! function pointer                    
+  uint8_t proto[4]; //! function prototype                  
+  uint8_t pid;      //! function PID                                    
+  uint8_t fid;      //! function ID                         
+} func_cb_t;
+
+
+
+typedef struct Message {
+	unsigned short  did;                           //!< module destination id
+	unsigned short  sid;                           //!< module source id
+	unsigned short daddr;                          //!< node destination address
+	unsigned short saddr;                          //!< node source address
+	unsigned char  type;                           //!< module specific message type
+	unsigned char  len;                            //!< payload length 
+	unsigned char  *data;                          //!< actual payload
+	unsigned short flag;                           //!< flag to indicate the status of message, see below
+	unsigned char payload[4];                      //!< statically allocated payload
+	struct Message *next;                          //!< link list for the Message
+} Message;
+
+typedef int8_t (*msg_handler_t)(void *state, Message *m);
+
+
+typedef struct mod_header {
+  uint16_t state_size;      //!< module state size
+  sos_pid_t mod_id;        //!< module ID (used for messaging).  Set NULL_PID for system selected mod_id
+  uint8_t num_timers;      //!< Number of timers to be reserved at module load time
+  uint8_t num_sub_func;    //!< number of functions to be subscribed
+  uint8_t num_prov_func;   //!< number of functions provided
+  uint8_t num_dfunc;       //!< number of direct linked functions
+  uint8_t version;         //!< version number, for users bookkeeping
+  sos_code_id_t code_id;   //!< module image identifier
+  uint8_t processor_type;  //!< processor type of this module
+  uint8_t platform_type;   //!< platform type of this module
+  //  uint8_t padding;
+  msg_handler_t module_handler;
+  func_cb_t funct[];
+} mod_header_t;
+
+
+
+typedef struct accel_sensor_state {
+	uint8_t accel_0_state;
+	uint8_t accel_1_state;
+	uint8_t options;
+	uint8_t state;
+} accel_sensor_state_t;
+
+
+//const short ehtons(short e) {return e;}
+
+
+// Dummy functions implmented in other parts of the system
+void ker_sensor_data_ready(int sid, unsigned short value, unsigned char flags);
+void ker_adc_proc_bindPort(unsigned int w, unsigned int x, unsigned int y,  unsigned int z);
+void ker_sensor_register(unsigned short pid, unsigned int sid, unsigned int fid, void *state);
+void ker_adc_proc_unbindPort(unsigned short pid, int sid);
+void ker_sensor_deregister(unsigned short pid, int sid);
+char ker_adc_proc_getData(int sid, int id);
+void sys_free(void * buf);
+
+// function registered with kernel sensor component
+static int8_t accel_control(func_cb_ptr cb, uint8_t cmd, void *data);
+// data ready callback registered with adc driver
+int8_t accel_data_ready_cb(func_cb_ptr cb, uint8_t port, uint16_t value, uint8_t flags);
+
+static int8_t accel_msg_handler(void *state, Message *msg);
+
+
+static const mod_header_t mod_header = {
+  mod_id : ACCEL_SENSOR_PID,
+  state_size : sizeof(accel_sensor_state_t),
+  num_timers : 0,
+  num_sub_func : 0,
+  num_prov_func : 2,
+	platform_type : HW_TYPE,
+	processor_type : MCU_TYPE,
+	//code_id : ehtons(ACCEL_SENSOR_PID),
+	code_id : ACCEL_SENSOR_PID,
+  module_handler : accel_msg_handler,
+	funct : {
+		{accel_control, "cCw2", ACCEL_SENSOR_PID, SENSOR_CONTROL_FID},
+		{accel_data_ready_cb, "cCS3", ACCEL_SENSOR_PID, SENSOR_DATA_READY_FID},
+	},
+};
+
+
+/**
+ * adc call back
+ * not a one to one mapping so not SOS_CALL
+ */
+int8_t accel_data_ready_cb(func_cb_ptr cb, uint8_t port, uint16_t value, uint8_t flags) {
+
+	// post data ready message here
+	if (port == MTS310_ACCEL_0_SID) {
+		ker_sensor_data_ready(MTS310_ACCEL_0_SID, value, flags);
+	} else {
+		ker_sensor_data_ready(MTS310_ACCEL_1_SID, value, flags);
+	}
+	return SOS_OK;
+}
+
+
+static inline void accel_on() {
+	//SET_ACCEL_EN();
+	//SET_ACCEL_EN_DD_OUT();
+}
+static inline void accel_off() {
+	//SET_ACCEL_EN_DD_IN();
+	//CLR_ACCEL_EN();
+}
+
+static int8_t accel_control(func_cb_ptr cb, uint8_t cmd, void* data) {\
+
+	uint8_t ctx = *(uint8_t*)data;
+	
+	switch (cmd) {
+		case SENSOR_GET_DATA_CMD:
+			// get ready to read accel sensor
+			if ((ctx & 0xC0) == ACCEL_0_SENSOR_ID) {
+				return ker_adc_proc_getData(MTS310_ACCEL_0_SID, ACCEL_0_SENSOR_ID);
+			} else {
+				return ker_adc_proc_getData(MTS310_ACCEL_1_SID, ACCEL_1_SENSOR_ID);
+			}
+			break;
+
+		case SENSOR_ENABLE_CMD:
+			accel_on();
+			break;
+
+		case SENSOR_DISABLE_CMD:
+			accel_off();
+			break;
+
+		case SENSOR_CONFIG_CMD:
+			// no configuation
+			if (data != NULL) {
+				sys_free(data);
+			}
+			break;
+
+		default:
+			return -EINVAL;
+	}
+	return SOS_OK;
+}
+
+
+int8_t accel_msg_handler(void *state, Message *msg)
+{
+	
+	accel_sensor_state_t *s = (accel_sensor_state_t*)state;
+  
+	switch (msg->type) {
+
+		case MSG_INIT:
+			// bind adc channel and register callback pointer
+
+			ker_adc_proc_bindPort(MTS310_ACCEL_0_SID, MTS310_ACCEL_0_HW_CH, ACCEL_SENSOR_PID,  SENSOR_DATA_READY_FID);
+			ker_adc_proc_bindPort(MTS310_ACCEL_1_SID, MTS310_ACCEL_1_HW_CH, ACCEL_SENSOR_PID,  SENSOR_DATA_READY_FID);
+			// register with kernel sensor interface
+			s->accel_0_state = ACCEL_0_SENSOR_ID;
+			ker_sensor_register(ACCEL_SENSOR_PID, MTS310_ACCEL_0_SID, SENSOR_CONTROL_FID, (void*)(&s->accel_0_state));
+			s->accel_1_state = ACCEL_1_SENSOR_ID;
+			ker_sensor_register(ACCEL_SENSOR_PID, MTS310_ACCEL_1_SID, SENSOR_CONTROL_FID, (void*)(&s->accel_1_state));
+			break;
+
+		case MSG_FINAL:
+			// shutdown sensor
+			accel_off();
+			//  unregister ADC port
+			ker_adc_proc_unbindPort(ACCEL_SENSOR_PID, MTS310_ACCEL_0_SID);
+			ker_adc_proc_unbindPort(ACCEL_SENSOR_PID, MTS310_ACCEL_1_SID);
+			// unregister sensor
+			ker_sensor_deregister(ACCEL_SENSOR_PID, MTS310_ACCEL_0_SID);
+			ker_sensor_deregister(ACCEL_SENSOR_PID, MTS310_ACCEL_1_SID);
+			break;
+
+		default:
+			return -EINVAL;
+			break;
+	}
+	return SOS_OK;
+}
+
+/*
+#ifndef _MODULE_
+mod_header_ptr accel_sensor_get_header() {
+	return sos_get_header_address(mod_header);
+}
+#endif
+*/
+^^^^^^^^
+
+
+Now life is exciting.  Note that without the addition of predicates on the
+node edges, this graph is non-deterministic.  Bummer.  But it makes sense
+since the nodes (at least in this example) really are stateless.  We could
+simplify this graph by collapsing it into a single node, and keeping all
+edges.  
+
+
+Next Steps
+----------
+
+- Need to move state into the nodes of the finite 'state' diagram. 
+- Need a clear definition of what is state and what is a predicate
+    * Global stores are state
+    * Heap data in formal / return value is a predicate (?)
+    * Path specific control flow is encoded as predicates
+
+
