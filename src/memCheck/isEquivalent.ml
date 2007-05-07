@@ -752,7 +752,7 @@ let generate_equiv (f:fundec) (cilFile:file): unit =
   (* Also, I am currently disabling this, since the many global variables that
    * are not being used cause very slow run times. Analysis should still be
    * correct without this. *)
-
+    
     (*
   let global_vars = 
     foldGlobals 
@@ -763,6 +763,7 @@ let generate_equiv (f:fundec) (cilFile:file): unit =
          | GVarDecl (v, _) -> v::s
          | _ -> s
       ) 
+      []
   in
 
     let start_state = 
@@ -771,11 +772,12 @@ let generate_equiv (f:fundec) (cilFile:file): unit =
         []
         (global_vars @ f.slocals)
     in
-     *)
 
-    let start_state = [] in
-
-    let start_state = 
+   *)
+    
+  let start_state = [] in
+ 
+  let start_state = 
       List.fold_left
         (fun start_state v -> 
            if (hasAttribute "sos_release" v.vattr) then (
