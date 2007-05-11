@@ -1016,7 +1016,7 @@ let update_state_with_post
 
              | _ ->
                  E.error "%s %a %s at %a" 
-                   "State.verify_state_with_pre:"
+                   "State.update_state_with_post:"
                    d_exp key
                    "is empty and may not be made empty again"
                    d_loc (get_stmtLoc current_stmt.skind);

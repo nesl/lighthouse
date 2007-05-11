@@ -27,6 +27,23 @@ computer.  The CIL website has good instructions on how to
 http://hal.cs.berkeley.edu/cil/[install CIL].  Lighthouse is currently
 developed using CIL version 1.3.5.
 
+Brief instructions on this process are:
+
+- Obtain CIL 1.3.5 from http://sourceforge.net/projects/cil[CIL's Source
+  Forge page].  
+- Expand the tarball in a local directory using the command `tar -xzvf
+  cil-1.3.5.tar.gz`
+- Change directories into the root of the CIL distrobution
+- Configure CIL using `./configure`
+- Build CIL using `make`
+- If the build comlains of:
+----
+File "obj/x86_LINUX/feature_config.ml", line 4, characters 1-3:
+Unbound value ne
+----
+then remove the `-ne` from line 4 of obj/x86_LINUX/feature_config.ml and
+try to build again
+
 Obtain Lighthouse
 ~~~~~~~~~~~~~~~~~
 

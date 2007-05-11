@@ -11,7 +11,9 @@ void * msg_create()
     if (tmp != 0) {
         tmp[0] = 4;
         tmp[1] = 0;
+        return tmp;
     }
+    tmp = ker_malloc(8);
     return tmp;
 }
 

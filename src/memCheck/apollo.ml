@@ -13,7 +13,7 @@ module MA = MayAliasWrapper;;
 let dbg_apollo_s = ref false;;
 let dbg_apollo_i = ref false;;
 let dbg_apollo_c = ref false;;
-let dbg_apollo_df = ref false;;
+let dbg_apollo_df = ref true;;
 let dbg_apollo_g = ref false;;
 let dbg_apollo = ref false;;
 
@@ -49,6 +49,12 @@ module Apollo_Dataflow = struct
 
 
   let combinePredecessors (s: stmt) ~(old: t) (new_state: t) = 
+    
+    if !dbg_apollo_c then (
+      ignore (printf "Checking combine at %a\n" d_loc (get_stmtLoc !current_stmt.skind));
+      flush stdout;
+    );
+
 (*
     let updated_state = ref false in
 
@@ -237,10 +243,10 @@ module Apollo_Dataflow = struct
 
   let doInstr (i: instr) (state: t): t DF.action = 
    
-    (* 
-    ignore (printf "Checking instruction at %a\n" d_loc (get_instrLoc i));
-    flush stdout;
-    *)
+    if !dbg_apollo_i then (
+      ignore (printf "Checking instruction at %a\n" d_loc (get_instrLoc i));
+      flush stdout;
+    );
 
     match i with
 
@@ -426,7 +432,8 @@ module Apollo_Dataflow = struct
                 
 
               (* TODO: Double check the rest of these default cases *)
-              | (_, _) -> DF.Default
+              | (_, _) -> 
+                  DF.Default
           
           end
 
@@ -445,14 +452,11 @@ module Apollo_Dataflow = struct
             verify_state_with_pre v.vname (lvop, el) state !current_stmt
           in
 
-          let _ =
-            if not proper_pre then (
-              E.error "%s %s %a"
-                "Apollo.Apollo_Dataflow.doInstr:"
-                "Unsafe precondition found in call" 
-                d_instr i
-            )
-          in
+          (* Place holder for checking for errors.  The function
+           * verify_state_with_pre currently prints a debugging statement for
+           * us. 
+           *)
+          let _ = if not proper_pre then () in
 
           (* Update state to reflect the effects of the function call *)
           let new_state = update_state_with_post v.vname (lvop, el) state !current_stmt in
@@ -482,6 +486,12 @@ module Apollo_Dataflow = struct
 
   let doStmt (s: stmt) (state: t) =
     current_stmt := s;
+    
+    if !dbg_apollo_s then (
+      ignore (printf "Checking statement at %a\n" d_loc (get_stmtLoc !current_stmt.skind));
+      flush stdout;
+    );
+
 
     match s.skind with 
         If (e, _, _, _)
@@ -504,6 +514,11 @@ module Apollo_Dataflow = struct
    * been claimed. *)
   let doGuard (e: exp) (state: t) = 
     
+    if !dbg_apollo_g then (
+      ignore (printf "Checking guard at %a\n" d_loc (get_stmtLoc !current_stmt.skind));
+      flush stdout;
+    );
+
     (* Helper function used to determine if a binary comparison is comparing the
      * target expression to a null pointer *)
     let is_target_and_null (e1: exp) (e2: exp) (s: stmt) : bool =
@@ -673,11 +688,11 @@ let apollo_func_simple (f: fundec) (cfile: file) : bool =
                Return (eop, _) -> eop
              | _ -> None
          in
-           if not (verify_state_with_post f.svar.vname (return_eop, formals) return s) 
-           then
-             E.error 
-               "Return at %a fails to satisfy post- conditions for function %s"
-               d_loc (get_stmtLoc s.skind) f.svar.vname
+
+         let _ = (verify_state_with_post f.svar.vname (return_eop, formals) return s) in
+           
+           ()
+
        with Not_found -> 
          E.error "Unable to find state for return statement %d (%a)" 
            s.sid
