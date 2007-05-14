@@ -5,6 +5,9 @@ module IE = IsEquivalent;;
 module MA = MayAliasWrapper;;
 
 let dbg_state = ref false;;
+
+(* TODO: set this to false before release *)
+let quite = ref true;;
   
 (* Unique counters for tracking heap data flowing into or out of functions *)
 let incoming_heap_counter = ref 0;;
@@ -1007,6 +1010,7 @@ let update_state_with_post
                    states
              
              | None when must_be_full key states current_stmt ->
+                     if not !quite then 
                  ignore (E.warn "%s %a %s at %a"
                            "State.update_state_with_post:"
                            d_exp key 
@@ -1015,6 +1019,7 @@ let update_state_with_post
                  states
 
              | _ ->
+                     if not !quite then 
                  E.error "%s %a %s at %a" 
                    "State.update_state_with_post:"
                    d_exp key
