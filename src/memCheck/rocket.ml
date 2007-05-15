@@ -128,6 +128,9 @@ let argDescr = [
   ("--check_headers", Arg.Unit (fun _ -> check_headers := true),
    "Enable checking of header files");
 
+  ("--strict", Arg.Unit (fun _ -> Apollo.strict := true),
+   "Use strict checking that assumes non-speficied stores to be off limits");
+  
   ("--dbg_state", Arg.Unit (fun _ -> State.dbg_state := true),
    "Debug state tracking");
 

@@ -16,6 +16,7 @@ let dbg_apollo_c = ref false;;
 let dbg_apollo_df = ref false;;
 let dbg_apollo_g = ref false;;
 let dbg_apollo = ref false;;
+let strict = ref false;;
 
 (* Reference to the current statment *)
 let current_stmt = ref (mkEmptyStmt ());;
@@ -639,7 +640,14 @@ let apollo_func_simple (f: fundec) (cfile: file) : bool =
 
   (* Create a dummy "initial_state" that has all stores in an unknown state and
    * an empty heap *)
-  let global_stores = List.map (fun e -> (Unknown_store, e)) global_exps in
+  let global_stores = 
+    if !strict then (
+      List.map (fun e -> (Error_store, e)) global_exps 
+    ) else (
+      List.map (fun e -> (Unknown_store, e)) global_exps 
+    )
+  in
+
   let initial_heaps = [] in
   let initial_states = initial_heaps @ global_stores in
   
