@@ -45,7 +45,7 @@ class rocketVisitor = object inherit nopCilVisitor
       let _ = State.fsm_specification := spec in
 
       try 
-        ignore (Apollo.apollo_func_fsm f !cil_file edge);
+        ignore (Apollo.apollo_func_fsm f !cil_file);
       with 
           E.Error -> ignore (printf "####\n# Bummer!\n####\n\n\n");
     in
