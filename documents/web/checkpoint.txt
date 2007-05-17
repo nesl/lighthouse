@@ -1,22 +1,69 @@
 Checkpoint
 ==========
 
-
 Checkpoint helps refine static analysis by bringing external event ordering
 information into static analysis.  This work is used to drive the Lighthouse
 analysis.
 
 
-Overview
---------
+Motivation
+----------
 
-An embedded sensing node is often designed as a system that reacts to external
-events.  Example events include environmental conditions that cause a sensor
-to pass a threshold, messages arriving over a radio, or on board timer
-firings.  These events trigger action from the underlying system.  A
-naive static analysis without additional information must assume that any
-event can fire at any time.  This leads to unfortunate false positives.
-Imagine the following simple program.
+An embedded sensor node often reacts to external events.  Example events
+include environmental conditions causing a sensor to pass a threshold, radio
+messages arrivial, or on board timer firings.  These events trigger action on
+the underlying sensor node.  Static analysis without additional information
+must assume all (possible) event orderings.  This leads to false positives
+resulting from staticly examining event orderings that a programmer may know
+should not occure in a deployed system.  
+
+The following specification is proposed to help programmers describe
+valid event orderings.  Event specifications can be used to constrain static
+analysis, embed run time checks into source code, and document a project.
+
+
+Graph Specification
+-------------------
+
+
+Definition of Graph
+~~~~~~~~~~~~~~~~~~~
+
+Graph := \'digraph\' [ID] \'{\' [Node_list] [Edge_list] \'}\'
+
+Node_list := Node\';\' [Node_list]
+
+Node := Node_id [Store_list]
+
+Node_id := ID
+
+Store_list := Global_id \'=\' Store_state\';\' [Store_list]
+
+Global_id := ID
+
+Store_state := (\'Full_Store\' | \'Empty_Store\' | \'Proctected_Store\')
+
+Edges := Node_id \'->\' Node_id \'[\' Event_id [\',\' \'pre=" \' Predicates
+\'" \'] [\',\' \'post=" \' Predicates\' "\'] \']\'
+
+Event_id := ID
+
+Formal_Predicates := Formal_id\'.\'(full | mpty)\'();\'
+
+Formal_id := ID
+
+
+Notes
+~~~~~
+
+- Unnamed stores are assumed to be have state Protected_Store.
+- Deviations from the FSM transition to an implicit Error state.
+- Lack of pre- or post- conditions on an edge imply that the formal can not
+  change during event execution.
+
+
+Examples
+--------
 
 [c,numbered]
 ^^^^^^^^
@@ -109,53 +156,64 @@ void destroy() {
 }
 ^^^^^^^^
 
-
-Many programs have a similar view of the world.  Random events happening.
-This is unfortunate since calling the `create` event twice in a
-row causes a memory leak.  This is only one of many potential problems with
-this program.  However, if the program can guarantee a fixed ordering of the
-events called (rather than the random ordering seen here) the program would be
-sound.  The following is a finite state machine that describes such a valid
-event ordering.  
-
-image:memory.dot.png[FSM of Valid Memory Program]
-
-States are simply bubbles.  No state really.  That should probably be fixed.
-But edges are cool!  An edge label is the function call that causes the
-transition.  The edge tail describes pre-conditions for the function while the
-edge head describes the post-conditions for the function.
-
-
-So What?
---------
+The above program provides a niave view of event driven systems.  Events fire
+randomly.  This is unfortunate since calling the `create` event twice in a row
+causes a memory leak.  This is only one of many potential problems with this
+program.  However, if the program can guarantee a fixed ordering of the events
+called (rather than the random ordering seen here) the program would be sound.
+The following is a specification that describes such a valid event ordering.  
 
 Running Lighthouse on the memory program listed above causes the following
-error:
+errors:
 
 ----
-./rocket --spec test.spec ../fsm/memory.c 
+./rocket --spec test.spec ../fsm/memory.c --strict
 
-Error: Unable to find state for return statement 39 (memory.c:60)
+...
+
+Error: State.verify_state_with_pre: malloc is not free to store heap data at
+memory.c:78
+
+Error: State.verify_state_with_pre: state is dead so it may not be
+dereferenced at memory.c:85
+
+...
 
 Error: State.verify_state_with_pre: Formal parameter $1 is not a full store
 and not heap data at memory.c:85
 
-Error: Apollo.Apollo_Dataflow.doInstr: Unsafe precondition found in call #line
-85 "memory.c"
-free(state);
 ----
 
-Note: Why isn't there a warning for the `malloc` in the prior paragraph?  Need
-to nail this down.
+If the static analysis understood event orderings and pre- and post-
+conditions for formals passed into event handlers, this would not be a
+problem.  An example of such an FSM specification is:
 
-The call to free at line 85 is recognized as potentially freeing data from a
-store that we know nothing about.  This is no good.  If the static analysis
-know more about the ordering of events and the corresponding pre- and post-
-conditions, this would not be a problem.  Thus, we updated 'rocket' to take as
-input a FSM description to drive the analysis:
+----
+digraph memory {
+
+    Start;
+    Init_done;
+    Final_done;
+    Create_done [state=Full_Store];
+    Destroy_done [state=Empty_Store];
+
+    Start -> Init_done [event=init];
+    Init_done -> Final_done [event=final];
+    Init_done -> Create_done [event=create];
+    Create_done -> Destroy_done [event=destroy];
+    Destroy_done -> Create_done [event=create];
+    Destroy_done -> Final_done [event=final];
+
+}
+----
+
+Updating 'rocket' to take as input a FSM description to drive the analysis
+results in:
 
 ----
 ./rocket --spec test.spec ../fsm/memory.c --fsm ../fsm/memory.dot
+
+NOT WORKING :-(
 ----
 
 This time the analysis only examines functions that label FSM edges and uses
@@ -393,7 +451,28 @@ void sensor_config_cmd(unsigned char *data) {
 
 A little ugly, but it compiles.  The corresponding FSM looks like:
 
-image:sensor.dot.fsm
+----
+digraph sensor {
+
+    Start;
+    Init_done;
+    Final_done;
+    Enable_done;
+    Get_Data_done;
+
+
+    Start -> Init_done [event=msg_init];
+    Init_done -> Init_done [event=sensor_config_cmd, pre="$1.full();", post="1.mpty();"];
+    Init_done -> Final_done [event=msg_final];
+    Init_done -> Enable_done [event=sensor_enable_cmd];
+    Enable_done -> Enable_done [event=sensor_config_cmd, pre="$1.full();", post="1.mpty();"];
+    Enable_done -> Init_done [event=sensor_disable_cmd];
+    Enable_done -> Get_Data_done [event=sensor_get_data_cmd];
+    Get_Data_done -> Enable_done [event=sensor_data_ready_fid];
+
+}
+----
+
 
 So far everything is still going well.  But problems arise as soon as we begin
 using the actual C program that the user provided.  Looking at the unmodified
@@ -630,22 +709,5 @@ mod_header_ptr accel_sensor_get_header() {
 #endif
 */
 ^^^^^^^^
-
-
-Now life is exciting.  Note that without the addition of predicates on the
-node edges, this graph is non-deterministic.  Bummer.  But it makes sense
-since the nodes (at least in this example) really are stateless.  We could
-simplify this graph by collapsing it into a single node, and keeping all
-edges.  
-
-
-Next Steps
-----------
-
-- Need to move state into the nodes of the finite 'state' diagram. 
-- Need a clear definition of what is state and what is a predicate
-    * Global stores are state
-    * Heap data in formal / return value is a predicate (?)
-    * Path specific control flow is encoded as predicates
 
 
