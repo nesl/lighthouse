@@ -438,10 +438,10 @@ digraph blink {
     Timeout_done;
 
     Start -> Init_done [event=blink_msg_handler, pred="msg->type=MSG_INIT"];
-    Init_done -> Final_done [event=blink_msg_handler, pred="msg-type=MSG_FINAL"];
-    Init_done -> Timeout_done [event=blink_msg_handler, pred="msg-type=MSG_TIMER_TIMEOUT"];
-    Timeout_done -> Timeout_done [event=blink_msg_handler, pred="msg-type=MSG_TIMER_TIMEOUT"];
-    Timeout_done -> Final_done [event=blink_msg_handler, pred="msg-type=MSG_FINAL"];
+    Init_done -> Final_done [event=blink_msg_handler, pred="msg->type=MSG_FINAL"];
+    Init_done -> Timeout_done [event=blink_msg_handler, pred="msg->type=MSG_TIMER_TIMEOUT"];
+    Timeout_done -> Timeout_done [event=blink_msg_handler, pred="msg->type=MSG_TIMER_TIMEOUT"];
+    Timeout_done -> Final_done [event=blink_msg_handler, pred="msg->type=MSG_FINAL"];
 
 }
 ----
