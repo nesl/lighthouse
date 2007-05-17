@@ -446,3 +446,29 @@ digraph blink {
 }
 ----
 
+
+Verification and FSM Specifications
+-----------------------------------
+
+The FSM specification provides information that is used by both the static
+and runtime checking systems.  
+
+Static Checks::
+    - Lighthouse only examines transitions that appear in the FSM
+    - Pre- and post- conditions for the static analysis are created by
+      combining the static store state described in the FSM nodes with pre-
+      and post- predicates describing the state of formals
+    - Consistency of the FSM is validated (TODO)
+
+Runtime Checks::
+    - Valid FSM state transitions are encoded in a function checking the
+      existence of a single hop path between two states
+    - Calls to the FSM function are inserted at the entry to event handlers
+      causing transitions (TODO)
+    - Predicates about global stores and formal states are assumed to be
+      true
+
+Remaining Checks::
+    - Pre-conditions on formals are not currently validated
+    - Behavior to take when an invalid event is called is not resolved
+
