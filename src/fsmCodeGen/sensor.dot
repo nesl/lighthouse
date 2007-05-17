@@ -1,0 +1,19 @@
+digraph sensor {
+
+    Start;
+    Init_done;
+    Final_done;
+    Enable_done;
+    Get_Data_done;
+
+
+    Start -> Init_done [event=msg_init];
+    Init_done -> Init_done [event=sensor_config_cmd, pre="$1.full();", post="1.mpty();"];
+    Init_done -> Final_done [event=msg_final];
+    Init_done -> Enable_done [event=sensor_enable_cmd];
+    Enable_done -> Enable_done [event=sensor_config_cmd, pre="$1.full();", post="1.mpty();"];
+    Enable_done -> Init_done [event=sensor_disable_cmd];
+    Enable_done -> Get_Data_done [event=sensor_get_data_cmd];
+    Get_Data_done -> Enable_done [event=sensor_data_ready_fid];
+
+}

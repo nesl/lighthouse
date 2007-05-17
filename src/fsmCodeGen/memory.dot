@@ -1,0 +1,16 @@
+digraph memory {
+
+    Start;
+    Init_done;
+    Final_done;
+    Create_done [state=Full_Store];
+    Destroy_done [state=Empty_Store];
+
+    Start -> Init_done [event=init];
+    Init_done -> Final_done [event=final];
+    Init_done -> Create_done [event=create];
+    Create_done -> Destroy_done [event=destroy];
+    Destroy_done -> Create_done [event=create];
+    Destroy_done -> Final_done [event=final];
+
+}
