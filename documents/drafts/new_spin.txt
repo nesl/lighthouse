@@ -1,0 +1,162 @@
+
+Introduction
+------------
+
+
+Background
+~~~~~~~~~~
+
+1. Exciting application domain using modular, event based, embedded systems
+
+2. Most software in the domain is not hardened unlike some other embedded
+systems domains
+
+3. Create a suite of tools to help researchers and students better
+accomplish the task of writing code and move onto their actual
+experimentation
+
+
+Goals
+~~~~~
+
+- Provide developers with tools to create more stable systems
+
+- Minimize runtime overhead
+
+- Trying to reason about C in all of its evil pointer glory
+    - Limited in our ability to reason about pointers
+    - Complex data structures make analysis a pain
+
+
+Contributions
+~~~~~~~~~~~~~
+
+Research
+^^^^^^^^
+
+- Minimal set of properties from "calculus of capabilities"
+
+- Demonstrate change of precision from using hybrid static / dynamic
+  checking
+    - Problems found using static checking
+    - Problems found using dynamic checking
+    - Problems found using both
+    
+- New ownership type system
+
+Practical
+^^^^^^^^^
+
+- Design methodology and suit of tools for examining modular, reactive,
+  and embedded systems with (respect to resource ownership)
+
+
+
+Sensor Network OS Background
+----------------------------
+
+
+Assumptions
+~~~~~~~~~~~
+
+- Modular testing is better than full program analysis 
+    - Users may not have access to the full system at build time
+    - Makes scaling an easier problem to solve
+
+- Event based system where incoming events are allowed to arrive in a
+  non-deterministic order
+    - Protocols may exist but we do not know this to be true statically
+
+- Embedded system with no MMU
+    - Why focus on dynamic memory?
+    - Other dynamic resources?
+    - Do resource constraints matter?
+
+
+
+Abstract OS
+~~~~~~~~~~~
+
+- Introduce TinyOS and SOS for running examples
+
+- Describe a very simple "ideal" OS that will be used for the rest of this
+  paper
+
+- Map the abstract OS onto TinyOS and SOS
+    - Global state
+    - Component local state
+    - Event handlers
+    - Calls to functions
+    - Messaging
+    - Component composition
+
+
+
+Proposed Design Process
+-----------------------
+
+
+Specification
+~~~~~~~~~~~~~
+
+- Write a protocol level specification for the program in state machine form
+    - Edges represent transitions caused by handling events
+    - States represent protocol state and global state of resources
+    - Perform basic sanity check on state machine
+
+
+Static Analysis
+~~~~~~~~~~~~~~~
+
+- Static analysis verifies the underlying source code corresponding to
+  specification
+    - Resource pre- and post- conditions pulled from specification
+    - Assume that other access to resources are forbidden
+    - Provide compile time feedback to systems users
+
+
+Runtime Monitoring
+~~~~~~~~~~~~~~~~~~
+
+- Generate runtime code to monitor state transitions in deployed code
+    - Basic FSM embedded in system
+    - Call into FSM when state transitions occur
+    - How best to embedded these in source (especially when they are not
+      tied directly to functions, but to paths through functions)?
+    - How to minimize the overhead of these checks?  Perhaps through static
+      analysis?
+    - How to handle runtime errors?
+    
+
+
+Motivating Example
+------------------
+
+- Faulty TinyOS application from CS113?
+
+
+
+Results
+-------
+
+- Practical experience using this to examine the RATS time synchronization
+  protocol in SOS?
+
+
+
+Related Work
+------------
+
+- Good engineering
+
+- Static verification
+
+- Analysis and sensor networks
+
+
+
+Future Work
+-----------
+
+- Nope :-)
+
