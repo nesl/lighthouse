@@ -25,23 +25,30 @@ class ctososVisitor = object inherit nopCilVisitor
     ignore (Pretty.printf "   -> variable %s: %a" v.vname d_storage v.vstorage);
     if v.vglob then (
       if isFunctionType v.vtype then (
-        match v.vstorage with
-            NoStorage -> 
-              func_global := v::!func_global
-          | Static -> 
-              func_local := v::!func_local
-          | Register -> 
-              E.s (E.bug "Function %s is stored in register\n" v.vname)
-          | Extern -> 
-              func_extern := v::!func_extern
+        begin
+          match v.vstorage with
+              NoStorage -> 
+                func_global := v::!func_global
+            | Static -> 
+                func_local := v::!func_local
+            | Register -> 
+                E.s (E.bug "Function %s is stored in register\n" v.vname)
+            | Extern -> 
+                func_extern := v::!func_extern
+        end;
+        ignore (Pretty.printf "\n");
+        DoChildren
       ) else (
-        global_vars := v::!global_vars
+        global_vars := v::!global_vars;
+        ignore (Pretty.printf " global\n");
+        let name = sprint ~width:40 (dprintf "global_%s" v.vname) in
+        let nv = makeVarinfo true name v.vtype in
+          ChangeTo nv
       );
-      Pretty.printf " global\n")
-    else (Pretty.printf "\n");
-
-
-    DoChildren
+    ) else (
+      ignore (Pretty.printf "\n");
+      DoChildren
+    )
 
 end
 
@@ -74,6 +81,10 @@ let doFile (file_name: string) : unit =
 
   cil_file := Frontc.parse file_name ();
 
+  (* Visit! *)
+  visitCilFile (new ctososVisitor) !cil_file;
+
+
   (* If requested dump the transformed code to file. *)
   (match !outChannel with
        None -> E.s (E.error "Must specify out file");
@@ -81,10 +92,6 @@ let doFile (file_name: string) : unit =
          Stats.time "printCIL" 
            (dumpFile (!printerForMaincil) c !cil_file.fileName) !cil_file
   );
-
-  (* Visit! *)
-  visitCilFileSameGlobals (new ctososVisitor) !cil_file;
-
   ()
 ;;
 
