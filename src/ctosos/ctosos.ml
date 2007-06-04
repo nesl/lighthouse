@@ -6,49 +6,92 @@ module E = Errormsg;;
 (** [cil_file] CIL file being analyzed. *)
 let cil_file: file ref = ref dummyFile;;
 
-let global_vars = ref [];;
-
 let func_global = ref [];;
 let func_local = ref [];;
 let func_extern = ref [];;
+
+(** Global vars in the original program are wrapped into a single structure in
+  * the new program. *)
+let global_vars = ref [];;
+let state = ref 
+              (mkCompInfo
+                 true
+                 "__ctosos_tmp_compinfo__"
+                 (fun _ -> 
+                    List.rev_map 
+                      (fun (vi,i) -> vi.vname,vi.vtype,None,[],vi.vdecl) []) 
+                 []
+              )
+;;
+
+let stateVar = ref None;
+
+(** Visitor to collect global vars *)
+class collectGlobals = object inherit nopCilVisitor
+
+  method vglob (g: global) = 
+    match g with
+        GVar (v, init, loc) ->
+          begin match (Formatcil.dType "%t:type const" v.vtype) with
+              Some _ ->
+                ignore (printf "Found a const: %s\n" v.vname); 
+                DoChildren
+            | None -> 
+                global_vars := v::!global_vars;
+                let comment = 
+                  sprint 
+                    ~width:400 
+                    (dprintf "/* %s moved to module_state structure */" v.vname)
+                in
+                  ChangeTo [GText comment]
+          end
+      | _ -> SkipChildren
+end
+
+
+(** Classify functions as local, static, or external *)
+class classifyFunctions = object inherit nopCilVisitor
+
+  method vvdec (v: varinfo) = 
+    if isFunctionType v.vtype then (
+      match v.vstorage with
+          NoStorage -> 
+            func_global := v::!func_global
+        | Static -> 
+            func_local := v::!func_local
+        | Register -> 
+            E.s (E.bug "Function %s is stored in register\n" v.vname)
+        | Extern -> 
+            func_extern := v::!func_extern
+    );
+    SkipChildren
+end
 
 (** Visitor *)
 class ctososVisitor = object inherit nopCilVisitor
 
   method vfunc (f: fundec) =
-
-    ignore (Pretty.printf "Found function %s\n" f.svar.vname);
-    DoChildren
-
-  method vvdec (v: varinfo) = 
-
-    ignore (Pretty.printf "   -> variable %s: %a" v.vname d_storage v.vstorage);
-    if v.vglob then (
-      if isFunctionType v.vtype then (
-        begin
-          match v.vstorage with
-              NoStorage -> 
-                func_global := v::!func_global
-            | Static -> 
-                func_local := v::!func_local
-            | Register -> 
-                E.s (E.bug "Function %s is stored in register\n" v.vname)
-            | Extern -> 
-                func_extern := v::!func_extern
-        end;
-        ignore (Pretty.printf "\n");
-        DoChildren
-      ) else (
-        global_vars := v::!global_vars;
-        ignore (Pretty.printf " global\n");
-        let name = sprint ~width:40 (dprintf "global_%s" v.vname) in
-        let nv = makeVarinfo true name v.vtype in
-          ChangeTo nv
-      );
-    ) else (
-      ignore (Pretty.printf "\n");
+    if not (List.exists (fun v -> v.vid = f.svar.vid) !func_local) then 
+      E.s (E.bug "Interesting.  I was wondering if this could happen.");
+    let stateType = TPtr ((TComp (!state, [])), []) in
+      stateVar := Some (makeFormalVar f ~where:"^" "state" stateType);
       DoChildren
-    )
+  
+  method vlval (lv: lval) =
+    let stateStruct = match !stateVar with
+        None -> E.s (E.bug "stateVar must be defined at this point :-(")
+      | Some v -> v
+    in
+
+    match lv with 
+        (Var v, offset) when (List.exists (fun gv -> gv.vid = v.vid) !global_vars) ->
+          ChangeDoChildrenPost 
+            (
+              (Mem (Lval (var stateStruct)), 
+               Field (getCompField !state v.vname, offset)),
+              (fun i -> i)
+            )
+      | _ -> DoChildren
 
 end
 
@@ -82,6 +125,21 @@ let doFile (file_name: string) : unit =
   cil_file := Frontc.parse file_name ();
 
   (* Visit! *)
+  visitCilFile (new collectGlobals) !cil_file;
+
+  state := mkCompInfo
+             true
+             "module_state"
+             (fun _ -> 
+                List.rev_map 
+                  (fun (vi) -> vi.vname,vi.vtype,None,[],vi.vdecl) !global_vars) 
+             []
+             ;
+
+  !cil_file.globals <- 
+    (GCompTag (!state, {line=0; file="__ctosos__"; byte=0}))::!cil_file.globals;
+
+  visitCilFile (new classifyFunctions) !cil_file;
   visitCilFile (new ctososVisitor) !cil_file;
 
 
