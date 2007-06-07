@@ -111,14 +111,16 @@ class sosCallVisitor = object inherit nopCilVisitor
 
   method vinst (i: instr) =
     match i with
-        Call (lop, e, el, loc) ->
+        Call (lop, (Lval (Var v, NoOffset)), el, loc)
+          when (List.exists (fun v2 -> v.vid = v2.vid) !func_extern)
+        ->
           let newInstr = 
             Formatcil.cInstr 
               "%lo:lop %l:sosCall ( %E:exps );"
               loc
               [ ("lop", Flo lop); 
                 ("sosCall", Fl (Var sosCall, NoOffset)); 
-                ("exps", FE (e::el)) ]
+                ("exps", FE ((Lval (var v))::el)) ]
           in
             ChangeTo [newInstr]
       | _ -> DoChildren
@@ -150,7 +152,7 @@ let argDescr = [
 
 (** Function that produces the module header *)
 
-let makeModHeader sub pub= 
+let makeModHeader sub pub = 
   
   let subFuncs = 
     let count = ref (-1) in
@@ -201,6 +203,19 @@ let makeModHeader sub pub=
 ;;
       
 
+let rec insertGlobal state header globals =
+  match globals with
+      (GFun (fd, loc))::tail -> 
+        (GCompTag (state, {line=0; file="__ctosos__"; byte=0})) ::
+        (GText header) ::
+        (GFun (fd, loc)) ::
+        tail
+    | head::tail -> head :: (insertGlobal state header tail)
+    | [] -> []
+;;
+
+
+
 (** Process a File *)
 
 let doFile (file_name: string) : unit = 
@@ -228,11 +243,6 @@ let doFile (file_name: string) : unit =
         !func_extern
   in
            
-
-
-
-
-
   state := mkCompInfo
              true
              "module_state"
@@ -244,14 +254,9 @@ let doFile (file_name: string) : unit =
              []
              ;
 
-  !cil_file.globals <- 
-    (GCompTag (!state, {line=0; file="__ctosos__"; byte=0}))::!cil_file.globals;
-
-  !cil_file.globals <- 
-    (GText (makeModHeader !func_extern !func_global))::!cil_file.globals;
+  !cil_file.globals <- insertGlobal !state (makeModHeader !func_extern !func_global) !cil_file.globals;
 
   visitCilFile (new useStateVisitor) !cil_file;
-
 
   visitCilFile (new sosCallVisitor) !cil_file;
 
