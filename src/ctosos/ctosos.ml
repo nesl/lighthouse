@@ -3,6 +3,10 @@ open Pretty;;
 open Cil;;
 module E = Errormsg;;
 
+let isSysFunction fname = 
+  (Str.string_match (Str.regexp "sys_") fname 0) 
+;;
+
 (** [cil_file] CIL file being analyzed. *)
 let cil_file: file ref = ref dummyFile;;
 
@@ -24,7 +28,10 @@ let state = ref
               )
 ;;
 
-let stateVar = ref None;
+let stateVar = ref None;;
+  
+let sosCallType = Formatcil.cType "void * () (void *, char *, ...)" [];;
+let sosCall = makeGlobalVar "SOS_CALL" sosCallType;;
 
 (** Visitor to collect global vars *)
 class collectGlobals = object inherit nopCilVisitor
@@ -61,14 +68,18 @@ class classifyFunctions = object inherit nopCilVisitor
             func_local := v::!func_local
         | Register -> 
             E.s (E.bug "Function %s is stored in register\n" v.vname)
-        | Extern -> 
+        | Extern when not (isSysFunction v.vname) -> 
             func_extern := v::!func_extern
+        | _ -> 
+            (** Found a system call.  Treat these as static. *)
+            func_local := v::!func_local
+
     );
     SkipChildren
 end
 
-(** Visitor *)
-class ctososVisitor = object inherit nopCilVisitor
+(** Update code to use recently constructed SOS state structure *)
+class useStateVisitor = object inherit nopCilVisitor
 
   method vfunc (f: fundec) =
     if not (List.exists (fun v -> v.vid = f.svar.vid) !func_local) then 
@@ -91,6 +102,25 @@ class ctososVisitor = object inherit nopCilVisitor
                Field (getCompField !state v.vname, offset)),
               (fun i -> i)
             )
+      | _ -> DoChildren
+
+end
+
+(** Change extern function calls to use SOS_CALL *)
+class sosCallVisitor = object inherit nopCilVisitor
+
+  method vinst (i: instr) =
+    match i with
+        Call (lop, e, el, loc) ->
+          let newInstr = 
+            Formatcil.cInstr 
+              "%lo:lop %l:sosCall ( %E:exps );"
+              loc
+              [ ("lop", Flo lop); 
+                ("sosCall", Fl (Var sosCall, NoOffset)); 
+                ("exps", FE (e::el)) ]
+          in
+            ChangeTo [newInstr]
       | _ -> DoChildren
 
 end
@@ -118,6 +148,59 @@ let argDescr = [
 ];;
 
 
+(** Function that produces the module header *)
+
+let makeModHeader sub pub= 
+  
+  let subFuncs = 
+    let count = ref (-1) in
+      List.fold_left
+        (fun s v ->
+           count := 1 + !count;
+           s ^ 
+           (Printf.sprintf
+              "[%d] = {XXX_%s_error_XXX, \"XXX_%s_proto_XXX\", "
+              !count
+              v.vname
+              v.vname
+           ) ^
+           (Printf.sprintf
+              "XXX_%s_pid_XXX, XXX_%s_fid_XXX},\n"
+              v.vname
+              v.vname
+           )
+        ) 
+        ""
+        sub
+  in 
+
+
+  let modHeader =
+    Printf.sprintf
+    "static const mod_header_t mod_header SOS_MODULE_HEADER = {
+        .mod_id        = %s,
+        .state_size    = sizeof(struct module_state),
+        .num_sub_func  = %d,
+        .num_prov_func = %d,
+        .platform_type  = HW_TYPE,
+        .processor_type = MCU_TYPE,
+        .code_id       = ehtons(%s),
+        .module_handler = XXX__module_handler__XXX, /* TODO: Update this name */
+        .funct = {
+          %s
+                  },
+        };
+    "
+      "CTOSOS_ID" 
+      (List.length sub)
+      (List.length pub)
+      "CTOSOS_ID" 
+      subFuncs    
+  in
+    modHeader
+;;
+      
+
 (** Process a File *)
 
 let doFile (file_name: string) : unit = 
@@ -127,20 +210,50 @@ let doFile (file_name: string) : unit =
   (* Visit! *)
   visitCilFile (new collectGlobals) !cil_file;
 
+  visitCilFile (new classifyFunctions) !cil_file;
+ 
+  (* Make function pointer type *)
+  let funPtrVars = 
+    let fPtrType = 
+      TNamed ({tname="func_cb_ptr"; 
+               ttype=(TPtr ((TFun ((TVoid []), None, false, [])), [])); 
+               treferenced=true}, 
+              []) 
+    in
+      List.fold_left
+        (fun fpv v ->
+           (makeGlobalVar v.vname fPtrType)::fpv
+        )
+        []
+        !func_extern
+  in
+           
+
+
+
+
+
   state := mkCompInfo
              true
              "module_state"
              (fun _ -> 
                 List.rev_map 
-                  (fun (vi) -> vi.vname,vi.vtype,None,[],vi.vdecl) !global_vars) 
+                  (fun (vi) -> vi.vname,vi.vtype,None,[],vi.vdecl) 
+                  (!global_vars @ funPtrVars)
+             ) 
              []
              ;
 
   !cil_file.globals <- 
     (GCompTag (!state, {line=0; file="__ctosos__"; byte=0}))::!cil_file.globals;
 
-  visitCilFile (new classifyFunctions) !cil_file;
-  visitCilFile (new ctososVisitor) !cil_file;
+  !cil_file.globals <- 
+    (GText (makeModHeader !func_extern !func_global))::!cil_file.globals;
+
+  visitCilFile (new useStateVisitor) !cil_file;
+
+
+  visitCilFile (new sosCallVisitor) !cil_file;
 
 
   (* If requested dump the transformed code to file. *)
