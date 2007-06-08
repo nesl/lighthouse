@@ -114,13 +114,22 @@ class sosCallVisitor = object inherit nopCilVisitor
         Call (lop, (Lval (Var v, NoOffset)), el, loc)
           when (List.exists (fun v2 -> v.vid = v2.vid) !func_extern)
         ->
+          let stateStruct = match !stateVar with
+              None -> E.s (E.bug "stateVar must be defined at this point :-(")
+            | Some v -> v
+          in
+
+          let proto = Formatcil.cExp "%g:proto" ["proto", Fg ("XXX_"^v.vname^"_ctosos_XXX")] in 
+
+          let fnCall = (Lval (Mem (Lval (var stateStruct)), 
+                              Field (getCompField !state v.vname, NoOffset))) in
           let newInstr = 
             Formatcil.cInstr 
               "%lo:lop %l:sosCall ( %E:exps );"
               loc
               [ ("lop", Flo lop); 
                 ("sosCall", Fl (Var sosCall, NoOffset)); 
-                ("exps", FE ((Lval (var v))::el)) ]
+                ("exps", FE (fnCall::proto::el)) ]
           in
             ChangeTo [newInstr]
       | _ -> DoChildren
