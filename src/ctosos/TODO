@@ -1,1 +1,26 @@
+Publish functions:
+- Add to module header
+- Add extra first parameter func_cb_ptr
+
+Find protoype and update:
+- int foo(char)
+- int (*)(func_cb_ptr, char)
+
+Order in module header:
+- Subscriber then published functions
+
+Error functions:
+- Create simple error handler for each subscribed function
+- Same proto as supplied version
+- Return default value
+
+White list:
+- ker_, post_, sys_
+
+Use well defiend hash of prototype for function protype in mod header
+
+Create my own enum to handle the pid and fid
+- subscribe
+- publish
+
 
