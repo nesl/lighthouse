@@ -7,6 +7,29 @@ let isSysFunction fname =
   (Str.string_match (Str.regexp "sys_") fname 0) 
 ;;
 
+let isKerFunction fname = 
+  (Str.string_match (Str.regexp "ker_") fname 0) 
+;;
+
+let isPostFunction fname = 
+  (Str.string_match (Str.regexp "post_") fname 0) 
+;;
+
+
+let isErrorStubFunction fname = 
+  (Str.string_match (Str.regexp "error_stub_") fname 0) 
+;;
+
+
+let fPtrType = 
+  TNamed ({tname="func_cb_ptr"; 
+           ttype=(TPtr ((TFun ((TVoid []), None, false, [])), [])); 
+           treferenced=true}, 
+          []) 
+;;
+
+let enumCounter = ref 0;;
+
 (** [cil_file] CIL file being analyzed. *)
 let cil_file: file ref = ref dummyFile;;
 
@@ -29,9 +52,14 @@ let state = ref
 ;;
 
 let stateVar = ref None;;
+let funcPtrVar = ref None;;
   
 let sosCallType = Formatcil.cType "void * () (void *, char *, ...)" [];;
 let sosCall = makeGlobalVar "SOS_CALL" sosCallType;;
+
+let sysGetStateType = Formatcil.cType "void * () ()" [];;
+let sysGetState = makeGlobalVar "sys_get_state" sysGetStateType;;
+
 
 (** Visitor to collect global vars *)
 class collectGlobals = object inherit nopCilVisitor
@@ -63,59 +91,70 @@ class classifyFunctions = object inherit nopCilVisitor
     if isFunctionType v.vtype then (
       match v.vstorage with
           NoStorage -> 
-            func_global := v::!func_global
+            func_global := v::!func_global;
+            SkipChildren
         | Static -> 
-            func_local := v::!func_local
+            func_local := v::!func_local;
+            SkipChildren
         | Register -> 
             E.s (E.bug "Function %s is stored in register\n" v.vname)
-        | Extern when not (isSysFunction v.vname) -> 
-            func_extern := v::!func_extern
+        | Extern when not (
+            (isSysFunction v.vname) || (isKerFunction v.vname) || (isPostFunction v.vname)
+          ) -> 
+            func_extern := v::!func_extern;
+            let (ret, formalsOp, vararg, attrs) = splitFunctionTypeVI v in
+            let formals = match formalsOp with
+                Some formals -> formals
+              | None -> []
+            in
+            let ptrToSub = 
+              makeGlobalVar 
+                v.vname 
+                (TFun 
+                   (ret,  
+                    Some (("proto", fPtrType, [])::formals), 
+                    vararg, 
+                    attrs
+                   )
+                ) 
+            in
+            ChangeTo ptrToSub;
         | _ -> 
             (** Found a system call.  Treat these as static. *)
-            func_local := v::!func_local
-
-    );
-    SkipChildren
+            func_local := v::!func_local;
+            SkipChildren
+    ) else (
+      SkipChildren
+    )
 end
 
 (** Update code to use recently constructed SOS state structure *)
 class useStateVisitor = object inherit nopCilVisitor
 
   method vfunc (f: fundec) =
-    if not (List.exists (fun v -> v.vid = f.svar.vid) !func_local) then 
-      E.s (E.bug "Interesting.  I was wondering if this could happen.");
-    let stateType = TPtr ((TComp (!state, [])), []) in
-      stateVar := Some (makeFormalVar f ~where:"^" "state" stateType);
-      DoChildren
-  
-  method vlval (lv: lval) =
-    let stateStruct = match !stateVar with
-        None -> E.s (E.bug "stateVar must be defined at this point :-(")
-      | Some v -> v
-    in
+    stateVar := None;
+    funcPtrVar := None;
 
-    match lv with 
-        (Var v, offset) when (List.exists (fun gv -> gv.vid = v.vid) !global_vars) ->
-          ChangeDoChildrenPost 
-            (
-              (Mem (Lval (var stateStruct)), 
-               Field (getCompField !state v.vname, offset)),
-              (fun i -> i)
-            )
-      | _ -> DoChildren
-
-end
-
-(** Change extern function calls to use SOS_CALL *)
-class sosCallVisitor = object inherit nopCilVisitor
-
+    if (List.exists (fun v -> v.vid = f.svar.vid) !func_local) then (
+      (** Add module state as first parameter to each function *)
+      let stateType = TPtr ((TComp (!state, [])), []) in
+        stateVar := Some (makeFormalVar f ~where:"^" "state" stateType);
+        DoChildren
+    ) else if (List.exists (fun v -> v.vid = f.svar.vid) !func_global) then (
+      SkipChildren
+    ) else if (isErrorStubFunction f.svar.vname) then (
+      SkipChildren
+    ) else (
+      E.s (E.bug "useStateVisitor: Attempt to visit non-local and non-global function %s" f.svar.vname)
+    )
+ 
   method vinst (i: instr) =
     match i with
         Call (lop, (Lval (Var v, NoOffset)), el, loc)
           when (List.exists (fun v2 -> v.vid = v2.vid) !func_extern)
         ->
           let stateStruct = match !stateVar with
-              None -> E.s (E.bug "stateVar must be defined at this point :-(")
+              None -> E.s (E.bug "stateVar must be defined at instruction: %a" d_instr i)
             | Some v -> v
           in
 
@@ -134,6 +173,50 @@ class sosCallVisitor = object inherit nopCilVisitor
             ChangeTo [newInstr]
       | _ -> DoChildren
 
+
+  method vlval (lv: lval) =
+    let stateStruct = match !stateVar with
+        None -> E.s (E.bug "stateVar must be defined at lval: %a" d_lval lv)
+      | Some v -> v
+    in
+
+    match lv with 
+        (Var v, offset) when (List.exists (fun gv -> gv.vid = v.vid) !global_vars) ->
+          ChangeDoChildrenPost 
+            (
+              (Mem (Lval (var stateStruct)), 
+               Field (getCompField !state v.vname, offset)),
+              (fun i -> i)
+            )
+      | _ -> DoChildren
+
+end
+
+
+(** Update code to use recently constructed SOS state structure *)
+class funcPtrVisitor = object inherit nopCilVisitor
+
+  method vfunc (f: fundec) =
+    funcPtrVar := None;
+
+    if (List.exists (fun v -> v.vid = f.svar.vid) !func_local) then (
+        SkipChildren
+    ) else if (List.exists (fun v -> v.vid = f.svar.vid) !func_global) then (
+      funcPtrVar := Some (makeFormalVar f ~where:"^" "fcb_ptr" fPtrType);
+      
+      let stateType = TPtr ((TComp (!state, [])), []) in
+      let stateVar = makeLocalVar f "state" stateType in
+      let getState = Call (Some (var stateVar), (Lval (var sysGetState)), [], f.svar.vdecl) in
+
+
+      f.sbody.bstmts <- ((mkStmtOneInstr getState)::f.sbody.bstmts);
+      DoChildren
+    ) else if (isErrorStubFunction f.svar.vname) then (
+      SkipChildren
+    ) else (
+      E.s (E.bug "funcPtrVisitor: Attempt to visit non-local and non-global function %s" f.svar.vname)
+    )
+ 
 end
 
 
@@ -159,24 +242,56 @@ let argDescr = [
 ];;
 
 
+(** Function that produces error stubs *)
+
+let makeErrorStub (fname: string) (ftype: typ) =
+
+  let errorStub = emptyFunction ("error_stub_" ^ fname) in
+
+  let (returnType, _, _, _) = splitFunctionType ftype in
+
+  let body = 
+    if isVoidType returnType then (
+      Formatcil.cStmt
+        "return;"
+        (fun n t -> E.s (E.bug "makeErrorStub: Should not be adding vars"))
+        locUnknown
+        []
+    ) else (
+      Formatcil.cStmt
+        "return %retval;"
+        (fun n t -> E.s (E.bug "makeErrorStub: Should not be adding vars"))
+        locUnknown
+        [("retval", Fd 0)]
+    )
+  in
+
+    setFunctionTypeMakeFormals errorStub ftype;
+    errorStub.sbody.bstmts <- [body];
+
+    errorStub
+;;
+
+
 (** Function that produces the module header *)
 
-let makeModHeader sub pub = 
+let makeModHeader (sub: varinfo list) (pub: varinfo list) = 
+  
+  let count = ref (-1) in
   
   let subFuncs = 
-    let count = ref (-1) in
       List.fold_left
         (fun s v ->
            count := 1 + !count;
            s ^ 
            (Printf.sprintf
-              "[%d] = {XXX_%s_error_XXX, \"XXX_%s_proto_XXX\", "
+              "[%d] = {error_stub_%s, \"%d\", "
               !count
               v.vname
-              v.vname
+              (Hashtbl.hash v.vtype mod 10000)
            ) ^
            (Printf.sprintf
-              "XXX_%s_pid_XXX, XXX_%s_fid_XXX},\n"
+              "sub_pid_%s, sub_fid_%s},\n"
               v.vname
               v.vname
            )
@@ -185,6 +300,27 @@ let makeModHeader sub pub =
         sub
   in 
 
+
+  let pubFuncs = 
+      List.fold_left
+        (fun s v ->
+           count := 1 + !count;
+           s ^ 
+           (Printf.sprintf
+              "[%d] = {%s, \"%d\", "
+              !count
+              v.vname
+              (Hashtbl.hash v.vtype mod 10000)
+           ) ^
+           (Printf.sprintf
+              "pub_pid_%s, pub_fid_%s},\n"
+              v.vname
+              v.vname
+           )
+        ) 
+        ""
+        pub
+  in 
 
   let modHeader =
     Printf.sprintf
@@ -206,20 +342,28 @@ let makeModHeader sub pub =
       (List.length sub)
       (List.length pub)
       "CTOSOS_ID" 
-      subFuncs    
+      (subFuncs ^ pubFuncs)
   in
     modHeader
 ;;
       
 
-let rec insertGlobal state header globals =
+let rec insertGlobal 
+      subPidEnums subFidEnums pubPidEnums pubFidEnums
+      state errorStubs header globals =
   match globals with
       (GFun (fd, loc))::tail -> 
         (GCompTag (state, {line=0; file="__ctosos__"; byte=0})) ::
-        (GText header) ::
-        (GFun (fd, loc)) ::
-        tail
-    | head::tail -> head :: (insertGlobal state header tail)
+        subPidEnums :: subFidEnums :: pubPidEnums :: pubFidEnums ::
+        (List.map (fun f -> GFun (f, loc)) errorStubs) @
+        (
+          (GText header) ::
+          (GFun (fd, loc)) ::
+          tail
+        )
+    | head::tail -> head :: (insertGlobal 
+                               subPidEnums subFidEnums pubPidEnums pubFidEnums
+                               state errorStubs header tail)
     | [] -> []
 ;;
 
@@ -235,15 +379,9 @@ let doFile (file_name: string) : unit =
   visitCilFile (new collectGlobals) !cil_file;
 
   visitCilFile (new classifyFunctions) !cil_file;
- 
+   
   (* Make function pointer type *)
   let funPtrVars = 
-    let fPtrType = 
-      TNamed ({tname="func_cb_ptr"; 
-               ttype=(TPtr ((TFun ((TVoid []), None, false, [])), [])); 
-               treferenced=true}, 
-              []) 
-    in
       List.fold_left
         (fun fpv v ->
            (makeGlobalVar v.vname fPtrType)::fpv
@@ -263,13 +401,74 @@ let doFile (file_name: string) : unit =
              []
              ;
 
-  !cil_file.globals <- insertGlobal !state (makeModHeader !func_extern !func_global) !cil_file.globals;
+  let errorStubs = List.map (fun v -> makeErrorStub v.vname v.vtype) !func_extern in
+
+  let subPidEnums =
+    GEnumTag (
+      {
+        ename="sub_pid";
+        eitems=List.map 
+                 (fun v -> enumCounter := !enumCounter + 1; 
+                           ("sub_pid_" ^ v.vname, (integer !enumCounter), locUnknown)
+                 ) !func_extern;
+        eattr=[];
+        ereferenced=true;
+      }, 
+      locUnknown)
+  in
+
+  let subFidEnums =
+    GEnumTag (
+      {
+        ename="sub_fid";
+        eitems=List.map 
+                 (fun v -> enumCounter := !enumCounter + 1; 
+                           ("sub_fid_" ^ v.vname, (integer !enumCounter), locUnknown)
+                 ) !func_extern;
+        eattr=[];
+        ereferenced=true;
+      }, 
+      locUnknown)
+  in
+
+  let pubPidEnums =
+    GEnumTag (
+      {
+        ename="pub_pid";
+        eitems=List.map 
+                 (fun v -> enumCounter := !enumCounter + 1; 
+                           ("pub_pid_" ^ v.vname, (integer !enumCounter), locUnknown)
+                 ) !func_global;
+        eattr=[];
+        ereferenced=true;
+      }, 
+      locUnknown)
+  in
+
+  let pubFidEnums =
+    GEnumTag (
+      {
+        ename="pub_fid";
+        eitems=List.map 
+                 (fun v -> enumCounter := !enumCounter + 1; 
+                           ("pub_fid_" ^ v.vname, (integer !enumCounter), locUnknown)
+                 ) !func_global;
+        eattr=[];
+        ereferenced=true;
+      }, 
+      locUnknown)
+  in
+
+  !cil_file.globals <- insertGlobal 
+                         subPidEnums subFidEnums pubPidEnums pubFidEnums
+                         !state 
+                         errorStubs 
+                         (makeModHeader !func_extern !func_global) 
+                         !cil_file.globals;
 
   visitCilFile (new useStateVisitor) !cil_file;
-
-  visitCilFile (new sosCallVisitor) !cil_file;
-
-
+  visitCilFile (new funcPtrVisitor) !cil_file;
+  
   (* If requested dump the transformed code to file. *)
   (match !outChannel with
        None -> E.s (E.error "Must specify out file");

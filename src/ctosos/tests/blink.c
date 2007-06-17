@@ -18,6 +18,16 @@ uint8_t blink_state;
 
 extern void sys_timer_start(uint8_t tid, uint32_t interval, uint8_t flags);
 extern void sys_timer_stop(uint8_t tid);
+extern void printf(char * string);
+
+void toggle_func() {
+    printf("LED_GREEN_TOGGLE");
+}
+
+void stop_func(uint8_t tid) {
+    sys_timer_stop(tid);
+}
+
 
 static int8_t blink_msg_handler(Message *msg)
 {
@@ -34,14 +44,14 @@ static int8_t blink_msg_handler(Message *msg)
 
         case 2:
             {
-                sys_timer_stop(BLINK_TID);
+                stop_func(BLINK_TID);
                 printf("Blink Stop\n");
                 break;
             }
 
         case 3:
             {
-                printf("LED_GREEN_TOGGLE");
+                toggle_func();
                 break;
             }
 
