@@ -30,6 +30,8 @@ let fPtrType =
 
 let enumCounter = ref 0;;
 
+let typeDefProtos = ref [];;
+
 (** [cil_file] CIL file being analyzed. *)
 let cil_file: file ref = ref dummyFile;;
 
@@ -118,7 +120,8 @@ class classifyFunctions = object inherit nopCilVisitor
                    )
                 ) 
             in
-            ChangeTo ptrToSub;
+              typeDefProtos := ptrToSub::!typeDefProtos;
+              ChangeTo ptrToSub
         | _ -> 
             (** Found a system call.  Treat these as static. *)
             func_local := v::!func_local;
@@ -158,8 +161,8 @@ class useStateVisitor = object inherit nopCilVisitor
             | Some v -> v
           in
 
-          let proto = Formatcil.cExp "%g:proto" ["proto", Fg ("XXX_"^v.vname^"_ctosos_XXX")] in 
-
+          let dummyVar = makeVarinfo true (v.vname ^ "_proto") voidType in
+          let proto = Lval (var dummyVar) in
           let fnCall = (Lval (Mem (Lval (var stateStruct)), 
                               Field (getCompField !state v.vname, NoOffset))) in
           let newInstr = 
@@ -349,10 +352,12 @@ let makeModHeader (sub: varinfo list) (pub: varinfo list) =
       
 
 let rec insertGlobal 
+      typeDefs
       subPidEnums subFidEnums pubPidEnums pubFidEnums
       state errorStubs header globals =
   match globals with
       (GFun (fd, loc))::tail -> 
+        typeDefs @ (
         (GCompTag (state, {line=0; file="__ctosos__"; byte=0})) ::
         subPidEnums :: subFidEnums :: pubPidEnums :: pubFidEnums ::
         (List.map (fun f -> GFun (f, loc)) errorStubs) @
@@ -360,10 +365,11 @@ let rec insertGlobal
           (GText header) ::
           (GFun (fd, loc)) ::
           tail
-        )
-    | head::tail -> head :: (insertGlobal 
+        ))
+    | head::tail -> typeDefs @ (head :: (insertGlobal 
+                               []
                                subPidEnums subFidEnums pubPidEnums pubFidEnums
-                               state errorStubs header tail)
+                               state errorStubs header tail))
     | [] -> []
 ;;
 
@@ -459,7 +465,23 @@ let doFile (file_name: string) : unit =
       locUnknown)
   in
 
+
+  let typeDefs = 
+    List.map
+      (fun v -> 
+         GType (
+           {
+             tname=(v.vname ^ "_proto");
+             ttype=v.vtype;
+             treferenced=false
+           }, 
+           locUnknown))
+      !typeDefProtos
+  in
+
+
   !cil_file.globals <- insertGlobal 
+                         typeDefs
                          subPidEnums subFidEnums pubPidEnums pubFidEnums
                          !state 
                          errorStubs 
