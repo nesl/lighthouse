@@ -3,6 +3,8 @@ open Pretty;;
 open Cil;;
 module E = Errormsg;;
 
+let locFile = {line=(-1); file="__ctosos__.c"; byte=(-1)};;
+
 let isSysFunction fname = 
   (Str.string_match (Str.regexp "sys_") fname 0) 
 ;;
@@ -67,6 +69,24 @@ let sysGetState = makeGlobalVar "sys_get_state" sysGetStateType;;
 class collectGlobals = object inherit nopCilVisitor
 
   method vglob (g: global) = 
+
+    let cFile = 
+      if String.length (get_globalLoc g).file = 0 then true 
+      else (
+        ((String.get (get_globalLoc g).file ((String.length (get_globalLoc g).file) -1)) = 'c') && 
+        ((String.get (get_globalLoc g).file ((String.length (get_globalLoc g).file) -2)) = '.')
+      )
+    in
+
+      if not cFile then 
+        SkipChildren
+      else (
+          
+
+
+
+
+
     match g with
         GVar (v, init, loc) ->
           begin match (Formatcil.dType "%t:type const" v.vtype) with
@@ -83,11 +103,27 @@ class collectGlobals = object inherit nopCilVisitor
                   ChangeTo [GText comment]
           end
       | _ -> SkipChildren
+      )
 end
 
 
 (** Classify functions as local, static, or external *)
 class classifyFunctions = object inherit nopCilVisitor
+
+  method vglob (g: global) = 
+
+    let cFile = 
+      if String.length (get_globalLoc g).file = 0 then true 
+      else (
+        ((String.get (get_globalLoc g).file ((String.length (get_globalLoc g).file) -1)) = 'c') && 
+        ((String.get (get_globalLoc g).file ((String.length (get_globalLoc g).file) -2)) = '.')
+      )
+    in
+
+      if not cFile then SkipChildren
+      else DoChildren
+
+
 
   method vvdec (v: varinfo) = 
     if isFunctionType v.vtype then (
@@ -133,6 +169,21 @@ end
 
 (** Update code to use recently constructed SOS state structure *)
 class useStateVisitor = object inherit nopCilVisitor
+
+  method vglob (g: global) = 
+
+    let cFile = 
+      if String.length (get_globalLoc g).file = 0 then true 
+      else (
+        ((String.get (get_globalLoc g).file ((String.length (get_globalLoc g).file) -1)) = 'c') && 
+        ((String.get (get_globalLoc g).file ((String.length (get_globalLoc g).file) -2)) = '.')
+      )
+    in
+
+      if not cFile then SkipChildren
+      else DoChildren
+
+
 
   method vfunc (f: fundec) =
     stateVar := None;
@@ -199,6 +250,21 @@ end
 (** Update code to use recently constructed SOS state structure *)
 class funcPtrVisitor = object inherit nopCilVisitor
 
+  method vglob (g: global) = 
+
+    let cFile = 
+      if String.length (get_globalLoc g).file = 0 then true 
+      else (
+        ((String.get (get_globalLoc g).file ((String.length (get_globalLoc g).file) -1)) = 'c') && 
+        ((String.get (get_globalLoc g).file ((String.length (get_globalLoc g).file) -2)) = '.')
+      )
+    in
+
+      if not cFile then SkipChildren
+      else DoChildren
+
+
+
   method vfunc (f: fundec) =
     funcPtrVar := None;
 
@@ -258,13 +324,13 @@ let makeErrorStub (fname: string) (ftype: typ) =
       Formatcil.cStmt
         "return;"
         (fun n t -> E.s (E.bug "makeErrorStub: Should not be adding vars"))
-        locUnknown
+        locFile
         []
     ) else (
       Formatcil.cStmt
         "return %retval;"
         (fun n t -> E.s (E.bug "makeErrorStub: Should not be adding vars"))
-        locUnknown
+        locFile
         [("retval", Fd 0)]
     )
   in
@@ -356,20 +422,27 @@ let rec insertGlobal
       subPidEnums subFidEnums pubPidEnums pubFidEnums
       state errorStubs header globals =
   match globals with
-      (GFun (fd, loc))::tail -> 
+      (GFun (fd, loc))::tail when (
+        String.length loc.file = 0 ||
+        (
+          ((String.get loc.file ((String.length loc.file) -1)) = 'c') && 
+          ((String.get loc.file ((String.length loc.file) -2)) = '.')
+        )
+      ) ->
+
         typeDefs @ (
         (GCompTag (state, {line=0; file="__ctosos__"; byte=0})) ::
         subPidEnums :: subFidEnums :: pubPidEnums :: pubFidEnums ::
         (List.map (fun f -> GFun (f, loc)) errorStubs) @
         (
-          (GText header) ::
           (GFun (fd, loc)) ::
-          tail
+          tail @
+          [(GText header)]
         ))
-    | head::tail -> typeDefs @ (head :: (insertGlobal 
-                               []
+    | head::tail -> head :: (insertGlobal 
+                               typeDefs
                                subPidEnums subFidEnums pubPidEnums pubFidEnums
-                               state errorStubs header tail))
+                               state errorStubs header tail)
     | [] -> []
 ;;
 
@@ -410,59 +483,75 @@ let doFile (file_name: string) : unit =
   let errorStubs = List.map (fun v -> makeErrorStub v.vname v.vtype) !func_extern in
 
   let subPidEnums =
+    if List.length !func_extern = 0 then (
+      GText "/* Skipping sub_pid enum since no functions are subscribed to */\n"
+    ) else (
     GEnumTag (
       {
         ename="sub_pid";
         eitems=List.map 
                  (fun v -> enumCounter := !enumCounter + 1; 
-                           ("sub_pid_" ^ v.vname, (integer !enumCounter), locUnknown)
+                           ("sub_pid_" ^ v.vname, (integer !enumCounter), locFile)
                  ) !func_extern;
         eattr=[];
         ereferenced=true;
       }, 
-      locUnknown)
+      locFile)
+    )
   in
 
   let subFidEnums =
+    if List.length !func_extern = 0 then (
+      GText "/* Skipping sub_fid enum since no functions are subscribed to */\n"
+    ) else (
     GEnumTag (
       {
         ename="sub_fid";
         eitems=List.map 
                  (fun v -> enumCounter := !enumCounter + 1; 
-                           ("sub_fid_" ^ v.vname, (integer !enumCounter), locUnknown)
+                           ("sub_fid_" ^ v.vname, (integer !enumCounter), locFile)
                  ) !func_extern;
         eattr=[];
         ereferenced=true;
       }, 
-      locUnknown)
+      locFile)
+    )
   in
 
   let pubPidEnums =
+    if List.length !func_extern = 0 then (
+      GText "/* Skipping pub_pid enum since no functions are published */\n"
+    ) else (
     GEnumTag (
       {
         ename="pub_pid";
         eitems=List.map 
                  (fun v -> enumCounter := !enumCounter + 1; 
-                           ("pub_pid_" ^ v.vname, (integer !enumCounter), locUnknown)
+                           ("pub_pid_" ^ v.vname, (integer !enumCounter), locFile)
                  ) !func_global;
         eattr=[];
         ereferenced=true;
       }, 
-      locUnknown)
+      locFile)
+    )
   in
 
   let pubFidEnums =
+    if List.length !func_extern = 0 then (
+      GText "/* Skipping pub_fid enum since no functions are published */\n"
+    ) else (
     GEnumTag (
       {
         ename="pub_fid";
         eitems=List.map 
                  (fun v -> enumCounter := !enumCounter + 1; 
-                           ("pub_fid_" ^ v.vname, (integer !enumCounter), locUnknown)
+                           ("pub_fid_" ^ v.vname, (integer !enumCounter), locFile)
                  ) !func_global;
         eattr=[];
         ereferenced=true;
       }, 
-      locUnknown)
+      locFile)
+    )
   in
 
 
@@ -475,7 +564,7 @@ let doFile (file_name: string) : unit =
              ttype=v.vtype;
              treferenced=false
            }, 
-           locUnknown))
+           locFile))
       !typeDefProtos
   in
 
