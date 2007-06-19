@@ -4,6 +4,7 @@ open Cil;;
 module E = Errormsg;;
 
 let locFile = {line=(-1); file="__ctosos__.c"; byte=(-1)};;
+let notLocFile = {line=(-1); file="__ctosos__.x"; byte=(-1)};;
 
 let isSysFunction fname = 
   (Str.string_match (Str.regexp "sys_") fname 0) 
@@ -31,6 +32,7 @@ let fPtrType =
 ;;
 
 let enumCounter = ref 0;;
+let fidCounter = ref 0;;
 
 let typeDefProtos = ref [];;
 
@@ -64,6 +66,9 @@ let sosCall = makeGlobalVar "SOS_CALL" sosCallType;;
 let sysGetStateType = Formatcil.cType "void * () ()" [];;
 let sysGetState = makeGlobalVar "sys_get_state" sysGetStateType;;
 
+let fileName = ref "";;
+
+let ctosos_id = makeVarinfo true "CTOSOS_ID" intType;;
 
 (** Visitor to collect global vars *)
 class collectGlobals = object inherit nopCilVisitor
@@ -173,7 +178,9 @@ class useStateVisitor = object inherit nopCilVisitor
   method vglob (g: global) = 
 
     let cFile = 
-      if String.length (get_globalLoc g).file = 0 then true 
+      if String.length (get_globalLoc g).file = 0 then (
+        true 
+      )
       else (
         ((String.get (get_globalLoc g).file ((String.length (get_globalLoc g).file) -1)) = 'c') && 
         ((String.get (get_globalLoc g).file ((String.length (get_globalLoc g).file) -2)) = '.')
@@ -190,9 +197,15 @@ class useStateVisitor = object inherit nopCilVisitor
     funcPtrVar := None;
 
     if (List.exists (fun v -> v.vid = f.svar.vid) !func_local) then (
-      (** Add module state as first parameter to each function *)
+      
+      let memPtr = makeFormalVar f ~where:"^" "void_state" voidPtrType in
       let stateType = TPtr ((TComp (!state, [])), []) in
-        stateVar := Some (makeFormalVar f ~where:"^" "state" stateType);
+        stateVar := Some (makeLocalVar f "state" stateType);
+      let state = match !stateVar with Some s -> s | None -> E.s (E.bug "Nope") in
+      let castState = Set (var state, CastE (stateType, Lval (var memPtr)), f.svar.vdecl) in
+
+      f.sbody.bstmts <- ((mkStmtOneInstr castState)::f.sbody.bstmts);
+    
         DoChildren
     ) else if (List.exists (fun v -> v.vid = f.svar.vid) !func_global) then (
       SkipChildren
@@ -382,8 +395,8 @@ let makeModHeader (sub: varinfo list) (pub: varinfo list) =
               (Hashtbl.hash v.vtype mod 10000)
            ) ^
            (Printf.sprintf
-              "pub_pid_%s, pub_fid_%s},\n"
-              v.vname
+              "%s_pid, pub_fid_%s},\n"
+              !fileName
               v.vname
            )
         ) 
@@ -407,10 +420,10 @@ let makeModHeader (sub: varinfo list) (pub: varinfo list) =
                   },
         };
     "
-      "CTOSOS_ID" 
+      (!fileName ^ "_pid")
       (List.length sub)
       (List.length pub)
-      "CTOSOS_ID" 
+      (!fileName ^ "_pid")
       (subFuncs ^ pubFuncs)
   in
     modHeader
@@ -429,7 +442,7 @@ let rec insertGlobal
           ((String.get loc.file ((String.length loc.file) -2)) = '.')
         )
       ) ->
-
+        (GText "/* Start of CTOSOS Output */") ::
         typeDefs @ (
         (GCompTag (state, {line=0; file="__ctosos__"; byte=0})) ::
         subPidEnums :: subFidEnums :: pubPidEnums :: pubFidEnums ::
@@ -453,6 +466,21 @@ let rec insertGlobal
 let doFile (file_name: string) : unit = 
 
   cil_file := Frontc.parse file_name ();
+
+  let startName = 
+    try (String.rindex !cil_file.fileName '/') + 1
+    with _ -> 0
+  in
+
+  let stopName = 
+      ((String.length !cil_file.fileName) - startName - 2)
+  in 
+
+  fileName := 
+    String.sub 
+      !cil_file.fileName 
+      startName
+      stopName;
 
   (* Visit! *)
   visitCilFile (new collectGlobals) !cil_file;
@@ -496,7 +524,7 @@ let doFile (file_name: string) : unit =
         eattr=[];
         ereferenced=true;
       }, 
-      locFile)
+      notLocFile)
     )
   in
 
@@ -514,26 +542,19 @@ let doFile (file_name: string) : unit =
         eattr=[];
         ereferenced=true;
       }, 
-      locFile)
+      notLocFile)
     )
   in
 
   let pubPidEnums =
-    if List.length !func_extern = 0 then (
-      GText "/* Skipping pub_pid enum since no functions are published */\n"
-    ) else (
     GEnumTag (
       {
-        ename="pub_pid";
-        eitems=List.map 
-                 (fun v -> enumCounter := !enumCounter + 1; 
-                           ("pub_pid_" ^ v.vname, (integer !enumCounter), locFile)
-                 ) !func_global;
+        ename="pid";
+        eitems= [(!fileName ^ "_pid"), Lval (var ctosos_id), notLocFile];
         eattr=[];
         ereferenced=true;
       }, 
-      locFile)
-    )
+      notLocFile)
   in
 
   let pubFidEnums =
@@ -544,13 +565,13 @@ let doFile (file_name: string) : unit =
       {
         ename="pub_fid";
         eitems=List.map 
-                 (fun v -> enumCounter := !enumCounter + 1; 
-                           ("pub_fid_" ^ v.vname, (integer !enumCounter), locFile)
+                 (fun v -> fidCounter := !fidCounter + 1; 
+                           ("pub_fid_" ^ v.vname, (integer !fidCounter), locFile)
                  ) !func_global;
         eattr=[];
         ereferenced=true;
       }, 
-      locFile)
+      notLocFile)
     )
   in
 

@@ -4,13 +4,6 @@ TODO
 ctosos
 ------
 
-Update static functions to take as input a void* then typecast to state
-struct in body of function.
-
-Use my own pid for pub_pid
-
-Use my own address space for pub_fid
-
 Use predefined sub_pid / sub_fid enums when possible
 
 
@@ -21,10 +14,23 @@ Pull from C file into header file:
 - enums for pid / fid
 - xxx_proto typedefs
 
-Reinsert the enum names into generated code
+Reinsert the enum and #define names into generated code
 
 Automate steps to go from C to SOSc
+- Build to .i
+- Feed through ctosos
+- Remove top garbage
+- %s/\#line.*$//
+- Add back #include
 
+update Makefile
+make check mica2
+./ctosos <file>
+%s/\#line.*$//
+remove garbage
+reformat
+update Makefile
+output changes required to build
 
 Cleaning SOS
 ------------
