@@ -153,13 +153,16 @@ class classifyFunctions = object inherit nopCilVisitor
             let ptrToSub = 
               makeGlobalVar 
                 v.vname 
-                (TFun 
-                   (ret,  
-                    Some (("proto", fPtrType, [])::formals), 
-                    vararg, 
-                    attrs
-                   )
-                ) 
+                (TPtr (
+                  (TFun 
+                     (ret,  
+                      Some (("proto", fPtrType, [])::formals), 
+                      vararg, 
+                      attrs
+                     )
+                  ), 
+                  []
+                ))
             in
               typeDefProtos := ptrToSub::!typeDefProtos;
               ChangeTo ptrToSub
@@ -341,7 +344,7 @@ let makeErrorStub (fname: string) (ftype: typ) =
         []
     ) else (
       Formatcil.cStmt
-        "return %retval;"
+        "return %d:retval;"
         (fun n t -> E.s (E.bug "makeErrorStub: Should not be adding vars"))
         locFile
         [("retval", Fd 0)]
@@ -465,7 +468,9 @@ let rec insertGlobal
 
 let doFile (file_name: string) : unit = 
 
+  insertImplicitCasts := false;
   cil_file := Frontc.parse file_name ();
+    
 
   let startName = 
     try (String.rindex !cil_file.fileName '/') + 1
@@ -558,7 +563,7 @@ let doFile (file_name: string) : unit =
   in
 
   let pubFidEnums =
-    if List.length !func_extern = 0 then (
+    if List.length !func_global = 0 then (
       GText "/* Skipping pub_fid enum since no functions are published */\n"
     ) else (
     GEnumTag (
