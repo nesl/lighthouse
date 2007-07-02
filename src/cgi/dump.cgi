@@ -5,7 +5,7 @@ import cgitb; cgitb.enable()
 
 import tempfile
 import subprocess
-
+import time
 
 
 # Simple HTML form requesting file to verify.
@@ -89,11 +89,18 @@ def main():
             verbose = True
 
         fileitem = form["file"]
-        tfile = tempfile.NamedTemporaryFile()
+        
+        date = time.ctime().split()
+        date = "_".join(date)
+        date = date.split(":")
+        date = "_".join(date)
+
+        file_name = "data/" + date + "_" + fileitem.filename
+        file = open(file_name, "w")
         for line in fileitem.file:
-            tfile.write(line)
-        tfile.flush()
-        result = checkFile(tfile.name, verbose)
+            file.write(line)
+        file.close()
+        result = checkFile(file_name, verbose)
     else:
         generate_form()
 
