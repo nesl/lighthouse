@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 import os
 import sys
 import subprocess
@@ -12,9 +14,8 @@ def make_i(file):
     subprocess.call(command, stderr=null, stdout=null)
 
 
-def ctosos(file):
-    command = shlex.split("/home/rshea/svn/lighthouse/src/ctosos/ctosos " \
-            + file + ".i")
+def ctosos(file_i):
+    command = shlex.split("/home/rshea/svn/lighthouse/src/ctosos/ctosos " + file_i)
     ctosos = subprocess.Popen(command, stdout=subprocess.PIPE)
     return ctosos.stdout
 
@@ -70,8 +71,8 @@ def clean(output):
     return pretty.stdout
 
 
-def add_headers(file, output):
-    f_in = open(file + ".c", "read")
+def add_headers(file_c, output):
+    f_in = open(file_c, "read")
     include = re.compile("^\s*#include.*$")
     with_headers = []
     for line in f_in:
@@ -79,7 +80,7 @@ def add_headers(file, output):
             with_headers.append(line)
     f_in.close()
 
-    with_headers.append("#include \"" + file + ".h\"\n")
+    with_headers.append("#include \"" + file_c[:-2] + ".h\"\n")
 
     #TODO: Ugly hack...
     with_headers.append("\n")
@@ -95,17 +96,19 @@ def add_headers(file, output):
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 2:
-        print "Usage: %s <file>" % (sys.argv[0])
-        print "    file: name of C file to convert into an SOS module" 
+    if len(sys.argv) != 3:
+        print "Usage: %s <file.c> <file.i>" % (sys.argv[0])
+        print "    file.c: name of C file to convert into an SOS module" 
+        print "    file.i: name of preprocessed version of C file" 
         sys.exit(-1)
 
-    file_name = sys.argv[1]
+    file_name_c = sys.argv[1]
+    file_name_i = sys.argv[2]
     
     # make_i(file_name)
-    output = ctosos(file_name)
+    output = ctosos(file_name_i)
     output = clean(output)
-    output = add_headers(file_name, output) 
+    output = add_headers(file_name_c, output) 
     for line in output:
         print line,
 
