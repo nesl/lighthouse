@@ -3,95 +3,93 @@ import sys
 import subprocess
 import shlex
 import re
+import tempfile
+
 
 def make_i(file):
-    command = shlex.split("make check mica2")
-    subprocess.call(command)
+    null = open("/dev/null", "w")
+    command = shlex.split("make " + file + ".i mica2")
+    subprocess.call(command, stderr=null, stdout=null)
 
 
 def ctosos(file):
     command = shlex.split("/home/rshea/svn/lighthouse/src/ctosos/ctosos " \
-            + file + ".i --out " + file + ".ctosos.c")
-    subprocess.call(command)
+            + file + ".i")
+    ctosos = subprocess.Popen(command, stdout=subprocess.PIPE)
+    return ctosos.stdout
 
 
-def clean(file):
+def clean(output):
 
     # Remove the "#line ...." entries from file
     loc_line = re.compile("^#line.*$")
-    f_in = open(file + ".ctosos.c", "read")
-    f_out = open(file + ".ctosos.c.tmp", "write")
-    for line in f_in:
+    no_line_nums = []
+    for line in output:
         if (loc_line.match(line) != None):
             continue
         else:
-            f_out.write(line)
-    f_in.close()
-    f_out.close()
-    os.remove(file + ".i")
-    os.rename(file + ".ctosos.c.tmp", file + ".ctosos.c")
+            no_line_nums.append(line)
+    output = no_line_nums
+
 
     # Remove code from header files sitting in file
     ctosos_start = re.compile("^/\* Start of CTOSOS Output \*/$")
-    f_in = open(file + ".ctosos.c", "read")
-    f_out = open(file + ".ctosos.c.tmp", "write")
     ctosos_found = False
-    for line in f_in:
+    cut_header = []
+    for line in output:
         if (ctosos_start.match(line) != None):
             ctosos_found = True
         if ctosos_found:
-            f_out.write(line)
-    f_in.close()
-    f_out.close()
-    os.rename(file + ".ctosos.c.tmp", file + ".ctosos.c")
+            cut_header.append(line) 
+    output = cut_header
+
 
     # Remove type casts from SOS_CALL
-    f_in = open(file + ".ctosos.c", "read")
-    f_out = open(file + ".ctosos.c.tmp", "write")
     sos_call = re.compile("^.*=.*(.*).*SOS_CALL.*$")
-    for line in f_in:
+    no_call_casts = []
+    for line in output:
         if (sos_call.match(line) != None):
             # Strip potential type casts from SOS_CALL
             sos_call_cast = re.compile("=.*(.*).*SOS_CALL")
             m = sos_call_cast.search(line)
             head = line[:(m.start() + 1)]
             tail = line[(m.end()-len("SOS_CALL")):]
-            f_out.write(head + " " + tail)
+            no_call_casts.append(head + " " + tail)
         else:
-            f_out.write(line)
-    f_in.close()
-    f_out.close()
-    os.rename(file + ".ctosos.c.tmp", file + ".ctosos.c")
+            no_call_casts.append(line)
+    output = cut_header
 
 
     # Make the code pretty
-    command = shlex.split("indent -i4 -lp -ts4 -nut -bad -bap -bbb -sob " + file + ".ctosos.c")
-    subprocess.call(command)
-    os.remove(file + ".ctosos.c~")
+    input = tempfile.TemporaryFile()
+    for line in output:
+        input.write(line)
+    input.seek(0)   
+    command = shlex.split("indent -i4 -lp -ts4 -nut -bad -bap -bbb -sob -st")
+    pretty = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=input)
+    return pretty.stdout
 
 
-def add_headers(file):
+def add_headers(file, output):
     f_in = open(file + ".c", "read")
-    f_out = open(file + ".ctosos.c.tmp", "write")
     include = re.compile("^\s*#include.*$")
+    with_headers = []
     for line in f_in:
         if(include.match(line) != None):
-            f_out.write(line)
+            with_headers.append(line)
     f_in.close()
 
-    f_out.write("#include \"" + file + ".h\"\n")
+    with_headers.append("#include \"" + file + ".h\"\n")
 
     #TODO: Ugly hack...
-    f_out.write("\n")
-    f_out.write("#define CTOSOS_ID 128\n")
-    f_out.write("\n")
+    with_headers.append("\n")
+    with_headers.append("#define CTOSOS_ID 128\n")
+    with_headers.append("\n")
 
-    f_in = open(file + ".ctosos.c", "read")
-    for line in f_in:
-        f_out.write(line)
-    f_in.close()
-    f_out.close()
-    os.rename(file + ".ctosos.c.tmp", file + ".ctosos.c")
+    for line in output:
+        with_headers.append(line)
+
+    return with_headers
 
 
 
@@ -104,8 +102,10 @@ if __name__ == "__main__":
 
     file_name = sys.argv[1]
     
-    make_i(file_name)
-    ctosos(file_name)
-    clean(file_name)
-    add_headers(file_name) 
+    # make_i(file_name)
+    output = ctosos(file_name)
+    output = clean(output)
+    output = add_headers(file_name, output) 
+    for line in output:
+        print line,
 

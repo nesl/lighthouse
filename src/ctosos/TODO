@@ -5,32 +5,12 @@ ctosos
 ------
 
 Use predefined sub_pid / sub_fid enums when possible
-
+Write documentation
+Setup internal webinterface
 
 Suport Tools
 ------------
 
-Pull from C file into header file:
-- enums for pid / fid
-- xxx_proto typedefs
-
-Reinsert the enum and #define names into generated code
-
-Automate steps to go from C to SOSc
-- Build to .i
-- Feed through ctosos
-- Remove top garbage
-- %s/\#line.*$//
-- Add back #include
-
-update Makefile
-make check mica2
-./ctosos <file>
-%s/\#line.*$//
-remove garbage
-reformat
-update Makefile
-output changes required to build
 
 Cleaning SOS
 ------------

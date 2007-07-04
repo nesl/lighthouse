@@ -96,7 +96,9 @@ class collectGlobals = object inherit nopCilVisitor
         GVar (v, init, loc) ->
           begin match (Formatcil.dType "%t:type const" v.vtype) with
               Some _ ->
+                (*
                 ignore (printf "Found a const: %s\n" v.vname); 
+                 *)
                 DoChildren
             | None -> 
                 global_vars := v::!global_vars;
@@ -608,7 +610,9 @@ let doFile (file_name: string) : unit =
   
   (* If requested dump the transformed code to file. *)
   (match !outChannel with
-       None -> E.s (E.error "Must specify out file");
+       None -> 
+         Stats.time "printCIL" 
+           (dumpFile (!printerForMaincil) stdout !cil_file.fileName) !cil_file
      | Some c -> 
          Stats.time "printCIL" 
            (dumpFile (!printerForMaincil) c !cil_file.fileName) !cil_file
@@ -643,10 +647,12 @@ let mainFunction () =
 
     List.iter doFile !fileNames;
 
+    (*
     List.iter (fun v -> ignore (Pretty.printf "---> %s\n" v.vname)) !func_global;
     List.iter (fun v -> ignore (Pretty.printf "~~~> %s\n" v.vname)) !func_local;
     List.iter (fun v -> ignore (Pretty.printf "^^^> %s\n" v.vname)) !func_extern;
     List.iter (fun v -> ignore (Pretty.printf "***> %s\n" v.vname)) !global_vars;
+     *)
 ;;
 
 
