@@ -1,0 +1,47 @@
+Callgraph Generator
+===================
+
+How to use:
+-----------
+
+The following two instructions generate the dot file for the call graph and
+then significantly reduce the call graph by:
+    - Removing macros for pin manipulation 
+    - Eliminating singleton nodes via removing explicit node labels
+    - Removing duplicate edges
+Note that when this is done you must manually return the `}` to the end of
+the dot file and the `digraph ... {` to the top of the file.  These were
+moved as a result of the call to `sort`.
+
+----
+./fnCallGraph *.i > callgraph.dot
+cat callgraph.dot | \
+    grep -v PIN | \
+    grep -v BIT | \
+    grep -v CLR | \
+    grep -v SET | \
+    grep -v PORT | \
+    grep -v READ | \
+    grep -v TOGGLE | \
+    grep -v "label = " | \
+    sort | uniq > 
+    callgraph_reduced.dot 
+----
+
+This generates a handy dandy call graph.  Now you can ues graphviz to plot.
+I find that for very large callgraphs the svg files work best.
+
+----
+dot -Tsvg callgraph_reduced.dot > callgraph_reduced.svg
+----
+
+Take a look using your favorite svg viewer such as `eog`.
+
+
+Limitations:
+------------
+
+- This does NOT handle function pointers.  Function pointers are poopy.
+- Assumes that .i files are available.  These can be generated using the
+  `-E` flag in your call to gcc.
+
