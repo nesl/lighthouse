@@ -1,6 +1,7 @@
 open Cil
 open Pretty
 
+let verbose = ref false
 let currentFunc = ref (emptyFunction "")
     
 class fnCallGraphVisitor = object
@@ -8,7 +9,14 @@ class fnCallGraphVisitor = object
     
   method vfunc (f:fundec) =
     currentFunc := f;
-    ignore(printf "%s [label = %s];\n" f.svar.vname f.svar.vname);
+    if !verbose then
+      ignore(printf "\"%s:%s\" [label = \"%s:%s\"];\n" 
+               f.svar.vdecl.file
+               f.svar.vname 
+               f.svar.vdecl.file
+               f.svar.vname)
+    else
+      ignore(printf "%s [label = %s];\n" f.svar.vname f.svar.vname);
     DoChildren
 
 
@@ -17,7 +25,15 @@ class fnCallGraphVisitor = object
       begin  
         match i with
           | Call (_, Lval (Var v, NoOffset), _, _) ->
-              ignore(printf "%s -> %s;\n" !currentFunc.svar.vname v.vname)
+              if !verbose then
+                ignore(printf "\"%s:%s\" -> \"%s:%s\";\n" 
+                         !currentFunc.svar.vdecl.file
+                         !currentFunc.svar.vname 
+                         v.vdecl.file
+                         v.vname)
+              else
+                ignore(printf "%s -> %s;\n" !currentFunc.svar.vname v.vname);
+              ()
           | _ ->
               ()
       end;
@@ -35,6 +51,9 @@ let openFile (what: string) (takeit: out_channel -> unit) (fl: string) =
 
 
 let argDescr = [
+  ("--verbose", Arg.Unit (fun _ -> verbose := true),
+   "Include function names in variable listing");
+
     ];;
 
 
@@ -55,8 +74,6 @@ let mainFunction () =
     fileNames := fname :: (!fileNames) 
   in
   
-  let outName = ref "" in
-    
     Arg.parse argDescr recordFile usageMsg;
     
     Cil.initCIL ();

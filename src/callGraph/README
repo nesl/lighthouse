@@ -24,8 +24,7 @@ cat callgraph.dot | \
     grep -v READ | \
     grep -v TOGGLE | \
     grep -v "label = " | \
-    sort | uniq > 
-    callgraph_reduced.dot 
+    sort | uniq > callgraph_reduced.dot 
 ----
 
 This generates a handy dandy call graph.  Now you can ues graphviz to plot.
@@ -44,4 +43,14 @@ Limitations:
 - This does NOT handle function pointers.  Function pointers are poopy.
 - Assumes that .i files are available.  These can be generated using the
   `-E` flag in your call to gcc.
+
+Printing from Linux:
+--------------------
+
+Print the svg to a pdf and then:
+
+----
+pdftops output.pdf output.ps
+ps2ps -sPAPERSIZE=letter output.ps output_clean.ps
+----
 
