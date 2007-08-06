@@ -1,0 +1,18 @@
+
+Working with specifications
+---------------------------
+
+10 - Write base specification
+30 - Add specification parser / writer to treeify
+10 - Read in base specification in treeify
+10 - Write out temporary specification
+
+15 - Run test using temporary specification
+15 - Test using functions that
+05     - malloc data
+05    - free data
+05    - neither
+30 - Translate from errors to specifications
+
+- Update specification on the fly
+
