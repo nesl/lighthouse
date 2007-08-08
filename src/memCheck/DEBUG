@@ -1,0 +1,4 @@
+make debug-code
+
+rlwrap ocamldebug -I /home/rshea/mote/cil-1.3.5/obj/x86_LINUX $CMD_LINE
+
