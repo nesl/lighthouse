@@ -1,0 +1,51 @@
+\documentclass{llncs}
+\usepackage{times}
+
+\def\numannote{35 }
+\def\mynote#1{{\sf $\clubsuit$ #1$\clubsuit$}}
+\def\create{{\mathsf{create}}}
+\def\alloc{{\mathsf{alloc}}}
+\def\access{{\mathsf{access}}}
+\def\delete{{\mathsf{delete}}}
+\def\alias{{\mathsf{alias}}}
+\def\code#1{\texttt{#1}}
+
+\sloppy
+
+
+\begin{document}
+
+\title{Static Checking for Dynamic Resource Management \\ in Sensor
+  Network Systems}
+
+\author{Roy Shea\inst{1} \and Shane Markstrum\inst{1} \and Todd
+Millstein\inst{1} \and Rupak Majumdar\inst{1} \and Mani Srivastava\inst{2} }
+
+\institute{ 
+            Computer Science Department\\
+            University of California, Los Angeles\\
+            \email{\{roy,smarkstr,todd,rupak\}@cs.ucla.edu}
+\and
+            Electrical Engineering Department\\
+            University of California, Los Angeles\\
+            \email{mbs@ucla.edu}
+}
+
+\maketitle
+
+\input{abstract}
+\input{introduction}
+\input{caseExample}
+\input{algorithm}
+\input{evaluation}
+\input{related}
+\input{conclusion}
+
+{
+\bibliographystyle{abbrv}
+\bibliography{sw,sos,references}
+}
+
+\end{document}
+
+

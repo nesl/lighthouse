@@ -1,0 +1,194 @@
+\section{Introduction}
+\label{sec:intro}
+
+Networked embedded systems, or sensor networks, are finding ubiquitous
+application in densely sampling phenomena --- from structural
+properties of buildings to wildlife behavior --- that were previously
+difficult or impossible to observe.  Like embedded systems, sensor
+networks operate in resource and energy constrained environments with
+minimal operating system support.  However, unlike traditional
+``dedicated'' embedded applications, sensor network applications are
+reprogrammable, and applications may change in the field.  For this
+reason, sensor network applications can benefit from operating system
+support for general-purpose system abstractions.
+
+A useful class of system abstractions provides facilities to
+dynamically manipulate system resources.  
+%
+% Another important class of abstractions are those that facilitate
+% changing the owner of a resource.
+%
+Such abstractions can simplify application development and allow an
+application to naturally and efficiently respond to the changing needs of its
+environment.  
+%
+% Several platforms for sensor networks provide a form of dynamic
+% resource management.  
+%
+For example, TinyOS~\cite{TinyOS} uses a buffer-swapping protocol 
+between components for
+efficient sharing of statically allocated buffers.  
+The SOS operating system~\cite{sos} supports dynamic
+allocation of memory, while MANTIS OS~\cite{abrach03mantis} supports
+both dynamic memory allocation and thread creation.
+Frameworks built on
+top of sensor network systems also include components that make
+resources dynamically available to other parts of the system.  
+An example of this form of dynamic resource 
+management is the
+VanGo~\cite{greenstein05vango} framework's buffer pool for
+TinyOS. 
+
+%
+% NOTE: With the addition of buffer swapping in TinyOS added above, is
+% this paragraph still needed?
+%
+% While especially important for the proper management of dynamic
+% resources, this kind of ownership model is also useful for managing
+% static resources.  For example, TinyOS lacks support for dynamic
+% memory allocation, but statically allocated buffers are often
+% transferred among components for efficiency reasons.  TinyOS employs a
+% split-phase approach to message passing~\cite{TinyOS}: a message
+% pointer is passed via a call to {\tt Send.send}, and the sender
+% receives the {\tt Send.sendDone} event when message transmission has
+% completed.  The calling component should not modify the message
+% pointer in any way until receiving the {\tt sendDone} event.
+% Ownership is a natural protocol for guaranteeing this behavior:  the
+% calling component transfers ownership of the pointer to the callee
+% upon a {\tt send} call and regains ownership upon the {\tt sendDone}
+% event~\cite{ownershipthread}.
+
+
+While the ability to manipulate resources increases the expressiveness
+of sensor network applications, this expressiveness can be a
+double-edged sword.  Improper management of resources can lead to
+subtle errors that can affect both the correctness and efficiency of
+applications.
+
+For example, consider the architecture of a simple sensor network
+sense and send application.
+%, shown in Figure~\ref{fig:surge-dataflow}.
+Like many sensor network applications, this application can be
+arranged for a dataflow architecture:  raw sensed data captured at the
+sensors moves through various filters
+% (via the {\tt surge} component)
+before being forwarded to a base station.
+% (via the {\tt tree routing} component).  
+In order to naturally and efficiently implement the message passing,
+data buffers are 
+%  dynamically allocated as necessary and 
+passed by
+reference between system components.
+% rather than by copying.
+
+If incorrectly implemented, this style of data sharing can lead to
+serious errors.  First, a component may access a (dangling) reference to
+data that has been passed on and possibly freed downstream. 
+%
+This is dangerous because
+%
+the low-end processor hardware used in current sensor nodes does not
+have a memory management unit.  Thus existing sensor node operating
+systems for these platforms, like TinyOS~\cite{TinyOS} and
+SOS~\cite{sos}, do not support virtual memory, and a bad dereference
+can crash the system. 
+%
+Second, a component may get a data buffer from an upstream component but
+forget to either dispose it or pass it on to the next stage for
+processing.  Since expensive garbage-collection mechanisms are not
+available, such resource leaks will very soon exhaust available
+memory.
+
+
+Our key insight is that data transfer between
+components in sensor network applications 
+typically does not lead to sharing, but instead follows a
+producer-consumer pattern.  
+% Therefore, sensor network programmers
+% typically implement correct and efficient resource management using
+% implicit {\em ownership-based} data access protocols. 
+In this style,
+every resource has exactly one {\em owner} component at any point.  The
+component that creates the resource (dynamically 
+through a kernel call or statically
+through a variable declaration) assumes initial ownership.
+% Ownership of a resource is explicitly transferred through kernel calls
+% that implement message passing.  
+% %
+% \mynote{ROY: This is a little awkward.  I added the notion of
+% ``static'' resource allocation above.  Here I am trying to explain
+% that it is valid for a component to simply ``remember'' a resource (ie.
+% not leak it).  In the prior version we simply said that a component must
+% free or transfer ownership of data.}
+% %
+Each component has the right to access the resources that it owns but
+also the responsibility to eventually either free the resource or transfer
+ownership to another component.  
+%
+A component may not manipulate resources that it does not own.  If all
+components obey this protocol, then there can be neither accesses to
+dangling resources nor resource leaks.
+
+
+
+Current sensor network systems do not help programmers to ensure that
+this ownership protocol is properly obeyed.  In most systems, this
+protocol is completely implicit and can be expressed only informally
+through programming conventions and comments.  The SOS operating
+system includes an explicit API for expressing ownership
+relationships.  However, programmer-declared ownership relationships
+are trusted rather than checked, so programmers must take responsibility for
+ensuring that this API is properly used.  Our experience has been that
+programmers often make subtle mistakes in ownership,
+leading to critical and difficult-to-track errors.  
+
+In this paper, we present an approach for automated validation of dynamic
+resource management in sensor network software.  Programmers employ an
+explicit API along with lightweight program annotations to express
+ownership intentions for resources.  An automated program checker employs these
+annotations to analyze each component {\em
+at compile time} for violations of the ownership protocol, providing
+early feedback to programmers about the potential for dynamic resource
+errors.  The checker requires a novel suite of dataflow analyses to ensure
+the key ownership invariants:  each resource has a unique owner; each
+resource is only manipulated by its owner; and each resource is either
+freed by its owner or transferred to another owner.  With our approach,
+sensor network programmers can make use of the expressiveness of
+dynamic resource management while retaining confidence in the
+reliability of their applications.
+
+We have instantiated these ideas in Lighthouse, a tool for statically ensuring
+proper management of dynamic memory in the SOS operating
+system~\cite{sos}. 
+%which employs the C programming language.  
+We focus on SOS memory management because of our experience with
+memory errors as users of SOS, which was our initial motivation.
+However, the underlying dataflow analyses are generic, and Lighthouse is
+parametrized by the API for resource creation, ownership transfer, and
+resource deletion.  Therefore, we believe that our tool can be easily
+adapted both to statically track ownership for other kinds of
+resources and to handle C-based operating systems other than SOS.
+
+We evaluated Lighthouse on the historic versions of all user modules in
+the SOS CVS repository, as well as on the SOS kernel.  Overall, we ran
+the checker on about 40,000 lines of code.  The tool identified 25
+suspect memory operations of which eight were actual memory errors in the
+historic versions of the user modules, as well as 35 suspect memory
+operations of which two were actual memory errors in the SOS kernel.
+The latter finding is somewhat surprising, since the SOS kernel code
+is relatively mature and was written by experienced systems programmers.
+In summary, our experiments illustrate the practicality of our
+approach for providing early feedback about memory errors in real
+sensor network software.
+
+The rest of the paper is structured as follows.
+Section~\ref{sec:example} illustrates the problems for resource
+management via examples from TinyOS and SOS.  It continues
+with an informal description of the ownership protocol that resolves
+these problems.  Section~\ref{sec:alg} presents a precise description
+of this protocol and the way in which our tool enforces it.
+Section~\ref{sec:eval} provides our experimental results, which
+illustrate the utility of our tool in practice.
+Section~\ref{sec:related} compares against related work, and
+Section~\ref{sec:conc} concludes.
+
