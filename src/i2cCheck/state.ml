@@ -16,6 +16,7 @@ type i2c_state =
     Reserved
   | Free
   | Unknown
+  | Error
 ;;
 
 
@@ -26,6 +27,7 @@ let i2c_state_to_string state: string =
       Reserved -> "reserved"
     | Free -> "free"
     | Unknown -> "unknown"
+    | Error -> "error"
   in
 
     (Pretty.sprint 70 (Pretty.dprintf "%s" state_string))
