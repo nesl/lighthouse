@@ -18,7 +18,7 @@ let keywords = [
   ";";
   ".";
 
-  "$";
+  (* "$"; *)
 
   "pre";
   "post";
@@ -42,19 +42,10 @@ let parse_spec_block s =
 
   let rec parse_pre_post s =
     match s with parser
-      | [<'Kwd "$">] -> begin
-           match s with parser
-             | [<'Kwd "reserved"; 'Kwd "("; 'Kwd ")"; 'Kwd ";"; 'Kwd "}">] ->
-                 Reserved
-             | [<'Kwd "free"; 'Kwd "("; 'Kwd ")"; 'Kwd ";"; 'Kwd "}">] ->
-                 Free
-             | [<'Kwd "unknown"; 'Kwd "("; 'Kwd ")"; 'Kwd ";"; 'Kwd "}">] ->
-                 Unknown
-             | [<>] -> 
-                 raise Parse_error
-         end
-      | [<>] -> 
-          raise Parse_error
+      | [<'Kwd "reserved"; 'Kwd "("; 'Kwd ")"; 'Kwd ";"; 'Kwd "}">] -> Reserved
+      | [<'Kwd "free"; 'Kwd "("; 'Kwd ")"; 'Kwd ";"; 'Kwd "}">] -> Free
+      | [<'Kwd "unknown"; 'Kwd "("; 'Kwd ")"; 'Kwd ";"; 'Kwd "}">] -> Unknown
+      | [<>] -> raise Parse_error
   in
 
 
@@ -71,14 +62,11 @@ let parse_spec_block s =
     match s with parser
       | [<'Ident f_name; 'Kwd ".">] -> begin
           match s with parser 
-            | [<'Kwd "pre"; 'Kwd "{">] ->
-                parse_pre f_name s
-            | [<'Kwd "post"; 'Kwd "{">] ->
-                parse_post f_name s
+            | [<'Kwd "pre"; 'Kwd "{">] -> parse_pre f_name s
+            | [<'Kwd "post"; 'Kwd "{">] -> parse_post f_name s
             | [<>] -> raise Parse_error
         end
-      | [<>] -> 
-          raise Parse_error
+      | [<>] -> raise Parse_error
 ;;
 
 
@@ -109,8 +97,10 @@ let parse_spec_stream spec_stream =
       while true do
         block_num := !block_num + 1;
         match parse_spec_block spec_stream with
-            Pre pre -> specification.pre <- pre::(specification.pre)
-          | Post post -> specification.post <- post::(specification.post)
+            Pre pre -> 
+              specification.pre <- pre::(specification.pre)
+          | Post post -> 
+              specification.post <- post::(specification.post)
       done;
       assert false
     with

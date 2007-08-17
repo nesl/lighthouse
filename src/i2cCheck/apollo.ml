@@ -111,7 +111,7 @@ module I2C_Dataflow = struct
 
             if !dbg_i2c_i then (
               ignore (printf "State leaving called function %s is:\n%a\n" 
-                        v.vname pretty state);
+                        v.vname pretty new_state);
               flush stdout;
             );
 

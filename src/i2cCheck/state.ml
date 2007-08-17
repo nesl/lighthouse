@@ -97,7 +97,14 @@ let update_state_with_pre (fname: string) (state: i2c_state): i2c_state =
 (* Verify that state upholds on pre-conditions *)
 let verify_state_with_pre (fname: string) (state: i2c_state) : bool =
   let spec_state = spec_lookup_pre !specification fname in
-    spec_state == state 
+  let safe = (state == Unknown || spec_state == state) in
+    if not safe then (
+      E.warn "Entering function %s:\n    Expected state \"%s\" but found \"%s\""
+        fname 
+        (i2c_state_to_string spec_state)
+        (i2c_state_to_string state)
+    );
+    safe
 ;;
 
 
@@ -111,6 +118,13 @@ let update_state_with_post (fname: string) (state: i2c_state): i2c_state =
 (* Verify that state upholds post-conditions *)
 let verify_state_with_post (fname: string) (state: i2c_state) : bool =
   let spec_state = spec_lookup_post !specification fname in
-    spec_state == state
+  let safe = (spec_state == Unknown || spec_state == state) in
+    if not safe then (
+      E.warn "Leaving function %s:\n    Expected state \"%s\" but found \"%s\""
+        fname 
+        (i2c_state_to_string spec_state)
+        (i2c_state_to_string state)
+    );
+    safe
 ;;
 
