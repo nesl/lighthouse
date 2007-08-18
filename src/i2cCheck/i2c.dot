@@ -1,0 +1,23 @@
+digraph i2c {
+
+/* To reach "to" node, I must pass through "from" node where:
+ * - "from" node has precondition "taillabel" 
+ * - "from" node has postcondition "headlabel"
+ */
+
+    reserve_i2c -> reserve_i2c
+        [taillabel="free();",headlabel="free();"];
+
+    reserve_i2c -> send_i2c
+        [taillabel="free();",headlabel="reserved();"];
+    
+    send_i2c -> reserve_i2c
+        [taillabel="reserved();",headlabel="free();"];
+
+    send_i2c -> release_i2c
+        [taillabel="reserved();",headlabel="reserved();"];
+
+    release_i2c -> reserve_i2c
+        [taillabel="reserved();",headlabel="free();"];
+}
+

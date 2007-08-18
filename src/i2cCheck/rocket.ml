@@ -23,9 +23,6 @@ class rocketVisitor = object inherit nopCilVisitor
 
   method vfunc (f: fundec) =
       
-    let fsm_graph file_name = 
-      Dot2transCheck.get_fsm_graph file_name
-    in
 
     let simple_check () =
       try ignore (Apollo.i2c_func_simple f !cil_file);
@@ -36,7 +33,7 @@ class rocketVisitor = object inherit nopCilVisitor
      
       let (from_node, to_node, spec_string) = edge in
       let spec = SpecParse.parse_spec_string spec_string in
-      let _ = State.specification := spec in
+      let _ = State.fsm_specification := spec in
       
         try ignore (Apollo.i2c_func_fsm f !cil_file);
         with E.Error -> ignore (printf "####\n# Bummer!\n####\n\n\n");
@@ -45,7 +42,7 @@ class rocketVisitor = object inherit nopCilVisitor
 
       if not (!fsm_file = "") then (
       (** Checking using FSM takes priority *)
-        let graph = fsm_graph !fsm_file in
+        let graph = Dot2transCheck.get_fsm_graph !fsm_file in
 
         let matching_edges = 
           List.filter 
@@ -139,6 +136,9 @@ let argDescr = [
 
   ("--dbg_i2c_g", Arg.Unit (fun _ -> Apollo.dbg_i2c_g := true),
    "Guard evaluation debugging of the Apollo dataflow");
+
+  ("--dbg_i2c", Arg.Unit (fun _ -> Apollo.dbg_i2c := true),
+   "Other debugging statments of the Apollo dataflow");
 
 ];;
 

@@ -158,7 +158,7 @@ let table_to_string table =
     let spec_string = spec_string ^ Printf.sprintf "%s\n" edge.pre in
     let spec_string = spec_string ^ Printf.sprintf "}\n\n" in
     let spec_string = spec_string ^ Printf.sprintf "%s.post {\n" edge.to_func in
-    let spec_string = spec_string ^ Printf.sprintf "%s" edge.post in
+    let spec_string = spec_string ^ Printf.sprintf "%s\n" edge.post in
     let spec_string = spec_string ^ Printf.sprintf "}\n\n" in
 
       (from_node, to_node, spec_string)
@@ -218,11 +218,11 @@ let main () =
 
     ()
 ;;
- *) 
+*)
 
 (* Do something!!! *)
 (*
 let _ = 
   main ()
 ;;
- *)
+*)

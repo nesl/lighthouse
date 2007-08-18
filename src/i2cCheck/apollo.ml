@@ -98,7 +98,7 @@ module I2C_Dataflow = struct
 
           (* Verify that we are in a state that is valid for the function call
            *)
-          let proper_pre = verify_state_with_pre v.vname state in
+          let proper_pre = verify_state_with_pre v.vname state !current_stmt in
 
           (* Place holder for checking for errors.  The function
            * verify_state_with_pre currently prints a debugging statement for
@@ -170,13 +170,11 @@ module Track = DF.ForwardsDataFlow(I2C_Dataflow);;
 (****************************************)
 (****************************************)
 
-let i2c_func (f: fundec) (cfile: file) : unit = 
+let i2c_func (f: fundec) (cfile: file) (fsm: bool): unit = 
 
   cil_file := cfile;
 
-  let state = 
-    State.update_state_with_pre f.svar.vname Unknown
-  in
+  let state = State.update_state_with_pre f.svar.vname Unknown fsm in
 
   let _ = 
     if !dbg_i2c then (   
@@ -214,7 +212,7 @@ let i2c_func (f: fundec) (cfile: file) : unit =
            in
 
 
-           let safe_return = verify_state_with_post f.svar.vname return in
+           let safe_return = verify_state_with_post f.svar.vname return s fsm in
 
              if not safe_return then ( 
                (*
@@ -239,12 +237,12 @@ let i2c_func (f: fundec) (cfile: file) : unit =
 ;;
 
 let i2c_func_simple (f: fundec) (cfile: file): unit =
-  i2c_func f cfile
+  i2c_func f cfile false
 ;;
 
 
 let i2c_func_fsm (f: fundec) (cfile: file): unit =
-  i2c_func f cfile
+  i2c_func f cfile true
 ;;
 
 
