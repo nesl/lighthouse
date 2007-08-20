@@ -29,12 +29,19 @@ class rocketVisitor = object inherit nopCilVisitor
       with E.Error -> ignore (printf "####\n# Bummer!\n####\n\n\n");
     in
 
-    let fsm_check edge =
-     
-      let (func, from_node, to_node, spec_string) = edge in
+    let fsm_check edges =
+    
+      let spec_string =
+        List.fold_left
+          (fun str (_, _, _, edge_spec) -> edge_spec ^ "\n" ^ str)
+          ""
+          edges
+      in 
+
       let spec = SpecParse.parse_spec_string spec_string in
       let _ = State.fsm_specification := spec in
       
+        State.fsm_specification := SpecParse.parse_spec_string spec_string;
         try ignore (Apollo.i2c_func_fsm f !cil_file);
         with E.Error -> ignore (printf "####\n# Bummer!\n####\n\n\n");
     in
@@ -50,7 +57,10 @@ class rocketVisitor = object inherit nopCilVisitor
             graph
         in
 
-          List.iter fsm_check matching_edges
+          if matching_edges != [] then
+            fsm_check matching_edges
+          else
+            ()
 
       ) else if !func_name = f.svar.vname then (
       (** Then function specific check requests take priority *)

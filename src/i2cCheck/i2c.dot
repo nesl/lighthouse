@@ -17,7 +17,7 @@ digraph i2c {
         [label="reserve_i2c",taillabel="free();",headlabel="free();"];
 
     sending_data -> standby
-        [label="release_i2c",taillabel="reserved();",headlabel="free();"];
+        [label="send_i2c",taillabel="reserved();",headlabel="free();"];
 
 }
 

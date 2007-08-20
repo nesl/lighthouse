@@ -160,7 +160,7 @@ let print_transition_check table =
 ;;
 
 
-let table_to_string table =
+let constraints_to_edge_spec table =
  
   let handle_edge edge =
 
@@ -189,9 +189,16 @@ let print_constraints constraints =
          to_state
          spec
     ) 
-    (table_to_string constraints)
+    (constraints_to_edge_spec constraints)
 ;;
 
+
+(* Returns a list of edge specification tuples containing:
+ *  - function associated with the edge
+ *  - edge "from" state
+ *  - edge "to" state
+ *  - string representation of the pre- / post- conditions for the transition
+ *)
 
 let get_fsm_graph (file:string) =   
 
@@ -199,10 +206,11 @@ let get_fsm_graph (file:string) =
   let g = Odot.parse_file file in
   let _ = generate_table g mapping constraints in
   
-  let pre_post_string = table_to_string !constraints in
-    pre_post_string
+  let edge_specs = constraints_to_edge_spec !constraints in
+    edge_specs
 
 ;;
+
 
 
 (* Driver function *)    
