@@ -21,16 +21,28 @@ let usage () =
 
 
 type transition = {
-  from_func:string; 
-  to_func:string; 
+  func:string;
+  from_state:string; 
+  to_state:string; 
   pre:string;
   post:string;
 }
 ;;
 
 
-let get_transition (attrs: Odot.attr list): (string * string) = 
+let get_transition (attrs: Odot.attr list): (string * string * string) = 
 
+  let func = match Odot.attr_value (Odot.Simple_id "label") attrs with
+      Some (Odot.Double_quoted_id str) -> str
+    | Some _
+    | None -> 
+        ignore (
+          Printf.printf "Unable to find label in attribute list: %s\n" 
+            (Odot.string_of_attr_list attrs)
+        );
+        ""
+  in
+  
   let pre_string = match Odot.attr_value (Odot.Simple_id "taillabel") attrs with
       Some (Odot.Double_quoted_id str) -> str
     | Some _
@@ -53,7 +65,7 @@ let get_transition (attrs: Odot.attr list): (string * string) =
         ""
   in
 
-    (pre_string, post_string)
+    (func, pre_string, post_string)
 
 ;;
 
@@ -71,9 +83,10 @@ let generate_table (g:Odot.graph) table constraints =
           
           update_table id1 [id2] table;
           update_table id2 [] table;
-          let (pre, post) = get_transition attrs in
-            constraints := {from_func=(Odot.string_of_id id1); 
-                            to_func=(Odot.string_of_id id2); 
+          let (func, pre, post) = get_transition attrs in
+            constraints := {func=func;
+                            from_state=(Odot.string_of_id id1); 
+                            to_state=(Odot.string_of_id id2); 
                             pre=pre; 
                             post=post} :: !constraints;
             ()
@@ -151,17 +164,15 @@ let table_to_string table =
  
   let handle_edge edge =
 
-    let from_node = edge.from_func in
-    let to_node = edge.to_func in
     let spec_string = "" in
-    let spec_string = spec_string ^ Printf.sprintf "%s.pre {\n" edge.to_func in
+    let spec_string = spec_string ^ Printf.sprintf "%s.pre {\n" edge.func in
     let spec_string = spec_string ^ Printf.sprintf "%s\n" edge.pre in
     let spec_string = spec_string ^ Printf.sprintf "}\n\n" in
-    let spec_string = spec_string ^ Printf.sprintf "%s.post {\n" edge.to_func in
+    let spec_string = spec_string ^ Printf.sprintf "%s.post {\n" edge.func in
     let spec_string = spec_string ^ Printf.sprintf "%s\n" edge.post in
     let spec_string = spec_string ^ Printf.sprintf "}\n\n" in
 
-      (from_node, to_node, spec_string)
+      (edge.func, edge.from_state, edge.to_state, spec_string)
 
   in
 
@@ -171,10 +182,11 @@ let table_to_string table =
 
 let print_constraints constraints =
   List.iter 
-    (fun (from_node, to_node, spec) ->
-       Printf.printf "Transition after %s to %s:\n%s"
-         from_node
-         to_node
+    (fun (func, from_state, to_state, spec) ->
+       Printf.printf "Transition in %s from %s to %s:\n%s"
+         func
+         from_state
+         to_state
          spec
     ) 
     (table_to_string constraints)

@@ -31,7 +31,7 @@ class rocketVisitor = object inherit nopCilVisitor
 
     let fsm_check edge =
      
-      let (from_node, to_node, spec_string) = edge in
+      let (func, from_node, to_node, spec_string) = edge in
       let spec = SpecParse.parse_spec_string spec_string in
       let _ = State.fsm_specification := spec in
       
@@ -46,7 +46,7 @@ class rocketVisitor = object inherit nopCilVisitor
 
         let matching_edges = 
           List.filter 
-            (fun (_, to_node, _) -> to_node = f.svar.vname) 
+            (fun (func, _, _, _) -> func = f.svar.vname) 
             graph
         in
 
