@@ -19,13 +19,14 @@ experimentation
 Goals
 ~~~~~
 
-- Provide developers with tools to create more stable systems
-
-- Minimize runtime overhead
+- Provide developers with tools to create more stable sensor network systems
+  by reducing resource misuse and increasing protocol awareness
 
 - Trying to reason about C in all of its evil pointer glory
     - Limited in our ability to reason about pointers
     - Complex data structures make analysis a pain
+
+- Minimize runtime overhead
 
 
 Contributions
@@ -34,8 +35,6 @@ Contributions
 Research
 ^^^^^^^^
 
-- Minimal set of properties from "calculus of capabilities"
-
 - Demonstrate change of precision from using hybrid static / dynamic
   checking
     - Problems found using static checking
@@ -43,6 +42,8 @@ Research
     - Problems found using both
     
 - New ownership type system
+
+- Minimal set of properties from "calculus of capabilities"
 
 Practical
 ^^^^^^^^^
@@ -59,23 +60,23 @@ Sensor Network OS Background
 Assumptions
 ~~~~~~~~~~~
 
-- Modular testing is better than full program analysis 
+- Modular testing is desirable (as opposed to full program analysis)
     - Users may not have access to the full system at build time
-    - Makes scaling an easier problem to solve
+    - Able to avoid some scaling problems
 
-- Event based system where incoming events are allowed to arrive in a
-  non-deterministic order
+- Event based system where incoming events may arrive in a non-deterministic
+  order
     - Protocols may exist but we do not know this to be true statically
 
-- Embedded system with no MMU
+- Embedded system with no MMU 
     - Why focus on dynamic memory?
     - Other dynamic resources?
     - Do resource constraints matter?
 
 
 
-Abstract OS
-~~~~~~~~~~~
+Abstract OS?
+~~~~~~~~~~~~
 
 - Introduce TinyOS and SOS for running examples
 
@@ -136,8 +137,18 @@ Motivating Example
 
 
 
-Results
--------
+Evaluation
+----------
+
+Micro
+~~~~~
+
+- Types of bugs caught static and runtime analysis to show what they can do
+- Numbers of bugs from collection of tests on SOS?
+
+
+Macro
+~~~~~
 
 - Practical experience using this to examine the RATS time synchronization
   protocol in SOS?

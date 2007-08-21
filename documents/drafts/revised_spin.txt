@@ -1,0 +1,148 @@
+
+Introduction
+------------
+
+Background
+~~~~~~~~~~
+
+1. Exciting application domain using modular, event based, embedded systems
+
+2. Most software in the domain is not hardened unlike some other embedded
+systems domains
+
+3. Create a suite of tools to help researchers and students better
+accomplish the task of writing code and move onto their actual
+experimentation
+
+
+Practical Contribution
+~~~~~~~~~~~~~~~~~~~~~~
+
+Concrete instantiation of a tool using a specification driven static and
+dynamic analysis to isolate problems in sensor network systems.
+
+
+Assumptions
+~~~~~~~~~~~
+
+- Modular testing is desirable (as opposed to full program analysis)
+    - Users may not have access to the full system at build time
+
+- Event based system where incoming events arrive in an unknown order
+    - Protocols may exist but we do not know this to be true statically
+
+- Embedded system
+    - General low run time resource availability
+    - Current work focuses on memory when no MMU is present
+
+
+
+Motivating Example 
+------------------
+
+Provide examples from CS113 code.  A common mistake is to misuse lock
+variables.  Correct code for sending a message with the addition of a lock
+to insure that the buffer is not sent twice looks like:
+
+----
+void task sendFunction() {
+    if (gSendPending == FALSE) {
+        gSendPending = TRUE;
+        .
+        .
+        .
+        if (call SendMsg.send(...)) {
+            // All good
+        } else {
+            // Send failed and must revoke lock
+            gSendPending = FALSE;
+        }
+    }
+}
+
+
+event result_t SendMsg.sendDone() {
+    // Send complete so revoke lock
+    gSendPending = FALSE;
+    .
+    .
+    .
+    return SUCCESS;
+}
+----
+
+A common mistake is to forget to revoke the lock if the call to
+`SendMsg.send` fails.  This is a bit of a rough one, since the problem is
+that the event `SendMsg.sendDone()` would properly be in the specification
+but not occur at run time.  Hmm...  But this could also be an area to
+expand our specifications.  By not handling the error returned from
+`SendMsg.sendDone()` the user has entered a state that can not be
+transitioned out of in the FSM.  This is probably not what they had in mind.
+
+This requires a bit more work looking for the best motivating example.  We
+can always fall back to examples from the prior version of the paper.
+
+A second area that we can look is either of RATS or AODV for SOS.  However,
+there is a good chance that the static analysis would not play much of a
+role in these two examples.  Rather, this is more traditional protocol
+specification, validation, and tying the protocol specification back into
+the code being used.
+
+This is a major part of the paper and I do not want to belittle the
+motivating example.  But to get these ideas out, I am going to punt on a
+concrete motivating example and send this version out.
+
+
+Implementation
+--------------
+
+Specification
+~~~~~~~~~~~~~
+
+- Write a protocol level specification for the program in state machine form
+    - Edges represent transitions caused by handling events
+    - States represent protocol state and global state of resources
+    - Perform basic sanity check on state machine
+
+
+Static Analysis
+~~~~~~~~~~~~~~~
+
+- Static analysis verifies the underlying source code corresponding to
+  resource usage in specification
+    - Resource pre- and post- conditions pulled from specification
+    - Assume that other access to resources are forbidden
+    - Provide compile time feedback to systems users
+
+
+Runtime Monitoring
+~~~~~~~~~~~~~~~~~~
+
+- Generate runtime code to monitor state transitions in deployed code
+    - Basic FSM embedded in system
+    - Call into FSM when state transitions occur
+    - How best to embedded these in source (especially when they are not
+      tied directly to functions, but to paths through functions)?
+    - How to minimize the overhead of these checks?  Perhaps through static
+      analysis?
+    - How to handle runtime errors?
+    
+
+Results
+-------
+
+- Microbenchmarks of the impact that embedding FSMs withing a code base have
+    - Potential value in finding ways to minimize this overhead
+
+- Macro view can come from a follow up to the earlier motivating example
+    - Walk through session of using the tool to solve the problem
+
+
+Related Work
+------------
+
+
+Conclusions
+-----------
+
+
