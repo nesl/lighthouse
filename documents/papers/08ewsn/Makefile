@@ -28,6 +28,25 @@ main.dvi: $(TEXSRCS) $(FIGS)
 		fi; \
 	done
 
+wrapper.dvi: $(TEXSRCS) $(FIGS)
+	@echo $(LATEX) wrapper.tex </dev/null
+	@if $(LATEX) wrapper.tex </dev/null; then \
+		true; \
+	else \
+		stat=$$?; touch wrapper.dvi; exit $$stat; \
+	fi
+	bibtex wrapper
+	@echo $(LATEX) wrapper.tex </dev/null
+	$(LATEX) wrapper.tex </dev/null
+	@while grep "Rerun to get cross" wrapper.log; do \
+		echo $(LATEX) wrapper.tex </dev/null; \
+		if $(LATEX) wrapper.tex </dev/null; then \
+			true; \
+		else \
+			stat=$$?; touch wrapper.dvi; exit $$stat; \
+		fi; \
+	done
+
 # generate eps from xfig's "Combined PS/LaTeX (both parts)" export output
 %.eps: %.pstex_t
 	./pstex-to-eps $*.pstex_t

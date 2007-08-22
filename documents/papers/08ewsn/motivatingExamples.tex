@@ -1,0 +1,504 @@
+\section{A Need for Resource Management Validation}
+
+In this section we illustrate the benefits and pitfalls of dynamic resource
+management for sensor network applications through examples from TinyOS and
+SOS.  
+%
+We then demonstrate how an ownership discipline naturally captures the
+requirements for proper resource management in these systems.
+
+
+\subsection{Buffer Swapping in TinyOS}
+
+\begin{figure}[t]
+\input{GenericBaseM.c}
+\caption{TinyOS implementation of {\tt GenericBaseM receive}
+interface\label{fig:genericbase}}
+\end{figure}
+
+
+
+Applications in TinyOS typically receive data from the network stack by
+implementing the {\tt receive} event handler from the \code{GenericComm}
+interface.  
+%
+This handler is passed a \code{TOS\_MsgPtr}, which is a pointer to the
+incoming data, as well as a flag describing the data source.  
+%
+Passing a pointer obviates the need for copying, allowing the receiver to
+naturally and efficiently access the data.
+
+
+
+To obtain the benefits of passing data by reference without resorting to
+dynamic memory allocation, TinyOS commonly employs a {\em buffer-swapping}
+protocol.  
+%
+Under this protocol the {\tt receive} handler must return a
+\code{TOS\_MsgPtr} that points to a free buffer, thereby replacing the
+buffer passed to it by the caller.
+%
+In this way, the network layer can pass buffers by reference to its clients
+without running out of memory.
+
+
+
+As an example, Figure~\ref{fig:genericbase} shows the {\tt receive} event
+handler in {\tt GenericBaseM}, an application that uses a sensor node as a
+bridge between a base station and the rest of a sensor network.  
+%
+If there are no messages waiting to be sent (line 6), the handler forwards
+the incoming message out over the bridged interface.  
+%
+It also sets {\tt nextReceiveBuffer}, which is returned at line 29, to a
+free message buffer {\tt ourBuffer}.  
+%
+If a message is currently pending, the handler simply ignores the incoming
+message.  
+%
+In that case, {\tt nextReceiveBuffer} points to the incoming buffer (line
+2), which is therefore returned to the caller to be reused.
+
+
+
+While the code in Figure~\ref{fig:genericbase} properly implements the
+buffer-swapping protocol, this is not necessarily obvious, due to the
+dependence on which path is taken through the conditional at line 6.  
+%
+Further, small changes to the code can easily violate the protocol and cause
+critical application errors.  
+%
+For example, suppose the programmer failed to update
+\code{nextReceiveBuffer} at line 10.
+%
+In that case, the handler would be simultaneously forwarding the received
+message pointer over the bridged interface and returning it to the caller
+for reuse.  
+%
+If the caller reuses the buffer while it is still being accessed by the
+message receiver, undefined behavior will result.
+%
+As another example, suppose the programmer failed to update \code{ourBuffer}
+at line 11.  In that case, whenever the \code{if} branch is taken, the
+\code{received} buffer would be leaked.
+
+
+
+\subsection{Dynamic Memory Allocation in SOS}
+
+
+
+\begin{figure}[t]
+\input{surge.c}
+\caption{SOS implementation of {\tt surge}\label{fig:surge}}
+\end{figure}
+
+
+
+SOS is an operating system for sensor networks that supports dynamically
+loaded and unloaded software components called modules.
+%
+The SOS kernel provides an API for these modules to dynamically allocate
+memory, which can simplify applications and allow them to make more
+efficient usage of memory.
+%
+%As shown in Figure~\ref{fig:surge}, 
+The SOS functions \code{ker\_malloc} and \code{ker\_free} are similar to
+their C namesakes, respectively allocating and disposing of memory.  
+%
+As in C, programmers are responsible for manually managing their dynamic
+memory.  
+
+
+
+Figure~\ref{fig:surge} shows a portion of the SOS module that implements
+{\tt surge}, a simple application that takes sensor readings and sends the
+readings over a multihop network to a base station~\cite{nesC}.  
+%
+SOS modules employ an event-driven style.  
+%
+The {\tt surge} module's persistent state (which is maintained by the
+kernel) and an incoming message are passed to the \code{surge\_module}
+function, which is the module's top-level event handler.  
+%
+The handler uses a \code{switch} statement to dispatch based on the kind of
+message received.  
+%
+When sensor data becomes available at a node (\code{MSG\_DATA\_READY}), the
+handler dynamically allocates a new message (line 9) to hold the data and
+sends it out via a tree-routing mechanism (line 12).  
+%
+When the data arrives at the root of the routing tree
+(\code{MSG\_TR\_Data\_PKT}), the module forwards the message over the
+network.
+
+
+
+The code in Figure~\ref{fig:surge} properly manages dynamic memory via the
+SOS kernel's API.  
+%
+However, this fact is not at all obvious.  
+%
+For example, the module depends on proper use of flags within the calls to
+\code{post\_long} (line 12) and \code{post\_net} (line 21) to properly
+release dynamic data.
+%
+As with the earlier TinyOS example, small changes to this module can also
+cause critical errors.  
+%
+For example, the programmer must be sure not to access \code{payload} after
+it is sent out via \code{post\_net} in line 21.  
+%
+Otherwise, a dangling pointer error may result, since the network layer may
+have already freed the buffer. 
+
+
+
+\subsection{A Memory Leak in SOS}
+\label{ss:tale}
+
+
+
+\begin{figure}[tp]
+\begin{scriptsize}
+\begin{verbatim}
+mod_op = (sos_module_op_t*) ker_msg_take_data(msg);
+if(mod_op == NULL) return -ENOMEM;
+if(mod_op->op == MODULE_OP_INSMOD) {
+    existing_module = ker_get_module(mod_op->mod_id);
+    if(existing_module != NULL) {
+        uint8_t ver = sos_read_header_byte(
+                existing_module->header,
+                offsetof(mod_header_t, version));
+            if (ver < mod_op->version) {
+                ker_unload_module(existing_module->pid, 
+                        sos_read_header_byte(
+                        existing_module->header,
+                        offsetof(mod_header_t, version)));
+            } else {
+                return SOS_OK;
+            }
+        }
+    ret = fetcher_request(KER_DFT_LOADER_PID,
+            mod_op->mod_id,
+            mod_op->version,
+            entohs(mod_op->size),
+            msg->saddr);
+    s->pend = mod_op;
+    ker_led(LED_RED_TOGGLE);
+    return SOS_OK;
+}
+return SOS_OK;
+\end{verbatim}
+\end{scriptsize}
+\caption{\label{fig:leak}A memory leak in an SOS module.}
+\end{figure}
+
+
+
+This section examines the SOS loader, a core part of SOS that allows users
+to dynamically add modules to a running system.  
+%
+The loader is known to have caused stability problems for developers in the
+past.  We did an experiment to understand whether Lighthouse could have
+eased development pains by detecting these problems as they were introduced
+into the code.  
+%
+Since the loader is part of the kernel, the historic versions examined in
+this section were not included in the analysis of the kernel presented
+above.
+
+
+
+In mid-October 2005 the block of code shown in Figure~\ref{fig:leak} was
+checked into CVS as part of {\tt loader.c} and introduced a memory leak into
+the loader.  
+%
+All paths through this block of code leak the {\tt mod\_op} pointer, which
+the module acquires ownership of through {\tt ker\_msg\_take\_data}.  
+%
+This code results in the following warning from Lighthouse:
+
+
+
+\begin{scriptsize}
+\begin{verbatim}
+Error: Expression mod_op is not stored after 
+        instruction #line 125
+mod_op = (sos_module_op_t *)
+        ker_msg_take_data((unsigned char)18, msg);
+\end{verbatim}
+\end{scriptsize}
+
+
+
+After three additional revisions that did not significantly modify or fix
+the memory leak, a fourth revision was made in mid-December 2005.
+%
+This revision expanded the functionality of {\tt loader.c} and broke the
+code up into smaller functions:
+
+
+
+\begin{scriptsize}
+\begin{verbatim}
+sos_module_op_t *mod_op;
+if (msg->saddr == ker_id() || s->pend) {
+    return SOS_OK;
+}
+mod_op = (sos_module_op_t*) ker_msg_take_data(msg);
+if(mod_op == NULL) return -ENOMEM;
+switch(mod_op->op){
+case MODULE_OP_INSMOD:
+    return module_op_insmod(s,msg,mod_op);
+case MODULE_OP_RMMOD:
+    return module_op_rmmod(s,msg,mod_op);
+}
+return SOS_OK;
+\end{verbatim}
+\end{scriptsize}
+
+
+
+This code again causes our checker to warn about the memory leak:
+
+
+
+\begin{scriptsize}
+\begin{verbatim}
+Error: Expression mod_op is not stored after 
+        instruction #line 186
+mod_op = (sos_module_op_t *)
+        ker_msg_take_data((unsigned char)18, msg);
+\end{verbatim}
+\end{scriptsize}
+
+
+
+Clearly {\tt mod\_op} is still being leaked if {\tt mod\_op->op} does not
+find a matching case in the {\tt switch} statement.  
+%
+Further, adding the {\tt lh\_release} attribute to the third formal
+parameter of the functions {\tt module\_op\_insmod} and {\tt
+module\_op\_rmmod} and re-running the checker reveals that both of these
+functions also leak {\tt mod\_op}.
+
+
+
+A day later, eight weeks after the memory leaks were first introduced,
+these memory leaks were found and fixed:
+
+
+
+\begin{scriptsize}
+\begin{verbatim}
+sos_module_op_t *mod_op;
+if (msg->saddr == ker_id() || s->pend) {
+    return SOS_OK;
+}
+mod_op = (sos_module_op_t*) ker_msg_take_data(msg);
+if(mod_op == NULL) return -ENOMEM;
+switch(mod_op->op){
+case MODULE_OP_INSMOD:
+    return module_op_insmod(s,msg,mod_op);
+case MODULE_OP_RMMOD:
+    return module_op_rmmod(s,msg,mod_op);
+}
+ker_free(mod_op);
+return SOS_OK;
+\end{verbatim}
+\end{scriptsize}
+
+
+
+As shown above, a call to {\tt ker\_free} has been added before the final
+{\tt return}, in order to properly dispose of {\tt mod\_op}.
+%
+The functions {\tt module\_op\_insmod} and {\tt module\_op\_rmmod} were
+similarly updated to free their third argument.  
+%
+This corrected code passes through the checker without any warnings.  
+%
+The CVS log message simply reads, ``Fixed another memory leak.''  
+
+
+
+\subsection{Memory Ownership}
+\label{subsec:owner}
+
+Examination of the sensor network applications presented above reveals an
+underlying theme.  
+%
+In both examples, resources are shared dynamically across multiple software
+components to support simple and efficient access to these resources.  
+%
+However, only one component requires access to a given resource at any point
+in time.  
+%
+In other words, proper resource management naturally obeys an {\em
+ownership} discipline.  
+%
+In this style, each resource has a unique owning component (or {\em owner}),
+who has the sole capability to access the resource.  
+%
+The owner also has the responsibility to eventually dispose of the resource
+or explicitly {\em transfer} ownership to another component.
+
+
+
+In this paper, we describe an approach for statically enforcing an ownership
+discipline on sensor network applications.  
+%
+Lightweight annotations allow programmers to specify the ownership transfer
+requirements of each function.  
+%
+For example, in Figure~\ref{fig:genericbase} the \code{receive} function
+would be annotated to indicate that ownership of the \code{received}
+parameter is being transferred from the caller to the callee, and that
+ownership of the return value is being transferred from the callee to the
+caller.  
+%
+Given these annotations, we define a static checker that can analyze each
+function of a component in isolation, providing early and modular feedback
+on the potential for resource management errors.
+
+
+
+Informally, our static ownership discipline enforces the following rules:
+%
+\begin{enumerate}
+%
+\item Each function may only refer to dynamic memory that its component
+owns.  This includes memory allocated in the function, memory in the
+component's persistent store, and any formal parameters annotated as having
+their ownership transferred to the component.
+%
+\item Each function that allocates or obtains ownership of a block of
+dynamic memory must eventually free that memory, transfer its ownership to
+another component, or store the memory in a persistent location.
+%
+\item After a function frees or releases memory that it owns, it may no
+longer access the memory.
+%
+\end{enumerate}
+
+
+
+Our rules are necessarily an approximation of the run time requirements for
+proper resource ownership, due to the modular nature of the rules and the
+fundamental limitations of static analysis.  
+%
+As described in the next section, the rules above can lead to both false
+positives and false negatives.  
+%
+However, our experimental results indicate that the rules are a practical
+approach for detecting resource management errors in real sensor network
+software.
+
+
+
+\subsection{TinyOS and SOS, Revisited}
+
+
+
+The \code{receive} implementation in Figure~\ref{fig:genericbase} obeys our
+static ownership discipline, assuming the annotations described above. 
+%
+Upon entry to the \code{receive} event handler the \code{GenericBaseM}
+component owns the buffer referenced by the global variable \code{ourBuffer}
+and gains ownership of the \code{received} buffer passed into the function.
+%
+Within the body of the function, these are the only two buffers accessed,
+although they are at times accessed via the alias \code{nextReceiveBuffer}.  
+%
+If the message is able to be sent over the bridged interface, the function
+returns the buffer originally referenced by \code{ourBuffer} and retains
+ownership of \code{received} by storing it in \code{ourBuffer}.  
+%
+If the message is unable to be sent, the function returns the
+\code{received} buffer, thereby giving up ownership and all references to
+the buffer.
+
+
+
+The ownership discipline also catches the potential errors that can be
+introduced into \code{GenericBaseM}, as described earlier.  
+%
+Suppose that the programmer failed to update \code{ourBuffer} at line 11,
+leading to a memory leak.  
+%
+In this case, the \code{receive} function fails to either free, transfer, or
+persistently store \code{received}, violating our second rule above.
+ 
+
+
+The SOS kernel already dynamically tracks memory ownership and has an
+associated API for ownership transfer, which inspired our work.  
+%
+For example, the \code{SOS\_MSG\_RELEASE} flag in the call to
+\code{post\_long} at line 14 in Figure~\ref{fig:surge} indicates that
+ownership of \code{pkt} should be transferred to the callee (or freed by the
+kernel if the callee does not explicitly take ownership).  
+%
+Similarly, the call to \code{ker\_msg\_take\_data} at line 20 allows the
+caller to take ownership of \code{msg} under the alias \code{payload} (or to
+take ownership of a copy of \code{msg}, if the message provider did not
+explicitly release it).  
+%
+While useful as documentation, usage of this API is completely unchecked in
+SOS, so programmers must manually ensure adherence to the implicit ownership
+protocol associated with the API.  
+%
+Our work makes this protocol explicit and provides static checking for
+conformance.
+
+
+
+Given this API, the {\tt surge} module in Figure~\ref{fig:surge} can be seen
+to adhere to our static ownership discipline.  
+%
+The \code{MSG\_DATA\_READY} message handler allocates \code{pkt}, thereby
+taking initial ownership. 
+%
+This pointer is then dereferenced in order to provide the sensor data to be
+sent up the routing tree.  
+%
+This pointer manipulation is safe since the module has ownership.  
+%
+The module then releases ownership by posting \code{pkt} to the tree routing
+module using the \code{SOS\_MSG\_RELEASE} tag.  
+%
+After this release, the module does not access \code{pkt} again. 
+%
+The handler for \code{MSG\_TR\_DATA\_PKT} also conforms to the protocol.   
+%
+When the current node is the base station, the handler explicitly acquires
+ownership of the message's data using \code{ker\_msg\_take\_data}.  
+%
+This allows the module to manipulate the data and to pass it to the UART.  
+%
+The \code{post\_net} call explicitly releases the data, fulfilling the
+module's obligation to that data.
+%
+After the release, the data is no longer accessed.
+
+
+
+
+Again, our static rules would catch changes to this code that cause dynamic
+resource management errors.
+%
+For example, suppose the branch for \code{MSG\_DATA\_READY} did not release
+ownership of \code{pkt} by setting the \code{SOS\_MSG\_RELEASE} flag in the
+call to {\tt post\_long}, thereby retaining ownership but leaking the
+memory.    
+%
+In this case, the code fails to either free, transfer, or persistently store
+\code{pkt}, violating our second rule above.  
+%
+On the other hand, if the \code{SOS\_MSG\_RELEASE} flag is set but the code
+accesses \code{pkt} after the call to \code{post\_long}, then the dangling
+access is caught by our third rule.
+ 
+
+
