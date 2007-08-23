@@ -1,0 +1,66 @@
+\documentclass{llncs}
+
+%DIF PREAMBLE EXTENSION ADDED BY LATEXDIFF
+%DIF UNDERLINE PREAMBLE %DIF PREAMBLE
+\RequirePackage[normalem]{ulem} %DIF PREAMBLE
+\RequirePackage{color}\definecolor{RED}{rgb}{1,0,0}\definecolor{BLUE}{rgb}{0,0,1}
+%DIF PREAMBLE
+\providecommand{\DIFadd}[1]{{\protect\color{blue}\uwave{#1}}} %DIF PREAMBLE
+\providecommand{\DIFdel}[1]{{\protect\color{red}\sout{#1}}}
+%DIF PREAMBLE
+%DIF SAFE PREAMBLE %DIF PREAMBLE
+\providecommand{\DIFaddbegin}{} %DIF PREAMBLE
+\providecommand{\DIFaddend}{} %DIF PREAMBLE
+\providecommand{\DIFdelbegin}{} %DIF PREAMBLE
+\providecommand{\DIFdelend}{} %DIF PREAMBLE
+%DIF FLOATSAFE PREAMBLE %DIF PREAMBLE
+\providecommand{\DIFaddFL}[1]{\DIFadd{#1}} %DIF PREAMBLE
+\providecommand{\DIFdelFL}[1]{\DIFdel{#1}} %DIF PREAMBLE
+\providecommand{\DIFaddbeginFL}{} %DIF PREAMBLE
+\providecommand{\DIFaddendFL}{} %DIF PREAMBLE
+\providecommand{\DIFdelbeginFL}{} %DIF PREAMBLE
+\providecommand{\DIFdelendFL}{} %DIF PREAMBLE
+%DIF END PREAMBLE EXTENSION ADDED BY LATEXDIF
+
+\def\numannote{35 }
+\def\mynote#1{{\sf $\clubsuit$ #1$\clubsuit$}}
+\def\create{{\mathsf{create}}}
+\def\alloc{{\mathsf{alloc}}}
+\def\access{{\mathsf{access}}}
+\def\delete{{\mathsf{delete}}}
+\def\alias{{\mathsf{alias}}}
+\def\code#1{\texttt{#1}}
+
+\sloppy
+
+
+\begin{document}
+
+\title{IntroductionStatic Checking for Dynamic Resource Management \\ in Sensor
+  Network Systems}
+
+\author{Roy Shea\inst{1} \and Shane Markstrum\inst{1} \and Todd
+Millstein\inst{1} \and Rupak Majumdar\inst{1} \and Mani Srivastava\inst{2} }
+
+\institute{ 
+            Computer Science Department\\
+            University of California, Los Angeles\\
+            \email{\{roy,smarkstr,todd,rupak\}@cs.ucla.edu}
+\and
+            Electrical Engineering Department\\
+            University of California, Los Angeles\\
+            \email{mbs@ucla.edu}
+}
+
+
+%\input{introduction-diff}
+\input{motivatingExamples}
+
+{
+\bibliographystyle{abbrv}
+\bibliography{sw,sos,references}
+}
+
+\end{document}
+
+
