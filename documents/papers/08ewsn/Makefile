@@ -28,7 +28,7 @@ main.dvi: $(TEXSRCS) $(FIGS)
 		fi; \
 	done
 
-wrapper.dvi: $(TEXSRCS) $(FIGS)
+wrapper.dvi: wrapper.tex $(TEXSRCS) $(FIGS)
 	@echo $(LATEX) wrapper.tex </dev/null
 	@if $(LATEX) wrapper.tex </dev/null; then \
 		true; \

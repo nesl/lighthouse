@@ -1,8 +1,14 @@
 \section{A Need for Resource Management Validation}
 
-In this section we illustrate the benefits and pitfalls of dynamic resource
-management for sensor network applications through examples from TinyOS and
-SOS.  
+
+Our desire to statically validate dynamic resource management is motivated
+by the increased awarness of this need in the sensor network community.
+%
+This awareness is evident both in current sensor network research
+publications and from the logs of sensor network developers.
+%
+In this section we explore the need for dynamic resource management for
+sensor network applications through examples from TinyOS and SOS.  
 %
 We then demonstrate how an ownership discipline naturally captures the
 requirements for proper resource management in these systems.
@@ -10,78 +16,91 @@ requirements for proper resource management in these systems.
 
 \subsection{Buffer Swapping in TinyOS}
 
-\begin{figure}[t]
-\input{GenericBaseM.c}
-\caption{TinyOS implementation of {\tt GenericBaseM receive}
-interface\label{fig:genericbase}}
-\end{figure}
+
+Applications in TinyOS typically send data by using the {\tt SendMsg}
+interface.
+%
+A component using this interface calls the asynchrounous {\tt send} command
+to send a \code{TOS\_Msg} over the network.
+%
+Rather than copying each message, a reference to the message is used to
+naturally and efficiently pass the data.
+%
+Thus it is important that the high level component not reuse the message
+until the {\tt send} command completes.
+%
+Upon completion, a lower layer component signals the {\tt sendDone} event
+letting the higher layer component know that the buffer is again available
+for use.
 
 
 
-Applications in TinyOS typically receive data from the network stack by
-implementing the {\tt receive} event handler from the \code{GenericComm}
-interface.  
-%
-This handler is passed a \code{TOS\_MsgPtr}, which is a pointer to the
-incoming data, as well as a flag describing the data source.  
-%
-Passing a pointer obviates the need for copying, allowing the receiver to
-naturally and efficiently access the data.
+%  As an example, Figure~\ref{fig:genericbase} shows the {\tt receive} event
+%  handler in {\tt GenericBaseM}, an application that uses a sensor node as a
+%  bridge between a base station and the rest of a sensor network.  
+%  %
+%  If there are no messages waiting to be sent (line 6), the handler forwards
+%  the incoming message out over the bridged interface.  
+%  %
+%  It also sets {\tt nextReceiveBuffer}, which is returned at line 29, to a
+%  free message buffer {\tt ourBuffer}.  
+%  %
+%  If a message is currently pending, the handler simply ignores the incoming
+%  message.  
+%  %
+%  In that case, {\tt nextReceiveBuffer} points to the incoming buffer (line
+%  2), which is therefore returned to the caller to be reused.
+% 
+% 
+% 
+%  While the code in Figure~\ref{fig:genericbase} properly implements the
+%  buffer-swapping protocol, this is not necessarily obvious, due to the
+%  dependence on which path is taken through the conditional at line 6.  
+%  %
+%  Further, small changes to the code can easily violate the protocol and cause
+%  critical application errors.  
+%  %
+%  For example, suppose the programmer failed to update
+%  \code{nextReceiveBuffer} at line 10.
+%  %
+%  In that case, the handler would be simultaneously forwarding the received
+%  message pointer over the bridged interface and returning it to the caller
+%  for reuse.  
+%  %
+%  If the caller reuses the buffer while it is still being accessed by the
+%  message receiver, undefined behavior will result.
+%  %
+%  As another example, suppose the programmer failed to update \code{ourBuffer}
+%  at line 11.  In that case, whenever the \code{if} branch is taken, the
+%  \code{received} buffer would be leaked.
 
 
 
-To obtain the benefits of passing data by reference without resorting to
-dynamic memory allocation, TinyOS commonly employs a {\em buffer-swapping}
-protocol.  
+Research on interface contracts~\cite{archer07interface} recognizes this
+same management problem and proposes runtime state monitoring as a solution.
 %
-Under this protocol the {\tt receive} handler must return a
-\code{TOS\_MsgPtr} that points to a free buffer, thereby replacing the
-buffer passed to it by the caller.
+The \code{SendMsg} interface contract augments the {\tt TOS\_Msg} structure
+with a {\tt msg\_state} field to describe the owner of the message as {\tt
+USER\_OWNED} or {\tt OS\_OWNED}.
 %
-In this way, the network layer can pass buffers by reference to its clients
-without running out of memory.
+A component sends a \code{USER\_OWNED} message using \code{send} and the
+message state is updated to be \code{OS\_OWNED}.
+%
+When the underlying system returns the message in a \code{sendDone} event,
+the state is returned to \code{USER\_OWNED}.
+%
+The runtime system flags an error should a component succeed in sending an
+\code{OS\_OWNED} message. 
 
 
 
-As an example, Figure~\ref{fig:genericbase} shows the {\tt receive} event
-handler in {\tt GenericBaseM}, an application that uses a sensor node as a
-bridge between a base station and the rest of a sensor network.  
+Other current research looks at solving these problems dynamically.
 %
-If there are no messages waiting to be sent (line 6), the handler forwards
-the incoming message out over the bridged interface.  
+For example, interface contracts~\cite{archer07interface} describes a
+technque adding a state variable to all TinyOS messages.
 %
-It also sets {\tt nextReceiveBuffer}, which is returned at line 29, to a
-free message buffer {\tt ourBuffer}.  
-%
-If a message is currently pending, the handler simply ignores the incoming
-message.  
-%
-In that case, {\tt nextReceiveBuffer} points to the incoming buffer (line
-2), which is therefore returned to the caller to be reused.
-
-
-
-While the code in Figure~\ref{fig:genericbase} properly implements the
-buffer-swapping protocol, this is not necessarily obvious, due to the
-dependence on which path is taken through the conditional at line 6.  
-%
-Further, small changes to the code can easily violate the protocol and cause
-critical application errors.  
-%
-For example, suppose the programmer failed to update
-\code{nextReceiveBuffer} at line 10.
-%
-In that case, the handler would be simultaneously forwarding the received
-message pointer over the bridged interface and returning it to the caller
-for reuse.  
-%
-If the caller reuses the buffer while it is still being accessed by the
-message receiver, undefined behavior will result.
-%
-As another example, suppose the programmer failed to update \code{ourBuffer}
-at line 11.  In that case, whenever the \code{if} branch is taken, the
-\code{received} buffer would be leaked.
-
+Calls to {\tt send} result in runtime checks of th...
+% TODO
 
 
 \subsection{Dynamic Memory Allocation in SOS}
