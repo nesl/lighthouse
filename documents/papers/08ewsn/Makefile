@@ -3,7 +3,7 @@ LATEX = latex
 
 all: main.dvi main.ps pdf
 
-TEXSRCS = main.tex related.tex abstract.tex introduction.tex caseExample.tex \
+TEXSRCS = main.tex related.tex abstract.tex introduction.tex motivatingExamples.tex \
 		  algorithm.tex evaluation.tex conclusion.tex sw.bib
 FIGS = surge.c
 
