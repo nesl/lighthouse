@@ -12,7 +12,8 @@ battling it on a daily basis.
 
 
 
-\subsection{Researchers Hardening Buffer Passing}
+\subsection{Researchers Hardening Buffer Passing in TinyOS}
+\label{ssec:tinyos}
 
 
 The TinyOS operating system is used to develop sensor network applications by
@@ -60,7 +61,7 @@ management safety for sensor network systems.
 
 
 
-\subsection{Developers Struggling with Dynamic Memory}
+\subsection{Developers Struggling with Dynamic Memory in SOS}
 
 
 
@@ -216,67 +217,4 @@ compile time to the problem described above, helping to educate developers
 about incorrect programing habits and relieving developers of tedious hunts
 for bugs.
 
-
-
-\subsection{Memory Ownership}
-\label{subsec:owner}
-
-
-
-Many resource management problems, including those described above, share an
-underlying theme.  
-%
-Resources are shared dynamically across multiple software components to
-support simple and efficient access to the resources.  
-%
-However, often only one component requires access to a given resource at any
-point in time.  
-%
-In other words, proper resource management naturally obeys an {\em ownership}
-discipline.  
-%
-In this style, each resource has a unique owning component (or {\em owner}),
-who has the sole capability to access the resource.  
-%
-The owner also has the responsibility to eventually dispose of the resource or
-explicitly {\em transfer} ownership to another component.
-
-
-
-In this paper, we describe a simple, scalable, and practical static analysis
-to enforce an exclusive ownership discipline on sensor network applications.
-%
-The analysis is made possible by a static ownership discipline resting upon
-the following rules:
-
-\begin{enumerate}
-%
-\item Each function may only refer to dynamic memory that it owns.  This
-includes memory allocated in the function, memory in the encapsulating
-component's persistent store, and any formal parameters known to release
-dynamic memory into into the function body.
-%
-\item Each function that allocates or obtains ownership of dynamic memory must
-eventually free that memory, transfer its ownership to another component, or
-store the memory in a persistent location.
-%
-\item After a function frees or releases memory that it owns, it may no longer
-access the memory.
-%
-\end{enumerate}
-
-
-
-Our rules are necessarily an approximation of the run time requirements for
-proper resource ownership, due to the modular nature of the rules and the
-fundamental limitations of static analysis.  
-%
-\mynote{Roy: Tie above sentence into three primary goals?}
-%
-As described in the next section, the rules above can lead to both false
-positives and false negatives.  
-%
-However, our experimental results indicate that these simple rules are a
-practical approach for detecting resource management errors in real sensor
-network software.
 

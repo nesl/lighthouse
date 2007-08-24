@@ -3,87 +3,45 @@
 
 
 
-We have instantiated our approach to static checking of dynamic resource
-management in Lighthouse, a tool for ensuring proper ownership of dynamic
-memory in SOS programs.
+A single theme of exclusive data ownership underlies the examples provided in
+section~\ref{sec:mot}.
 %
-The tool employs a suite of dataflow analyses to enforce the three rules
-described in Section~\ref{subsec:owner} on each function.
+References to resources are passed between multiple components to support
+simple and efficient resource access.
 %
-This section overviews the usage and implementation of Lighthouse.
-
-
-\subsection{Memory Ownership}
-\label{subsec:owner}
-
-Examination of the sensor network applications presented in
-section~\ref{sec:mot} above reveals an underlying theme.  
+However, only one component accesses a given resource at any point in time.
 %
-In those examples, resources are shared dynamically across multiple software
-components to support simple and efficient resource access.
+The examples illustrate the {\em ownership} discipline prevalent in sensor
+networks.
 %
-However, only one component requires access to a given resource at any point
-in time.  
+Each resources in this discipline has a unique owning component with the sole
+capability to access the resource.
 %
-In other words, proper resource management naturally obeys an {\em
-ownership} discipline.  
-%
-In this style, each resource has a unique owning component (or {\em owner}),
-who has the sole capability to access the resource.  
-%
-The owner also has the responsibility to eventually dispose of the resource
-or explicitly {\em transfer} ownership to another component.
+The owner also has the responsibility to eventually dispose of the resource or
+explicitly transfer ownership to another component.
 
 
 
-In this section we describe our approach for statically enforcing an
+In this section we describe our approach to statically enforcing an exclusive
 ownership discipline on sensor network applications.  
 %
-Lightweight annotations allow programmers to specify the ownership transfer
-requirements of each function.  
-%
-For example, in Figure~\ref{fig:genericbase} the \code{receive} function
-would be annotated to indicate that ownership of the \code{received}
-parameter is being transferred from the caller to the callee, and that
-ownership of the return value is being transferred from the callee to the
-caller.  
-%
-Given these annotations, we define a static checker that can analyze each
-function of a component in isolation, providing early and modular feedback
-on the potential for resource management errors.
-
-
-
-Informally, our static ownership discipline enforces the following rules:
+Informally, following rules guarantee conformance to this discipline:
 %
 \begin{enumerate}
 %
-\item Each function may only refer to dynamic memory that its component
-owns.  This includes memory allocated in the function, memory in the
-component's persistent store, and any formal parameters annotated as having
-their ownership transferred to the component.
+\item Each function may only refer to owned dynamic memory.  This includes
+memory allocated in the function, memory accessible to the function via
+persistent stores, and any formal parameters transferring dynamic data
+ownership to the component.
 %
-\item Each function that allocates or obtains ownership of a block of
-dynamic memory must eventually free that memory, transfer its ownership to
-another component, or store the memory in a persistent location.
+\item Each function allocating or obtaining ownership of dynamic memory must
+eventually free that memory, transfer its ownership to another component, or
+store the memory in a persistent location.
 %
-\item After a function frees or releases memory that it owns, it may no
-longer access the memory.
+\item After freeing or releasing owned memory, a function may no longer access
+the memory.
 %
 \end{enumerate}
-
-
-
-Our rules are necessarily an approximation of the run time requirements for
-proper resource ownership, due to the modular nature of the rules and the
-fundamental limitations of static analysis.  
-%
-As described in the next section, the rules above can lead to both false
-positives and false negatives.  
-%
-However, our experimental results indicate that the rules are a practical
-approach for detecting resource management errors in real sensor network
-software.
 
 
 
@@ -91,110 +49,42 @@ software.
 
 
 
-The \code{receive} implementation in Figure~\ref{fig:genericbase} obeys our
-static ownership discipline, assuming the annotations described above. 
+The \code{SendMsg} interface described in section~\ref{ssec:tinyos} clearly
+follows the above three rules.
 %
-Upon entry to the \code{receive} event handler the \code{GenericBaseM}
-component owns the buffer referenced by the global variable \code{ourBuffer}
-and gains ownership of the \code{received} buffer passed into the function.
+Each component initially owns any \code{TOS\_Msg} that it creates at compile
+time.
 %
-Within the body of the function, these are the only two buffers accessed,
-although they are at times accessed via the alias \code{nextReceiveBuffer}.  
+Calls to the \code{send} command transfer ownership of the \code{TOS\_Msg}
+from the component to the kernel, after which the component must not access
+the message until ownership is regained via the \code{sendDone} event.
 %
-If the message is able to be sent over the bridged interface, the function
-returns the buffer originally referenced by \code{ourBuffer} and retains
-ownership of \code{received} by storing it in \code{ourBuffer}.  
+Interface contracts provide a means to verify these properties at runtime.
 %
-If the message is unable to be sent, the function returns the
-\code{received} buffer, thereby giving up ownership and all references to
-the buffer.
-
-
-
-The ownership discipline also catches the potential errors that can be
-introduced into \code{GenericBaseM}, as described earlier.  
-%
-Suppose that the programmer failed to update \code{ourBuffer} at line 11,
-leading to a memory leak.  
-%
-In this case, the \code{receive} function fails to either free, transfer, or
-persistently store \code{received}, violating our second rule above.
+Our work describes a simple technique to move this checking to compile time.
  
 
 
 The SOS kernel already dynamically tracks memory ownership and has an
 associated API for ownership transfer, which inspired our work.  
 %
-For example, the \code{SOS\_MSG\_RELEASE} flag in the call to
-\code{post\_long} at line 14 in Figure~\ref{fig:surge} indicates that
-ownership of \code{pkt} should be transferred to the callee (or freed by the
-kernel if the callee does not explicitly take ownership).  
+Calls to the messaging API can specify the \code{SOS\_MSG\_RELEASE} flag to
+signal that ownership of the posted message is to be transferred to the callee
+(or freed by the kernel if the callee does not explicitly take ownership).  
 %
-Similarly, the call to \code{ker\_msg\_take\_data} at line 20 allows the
-caller to take ownership of \code{msg} under the alias \code{payload} (or to
-take ownership of a copy of \code{msg}, if the message provider did not
-explicitly release it).  
+Calls to \code{ker\_malloc}, \code{ker\_free}, and \code{ker\_msg\_take\_data}
+are known to allocate, free, and transfer ownership of memory respectively.
 %
-While useful as documentation, usage of this API is completely unchecked in
-SOS, so programmers must manually ensure adherence to the implicit ownership
-protocol associated with the API.  
+Unfortunately, conformance to an exclusive ownership protocol is unchecked in
+the SOS runtime and the source of numerous problems in developing code.
 %
 Our work makes this protocol explicit and provides static checking for
 conformance.
 
 
 
-Given this API, the {\tt surge} module in Figure~\ref{fig:surge} can be seen
-to adhere to our static ownership discipline.  
-%
-The \code{MSG\_DATA\_READY} message handler allocates \code{pkt}, thereby
-taking initial ownership. 
-%
-This pointer is then dereferenced in order to provide the sensor data to be
-sent up the routing tree.  
-%
-This pointer manipulation is safe since the module has ownership.  
-%
-The module then releases ownership by posting \code{pkt} to the tree routing
-module using the \code{SOS\_MSG\_RELEASE} tag.  
-%
-After this release, the module does not access \code{pkt} again. 
-%
-The handler for \code{MSG\_TR\_DATA\_PKT} also conforms to the protocol.   
-%
-When the current node is the base station, the handler explicitly acquires
-ownership of the message's data using \code{ker\_msg\_take\_data}.  
-%
-This allows the module to manipulate the data and to pass it to the UART.  
-%
-The \code{post\_net} call explicitly releases the data, fulfilling the
-module's obligation to that data.
-%
-After the release, the data is no longer accessed.
-
-
-
-
-Again, our static rules would catch changes to this code that cause dynamic
-resource management errors.
-%
-For example, suppose the branch for \code{MSG\_DATA\_READY} did not release
-ownership of \code{pkt} by setting the \code{SOS\_MSG\_RELEASE} flag in the
-call to {\tt post\_long}, thereby retaining ownership but leaking the
-memory.    
-%
-In this case, the code fails to either free, transfer, or persistently store
-\code{pkt}, violating our second rule above.  
-%
-On the other hand, if the \code{SOS\_MSG\_RELEASE} flag is set but the code
-accesses \code{pkt} after the call to \code{post\_long}, then the dangling
-access is caught by our third rule.
- 
-
-
-
-
 \subsection{Ownership Annotations}
+
 
 
 Lighthouse depends on programmer-specified {\em ownership annotations} to
@@ -315,8 +205,6 @@ detect potential errors:
 
 \begin{itemize}
 
-
-
 \item Whenever a node in the graph is encountered that allocates or takes
 ownership of a block of memory, Lighthouse invokes a dataflow analysis to
 ensure that every path from this node to the function exit frees, stores, or
@@ -325,16 +213,12 @@ releases ownership of the memory exactly once.
 If this property is not satisfied, Lighthouse reports a possible memory
 leak.
 
-
-
 \item Whenever a node in the graph is encountered that frees or releases
 ownership of a block of memory, Lighthouse invokes a dataflow analysis to
 ensure that no path from this node to the function exit accesses the memory.  
 %
 If this property is not satisfied, Lighthouse reports a possible dangling
 pointer error.
-
-
 
 \end{itemize}
 
