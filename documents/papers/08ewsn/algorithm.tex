@@ -83,87 +83,140 @@ conformance.
 
 
 
-\subsection{Ownership Annotations}
+\subsection{Owenrship Specification}
+
+
+%  Use specification file
+%  - documentation
+%  - concise
+%  - simlpe
+%  - reusable
+%  
+%  Specification describes pre- and post- memory conditions for function
+%  - full / empty
+%  - formal / return / store
+%  - Examples for malloc / free / post 
+%  
+%  Global store
 
 
 
-Lighthouse depends on programmer-specified {\em ownership annotations} to
-specify when ownership of a block of memory should transfer from one
-component to another.
+Analyzing memory ownership requires understanding how underlying functions
+manipulate memory ownership properties.
 %
-These annotations provide a ``spec'' for each function, indicating its
-preconditions and postconditions with respect to memory ownership.  
-%
-This spec then enables precise modular checking of functions.  
+Our analysis uses a simple specification file documenting functions that
+transfer memory ownership between components by describing preconditions and
+postconditions, with respect to memory ownership, for the function.
 %
 Each function body is checked to ensure the postconditions on exit, under
 the assumption that the preconditions hold on entry.  
 %
-The function is also checked to obey the three rules constituting the
-ownership discipline, defined earlier.  
-%
-Each caller is separately checked to ensure the callee's preconditions
-before the call, and it may assume the callee's postconditions after the
-call.
+Each call within a function is separately checked to ensure the callee's
+preconditions before the call, and it assumes the callee's postconditions
+after the call.
 
 
 
-Two ownership annotations are used to describe changes of memory ownership
-resulting from function calls: {\tt lh\_claim} and {\tt lh\_release}.
-%
-The {\tt lh\_claim} annotation states that the caller of the function will
-take ownership of the memory pointed to by the annotated formal parameter or
-annotated return value, and therefore that the function body must release
-it.
-%
-For example, the SOS kernel's \code{ker\_malloc} function has the {\tt
-lh\_claim} annotation on its return value, to indicate that it returns
-dynamically allocated memory that the caller will own.
-%
-Conversely, the {\tt lh\_release} annotation states that the caller of the
-function will release ownership of the memory pointed to by the annotated
-formal parameter, and therefore that the function body must take ownership
-of this memory.
-%
-For example, the formal parameter of the SOS kernel's \code{ker\_free}
-function has the {\tt lh\_release} annotation.
+\begin{figure}[tp]
+\begin{scriptsize}
+\begin{verbatim}
+ker_malloc.pre {}
+
+ker_malloc.post {
+    $return.full();
+}
+
+ker_free.pre {
+    $1.full();
+}
+
+ker_free.post {
+    $1.empty();
+}
+\end{verbatim}
+\end{scriptsize}
+\caption{\label{fig:spec}Sample specifications for \code{ker\_free} and
+\code{ker\_malloc}}.
+\end{figure}
 
 
 
-Our ownership discipline defined earlier relies on the notion of a {\em
-persistent store}:  each component is assumed to own the data in its
-persistent store and can properly ``release'' owned data into this store.
+A function specification describes preconditions and postconditions relating
+to the dynamic memory refenced by expressions.
 %
-All global and static variables declared with a component are assumed by the
-analysis to be part of the component's persistent store.
+These preconditions and postconditions may describe the expression as
+pointing to a \code{full} or \code{empty} memory buffer.
 %
-A third and final annotation, {\tt lh\_store}, is used to denote formal
-parameters of functions that can also be considered part of the persistent
-store.
+Expresions in a specification may be one or more of: 
 %
-An example usage of {\tt lh\_store} is to annotate the \code{state}
-parameter of a module's message handler in SOS.
+\begin{itemize}
+%
+\item Formal variable identified by index in function prototype
+%
+\item Function return value identified by the keyword \code{return} (only
+valid in postconditions)
+%
+\item Global variable identified by variable name
+%
+\end{itemize}
+%
+An expression denoted as \code{full} in the postcondition describes dynamic
+memory that the caller of the function will take ownership of from the
+callee, and therefore that the function body must release it.
+%
+An expression denoted as \code{full} in the preconditon describes memory
+that the caller of the function releases to the callee, and therefore that
+the function body must take ownership of this memory.
+%
+The \code{empty} denotion is used to describe expressions that are known to
+be not valid pointers to dynamic memory.
+
+
+
+Example specifications demonstrating these ideas are presented in 
+Figure~\ref{fig:spec}.
+%
+The postcondition for \code{ker\_malloc} notes that the returned data the
+caller of \code{ker\_malloc} must take ownership of.
+%
+The \code{ker\_free} function specifies that the first formal parameter
+points to valid memory when the function is called, but that this data must
+be released before the function returns.
+
+
+
+\mynote{Roy: Check the status of how (if?) we mark the state variable of modules
+as being a valid store in the current version of the checker, and the
+version of the checker used for the evaluation.}
+%
+Our ownership discipline also uses the notion of a persistent store:  each
+component is assumed to own the data in its persistent store and can safely
+``release'' owned data into this store.
+%
+All global and static variables declared within a component are assumed by
+the analysis to be part of the component's persistent store.
+%
+Stores are used to describe individual the state parameter used by a
+module's message handler in SOS.
 %
 As described earlier, this parameter points to the persistent store
 allocated and maintained by the SOS kernel for a module.
 
 
 
-Annotations typically reside in an external configuration file listing a
-function name and the corresponding annotations for the return value and
-formal parameters.
+The specification resides in a single external configuration file.
 %
-Only functions that require annotations need to be included within this
-configuration file.
-%
-Annotations can also be included directly in the source code as GCC
-attributes decorating the prototype of a function.
+Only functions requiring annotations need be included in the specifications.
 %
 In practice we have found that a small set of annotations, \numannote for
 the complete evaluation of SOS, is sufficient for precise analysis. 
 
 
 
+The specification allows modular checking since the side effects of
+called functions is availible without leaving the text of a function being
+verified.
+%
 The ability to perform checking modularly allows application writers to
 obtain early feedback about the correctness of their resource management,
 without requiring access to the rest of the system.  
@@ -194,90 +247,48 @@ of compilation.
 
 
 
-The Lighthouse analysis traverses each function's control-flow graph (CFG)
-in isolation, which conservatively represents all possible execution paths
-through the function.  
+The Lighthouse uses a simple forward dataflow analysis to track the state of
+all expressions that may alias dynamic memory within a function.
 %
-During this traversal, Lighthouse triggers two major dataflow analyses to
-detect potential errors:
-
-
-
+The dataflow ensures that:
+%
 \begin{itemize}
-
-\item Whenever a node in the graph is encountered that allocates or takes
-ownership of a block of memory, Lighthouse invokes a dataflow analysis to
-ensure that every path from this node to the function exit frees, stores, or
-releases ownership of the memory exactly once.  
+%
+\item Whenever a node in the dataflow graph is encountered that allocates or
+takes ownership of a block of memory, every path from this node to the
+function exit frees, stores, or releases ownership of the memory exactly
+once.  
 %
 If this property is not satisfied, Lighthouse reports a possible memory
 leak.
-
+%
 \item Whenever a node in the graph is encountered that frees or releases
-ownership of a block of memory, Lighthouse invokes a dataflow analysis to
-ensure that no path from this node to the function exit accesses the memory.  
+ownership of a block of memory, that no path from this node to the function
+exit accesses the memory.  
 %
 If this property is not satisfied, Lighthouse reports a possible dangling
 pointer error.
-
+%
 \end{itemize}
-
-
-
-These two analyses also serve to check that a function meets its spec.  
 %
 For the purpose of the Lighthouse traversal over a function's CFG, the
 function's entry node is considered an allocation point for all parameters
-with the {\tt lh\_release} annotation, and the function's exit node is
-considered a release point for all parameters and return values with the
-{\tt lh\_claim} annotation.  
-
-
-
-\subsection{Pointer Aliasing}
+denoted as \code{full} in the functions precondition specification, and the
+function's exit nodes are considered release points for all parameters and
+return values denoted as \code{full}.
 
 
 
 The analysis described above requires knowledge of the memory pointed to by
 a function's pointers.  
 %
-As usual, this is statically approximated by an {\em alias analysis}, which
+As usual, this is statically approximated by an alias analysis, which
 determines whether two different pointers store the same memory location at
 a given program point.  
 %
 Two standard approximations to the true dynamic alias information are {\em
-must-alias} analysis and {\em may-alias} analysis.  
+must-alias} analysis and {\em may-alias} analysis.
 %
-A must-alias analysis underapproximates the dynamic alias relations:  if a
-must-alias analysis determines that $x$ and $y$ alias at a particular
-program point, then they definitely alias at that point in any program
-execution.  
-%
-A may-alias analysis overapproximates the dynamic alias relations:  if a
-may-alias analysis determines that $x$ and $y$ {\em cannot} alias at a
-particular program point, then they definitely do not alias at that point in
-any program execution.
-
-
-
-Lighthouse requires both kinds of static alias approximations.  
-%
-In the first dataflow analysis described above, alias information is used to
-ensure that something definitely happens, namely that an allocated resource
-is eventually released.  
-%
-Therefore, in this case we approximate the true alias information with
-must-alias information.  
-%
-In the second dataflow analysis described above, alias information is used
-to ensure that something definitely does not happen, namely an access to a
-released resource.  
-%
-Therefore, in this case we approximate the true alias information with
-may-alias information.
-
-
-
 We have built a simple flow-sensitive must-alias analysis for use by
 Lighthouse.  
 %
@@ -294,6 +305,36 @@ another.
 %
 Both alias analyses can be imprecise in the presence of linked data
 structures.
+
+
+
+%  A must-alias analysis underapproximates the dynamic alias relations:  if a
+%  must-alias analysis determines that $x$ and $y$ alias at a particular
+%  program point, then they definitely alias at that point in any program
+%  execution.  
+%  %
+%  A may-alias analysis overapproximates the dynamic alias relations:  if a
+%  may-alias analysis determines that $x$ and $y$ {\em cannot} alias at a
+%  particular program point, then they definitely do not alias at that point in
+%  any program execution.
+
+
+
+%  Lighthouse requires both kinds of static alias approximations.  
+%  %
+%  In the first dataflow analysis described above, alias information is used to
+%  ensure that something definitely happens, namely that an allocated resource
+%  is eventually released.  
+%  %
+%  Therefore, in this case we approximate the true alias information with
+%  must-alias information.  
+%  %
+%  In the second dataflow analysis described above, alias information is used
+%  to ensure that something definitely does not happen, namely an access to a
+%  released resource.  
+%  %
+%  Therefore, in this case we approximate the true alias information with
+%  may-alias information.
 
 
 
@@ -325,26 +366,29 @@ $p$.
 If $p+i$ in fact overflows to another block of memory at run time, the
 checker's assumption can cause it to miss errors.  
 %
-These kinds of {\em memory safety} assumptions are standard for C-based
+These kinds of memory safety assumptions are standard for C-based
 program analyses.
 
 
 
-Second, there is a design choice about how to treat resource parameters that
-are not annotated with {\tt lh\_release}.  Technically the ownership
-protocol disallows these resources from being accessed at all, since the
-receiving component is not the owner.  
+Second, there is a design choice about how to treat dynamic memory
+referenced by formal parameters without the \code{full} denotation.
+%
+Technically the ownership protocol disallows this memory from being
+accessed at all, since the receiving component is not the owner.  
 %
 Lighthouse does not currently enforce the requirement that a component only
 access a resource that it owns.
 % 
-This design decision provides a seamless adoption path for Lighthouse on
-existing systems.  
+%  This design decision provides a seamless adoption path for Lighthouse on
+%  existing systems.  
+%  %
+%  Programmers can incrementally add annotations to refine the quality of the
+%  analysis without suffering from excessive numbers of false positives.
 %
-Programmers can incrementally add annotations to refine the quality of the
-analysis without suffering from excessive numbers of false positives.
-%
-This decision also provides a mechanism for allowing patterns of resource
+This decision 
+%  also 
+provides a mechanism for allowing patterns of resource
 sharing that are in fact safe but not supported by the ownership discipline,
 for example when a component temporarily ``borrows'' data from another
 component within a bounded scope.
