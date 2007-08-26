@@ -84,8 +84,9 @@ days of SOS.
 The module loader is a core part of SOS, allowing users to dynamically add
 modules into the running system.
 %
-Looking back through CVS logs reveals an interesting story of resource
-mismanagement surrounding early development of the module loader.
+The analysis described in this paper was applied to old CVS versions of the
+module loader and quickly isolated bugs that had hindered initial development
+of the loader.
 
 
 
@@ -130,14 +131,25 @@ In mid-October 2005 the block of code shown in figure~\ref{fig:leak} was
 checked into CVS as part of \code{loader.c} and introduced a memory leak into
 the loader.  
 %
-All paths through this block of code leak the \code{mod\_op} pointer, which
-the module acquires exclusive ownership to via the \code{ker\_msg\_take\_data}
-call.  
+The SOS function \code{ker\_msg\_take\_data} transfers ownership a buffer,
+passed to the function, from the kernel to the calling component.
+%
+From the users perspective, this is identical to allocating a new buffer and
+copying into it the contents of an reference to external memory.
+%
+Application of our analysis generates warnings for all paths through this
+block of code, which leaks the \code{mod\_op} pointer acquired via the
+\code{ker\_msg\_take\_data} call.  
+%
+The bug slowly leaks memory storing module load and remove requests and, after
+extended use of module loading and unloading, leads to node failure when no
+memory is left available.
 
 
 
-After three additional revisions not significantly modifying or fixing the
-memory leak, a fourth revision was made in mid-December 2005.  
+After three additional revisions to the module loader not significantly
+modifying or fixing the memory leak, a fourth revision was made in
+mid-December 2005.  
 %
 This revision expands the functionality of \code{loader.c} and breaks the code
 up into smaller functions:
@@ -170,8 +182,9 @@ find a matching case in the {\tt switch} statement.
 Further, neither \code{module\_op\_insmod} nor \code{module\_op\_rmmod} free
 \code{mod\_op}, passed to them as the third formal parameter.
 %
-Again, all paths through this code leak the buffer claimed as a result of
-calling \code{ker\_msg\_take\_data}.
+Again, our analysis generates warnings stating that all paths through this
+code leak the buffer claimed as a result of calling
+\code{ker\_msg\_take\_data}.
 %
 A day later, two months after the memory leaks were first introduced, these
 memory leaks were found and fixed:
@@ -206,6 +219,10 @@ The functions \code{module\_op\_insmod} and \code{module\_op\_rmmod} were
 similarly updated to free their third argument.  
 %
 The CVS log message simply reads ``fixed another memory leak.''
+%
+The analysis described in this paper would have prevented these eight weeks of
+system instability by alerting developers when the initial memory leak was
+introduced to the code base.
 
 
 

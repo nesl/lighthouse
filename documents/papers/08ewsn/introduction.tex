@@ -99,27 +99,9 @@ resource leaks will rapidly exhaust available memory.
 
 
 
-In this paper, we present an approach for automated validation of dynamic
-resource management in sensor network software.  
-%
-Our design rests upon three primary goals:
-%
-\begin{description}
-%
-\item[Simplicity]  The analysis uses a simple exclusive ownership model
-facilitating programmer understanding of the underlying system.
-%
-\item[Scalability]  A simple pre- and post- condition specification allows
-the analysis to examine a single function at a time.
-%
-\item[Practicality] The analysis finds numerous bugs in real sensor network
-systems.
-%
-\end{description}
-%
-The key insight to this work is the observation that data transfer between
-components in sensor network applications typically does not lead to
-sharing, but instead follows a producer-consumer pattern.  
+Along with others in the sensor network community~\cite{07interface,XXX}, we
+observe that a clear cut exclusive ownership discipline fits many aspects of
+sensor network systems.
 %
 In this style, every resource has exactly one {\em owner} component at any
 point.  
@@ -127,13 +109,13 @@ point.
 The component creating the resource (dynamically through a kernel call or
 statically through a variable declaration) assumes initial ownership.  
 %
-Each component has the right to access the resources that it owns but also
-the responsibility to eventually either free the resource or transfer
-ownership to another component.  
+Each component has the right to access the resources that it owns but also the
+responsibility to eventually either free the resource or transfer ownership to
+another component.  
 %
 A component may not manipulate resources that it does not own.  
 %
-If all components obey this protocol, then there can be neither accesses to
+When all components obey this protocol, then there can be neither accesses to
 dangling resources nor resource leaks.
 %
 Current sensor network systems do not help programmers to ensure that this
@@ -141,6 +123,34 @@ ownership protocol is properly obeyed.
 %
 Our experience has been that programmers often make subtle mistakes in
 ownership, leading to critical and difficult-to-track errors.  
+
+
+
+In this paper, we present an approach for automated validation of dynamic
+resource management in sensor network software.  
+%
+Our design rests upon three primary goals:
+%
+\begin{description}
+%
+\item[Staticly] The analysis is performed staticlly at compile time.  This
+provides developers feedback early in their design cycle and prevents bugs
+from entering into deployed networks.
+%
+\item[Simplicity]  The analysis uses a simple exclusive ownership model
+facilitating programmer understanding of the underlying system.  
+%
+This allows developers to work within an understood owenship diciplin, rather
+than simply being told about of bugs.
+%
+\item[Scalability]  A simple pre- and post- condition specification allows the
+analysis to examine a single function at a time.
+%
+\item[Practicality] The analysis finds numerous bugs in real sensor network
+systems.
+%
+\end{description}
+%
 
 
 
@@ -157,7 +167,7 @@ The dataflow analyses ensures key ownership invariants:  each resource has a
 unique owner; each resource is only manipulated by its owner; and each
 resource is either freed by its owner or transferred to another owner.  
 %
-A reusable specification describes the operating system provided API to make
+A reusable specification documents the operating system provided API to make
 the analysis intraprocedural.
 %
 While rarely used or required, end programmers can provide additional
@@ -167,6 +177,14 @@ With our approach, sensor network programmers use the expressiveness of
 dynamic resource management while retaining confidence in the reliability of
 their applications.
 
+
+
+The exclusive ownership discipline is easy to understand and made explict to
+develpors.
+%
+Rather than acting as a black box, the approach presented in this paper
+provides a clear framework within which to develop sensor network
+applications.
 
 
 We focus on SOS memory management because of our experience with memory
