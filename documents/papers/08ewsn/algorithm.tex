@@ -347,58 +347,55 @@ violations of the ownership protocol on real sensor network code.
 %
 However, the checker is not guaranteed to find all such violations.  
 %
-In other words, the checker can be used for finding memory errors but not
-for guaranteeing the absence of all memory errors.  
-%
-The checker's false negatives come from three sources.
+By favoring simplicity, scalability, and practicality, the checker allows some
+false negatives.
 
 
 
-First, the checker does not precisely handle all of the unsafe features of
-the C programming language.  
+
+First, we favored using a simple memory model at the cost of not precisely
+handle all of the unsafe features of the C programming language.  
 %
 For example, pointer arithmetic is not statically analyzed.  
 %
-Instead, an expression of the form $p+i$, where $p$ is a pointer and $i$ is
-an integer, is simply treated as if it refers to the same block of memory as
-$p$.  
+Instead, an expression of the form $p+i$, where $p$ is a pointer and $i$ is an
+integer, is simply treated as if it refers to the same block of memory as $p$.  
 %
 If $p+i$ in fact overflows to another block of memory at run time, the
 checker's assumption can cause it to miss errors.  
 %
-These kinds of memory safety assumptions are standard for C-based
-program analyses.
+These kinds of memory safety assumptions are standard for C-based program
+analyses.
 
 
 
-Second, there is a design choice about how to treat dynamic memory
-referenced by formal parameters without the \code{full} denotation.
+Second, there is a design choice about how to treat dynamic memory referenced
+by formal parameters without the \code{full} denotation.
 %
-Technically the ownership protocol disallows this memory from being
-accessed at all, since the receiving component is not the owner.  
+Technically the ownership protocol disallows this memory from being accessed
+at all, since the receiving component is not the owner.  
 %
-Lighthouse does not currently enforce the requirement that a component only
-access a resource that it owns.
+Lighthouse assumes a more practical stance by not enforcing the requirement
+that a component only access a resource that it owns.
 % 
 %  This design decision provides a seamless adoption path for Lighthouse on
-%  existing systems.  
-%  %
-%  Programmers can incrementally add annotations to refine the quality of the
-%  analysis without suffering from excessive numbers of false positives.
+%  existing systems.  % Programmers can incrementally add annotations to
+%  refine the quality of the analysis without suffering from excessive numbers
+%  of false positives.
 %
 This decision 
 %  also 
-provides a mechanism for allowing patterns of resource
-sharing that are in fact safe but not supported by the ownership discipline,
-for example when a component temporarily ``borrows'' data from another
-component within a bounded scope.
+provides a mechanism for allowing patterns of resource sharing that are in
+fact safe but not supported by the ownership discipline, for example when a
+component temporarily ``borrows'' data from another component within a bounded
+scope.
 %
-The cost of this flexibility is the potential to miss real resource
-management errors.
+The cost of this flexibility is the potential to miss real resource management
+errors.
 %
-However, the checker still ensures that a function does not access a
-resource that has earlier been released by the function, thereby detecting
-memory leaks.
+However, the checker still ensures that a function does not access a resource
+that has earlier been released by the function, thereby detecting memory
+leaks.
 
 
 
@@ -420,10 +417,11 @@ $\access^*$ $\delete$ $)^*$.
 
 
 
-Lighthouse currently only tracks data locally within each event handler.  
+Perfering a scalable analysis that only requires examining a single function
+at a time, Lighthouse only tracks data locally within each event handler.  
 %
-When performing this tracking, the tool assumes on entry that all data in
-the persistent store is owned by the component.
+When performing this tracking, the tool assumes on entry that all data in the
+persistent store is owned by the component.
 %
 The tool similarly considers a resource to be properly released when it is
 placed in the persistent store.  
@@ -434,11 +432,22 @@ pass all checks.
 Nonetheless, dynamic memory errors can still happen, for example if an
 $\access$ event ever occurs before the $\alloc$ event.  
 %
-Our assumptions provide a practical point in the design space that allows
-each event handler to be usefully checked for local violations of the
-ownership protocol.  
+Our assumptions provide a practical point in the design space that allows each
+event handler to be usefully checked for local violations of the ownership
+protocol.  
+
+
+
+We have explored and implemented a prototype system combining Lighthouse with
+finite state machine (FSM) representation of the expected event orderings.
 %
-Handling inter-component relationships and application-level protocols is
-something we plan to pursue in the future, leveraging recent work on {\em
-interface synthesis} for software components~\cite{AlurPOPL05,HJM05}.
+This allows tracking of persistant store state across event handlers, solving
+the problem described above.
+%
+However, this requires pushing basic monitoring into the system runtime to
+watch for invalid event firing orders.
+%
+More complete handling of inter-component relationships and application-level
+protocols is something we plan to pursue in the future, leveraging recent work
+on {\em interface synthesis} for software components~\cite{AlurPOPL05,HJM05}.
 
