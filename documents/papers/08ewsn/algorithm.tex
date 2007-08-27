@@ -68,15 +68,21 @@ Our work describes a simple technique to move this checking to compile time.
 The SOS kernel already dynamically tracks memory ownership and has an
 associated API for ownership transfer, which inspired our work.  
 %
+Tracked ownership enables the SOS kernel to perform basic garbage collection
+when a module is removed from a node.
+%
 Calls to the messaging API can specify the \code{SOS\_MSG\_RELEASE} flag to
-signal that ownership of the posted message is to be transferred to the callee
-(or freed by the kernel if the callee does not explicitly take ownership).  
+signal that ownership of the posted message is to be transferred to the
+callee (or freed by the kernel if the callee does not explicitly take
+ownership).  
 %
-Calls to \code{ker\_malloc}, \code{ker\_free}, and \code{ker\_msg\_take\_data}
-are known to allocate, free, and transfer ownership of memory respectively.
+Calls to \code{ker\_malloc}, \code{ker\_free}, and
+\code{ker\_msg\_take\_data} are known to allocate, free, and transfer
+ownership of memory respectively.
 %
-Unfortunately, conformance to an exclusive ownership protocol is unchecked in
-the SOS runtime and the source of numerous problems in developing code.
+The SOS kernel only uses data ownership information when a module is removed
+from a node at run time and conformance to a stronger exclusive ownership
+protocol is remains completely unchecked.
 %
 Our work makes this protocol explicit and provides static checking for
 conformance.
