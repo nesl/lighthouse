@@ -83,7 +83,7 @@ conformance.
 
 
 
-\subsection{Owenrship Specification}
+\subsection{Ownership Specification}
 
 
 %  Use specification file
@@ -142,12 +142,12 @@ ker_free.post {
 
 
 A function specification describes preconditions and postconditions relating
-to the dynamic memory refenced by expressions.
+to the dynamic memory referenced by expressions.
 %
 These preconditions and postconditions may describe the expression as
 pointing to a \code{full} or \code{empty} memory buffer.
 %
-Expresions in a specification may be one or more of: 
+Expressions in a specification may be one or more of: 
 %
 \begin{itemize}
 %
@@ -168,7 +168,7 @@ An expression denoted as \code{full} in the preconditon describes memory
 that the caller of the function releases to the callee, and therefore that
 the function body must take ownership of this memory.
 %
-The \code{empty} denotion is used to describe expressions that are known to
+The \code{empty} denotation is used to describe expressions that are known to
 be not valid pointers to dynamic memory.
 
 
@@ -214,10 +214,10 @@ the complete evaluation of SOS, is sufficient for precise analysis.
 
 
 The specification allows modular checking since the side effects of
-called functions is availible without leaving the text of a function being
+called functions is available without leaving the text of a function being
 verified.
 %
-The ability to perform checking modularly allows application writers to
+The ability to perform modular checking allows application writers to
 obtain early feedback about the correctness of their resource management,
 without requiring access to the rest of the system.  
 %
@@ -235,7 +235,7 @@ not really possible to consider an approach based on whole-program analysis.
 
 Lighthouse is implemented in the CIL front end for C~\cite{CIL}, which
 parses C code into a simple intermediate format and provides a framework for
-performing analyses on the intermediate code. 
+performing analysis on the intermediate code. 
 %
 Lighthouse takes as input a preprocessed C file and prints out warning
 messages similar to those produced by a C compiler when suspect code is
@@ -417,7 +417,7 @@ $\access^*$ $\delete$ $)^*$.
 
 
 
-Perfering a scalable analysis that only requires examining a single function
+Preferring a scalable analysis that only requires examining a single function
 at a time, Lighthouse only tracks data locally within each event handler.  
 %
 When performing this tracking, the tool assumes on entry that all data in the
@@ -441,7 +441,7 @@ protocol.
 We have explored and implemented a prototype system combining Lighthouse with
 finite state machine (FSM) representation of the expected event orderings.
 %
-This allows tracking of persistant store state across event handlers, solving
+This allows tracking of persistent store state across event handlers, solving
 the problem described above.
 %
 However, this requires pushing basic monitoring into the system runtime to

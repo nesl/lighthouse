@@ -86,12 +86,15 @@ included in the SOS CVS repository that would compile for the
 The 48 available modules resulted in a total of 213 unique versions
 totaling 28042 source lines of code.
 %
-An external configuration of 26 function annotations was used for this
-analysis.
+The specification file used for this analysis included 9 functions to
+analyze user modules and 17 more functions to enable analysis of the SOS
+kernel.
 %
-Additionally, \code{lh\_store} annotations were added to 9 module
-versions, and a change to the core SOS API from the summer of 2006
-required changing the value of a constant in 6 module versions.
+Additionally, 9 custom function specifications were added to analyze
+module functions wrapping the underlying memory manipulation API.
+%
+Finally, a change to the core SOS API from the summer of 2006 required
+changing the value of a flag constant in 6 module versions.
 
 
 
@@ -165,15 +168,13 @@ about.
 The nine dangling pointer false positives result from limitations of the
 may-alias analysis.  
 %
-We plan to upgrade this analysis to be both field-sensitive
-(distinguishing among the different fields of a structure) and
-flow-sensitive (deriving alias information per program point rather than
-once for the entire program).  
+Improvements could be gained by adding field and flow sensitivity to
+this analysis.
 %
-Although these properties can make an alias analysis difficult to scale
-in general, sensor network applications tend to be small due to resource
-constraints, so we may be able to leverage these sophisticated
-techniques in a practical manner.
+Although these properties generally make an alias analysis difficult to
+scale, sensor network applications may be small enough due to resource
+constraints that we can leverage these sophisticated techniques in a
+practical manner.
 
 
 \subsection{Validating the SOS Kernel}
@@ -243,9 +244,9 @@ This increase in the rate of false positives is to be expected, since
 the kernel includes a significant amount of low-level code that does not
 conform to the ownership discipline meant to be obeyed by user modules.
 %
-For example, the function \code{ker\_msg\_take\_data} is annotated with
-\code{lh\_claim} to denote that it returns dynamically allocated memory,
-but Lighthouse warns that no such memory is returned.  
+For example, the function \code{ker\_msg\_take\_data} is specified to
+return a new memory buffer,  but Lighthouse warns that no such memory is
+returned.  
 %
 This is because the function's implementation directly accesses the
 internal data structures of the SOS memory manager to return a pointer

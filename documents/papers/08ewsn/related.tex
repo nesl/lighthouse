@@ -2,6 +2,8 @@
 \label{sec:related}
 
 
+\mynote{We can significantly shorten this discussion of SOS's memory system.
+Probably two short sentences.}
 As mentioned earlier, the memory manager in the SOS operating
 system~\cite{sos} includes an API that allows the kernel
 to dynamically track memory ownership.  When a module is removed from the
@@ -41,6 +43,31 @@ since that is the language that SOS employs, but it would be
 interesting to explore ways to leverage specialized language
 constructs to improve the tool's effectiveness.
 
+\mynote{Roy: This also needs to be tightened up a bit.}
+Notable work in the sensor network community has begun to look at the problem
+of verifying sensor network code.  Memory safety in sensor network systems
+begins to receive attention with solutions that augment source code to provide
+runtime monitoring of memory usage~\cite{regehr06memory,kumar07memory}.
+Other forms of runtime analysis are targeting interfaces misuse in sensor
+networks~\cite{regehr07memory}.  The work presented in this paper differs from
+these, in that it provides a static analysis to point developers to the
+incorrect code at compile time.
+
+\cite{archer07interface}
+
+
+
+\mynote{ROY: Rough first cut at adding Engler.}
+%
+An approach to isolating misuse of dynamic resources is the use of
+simple compiler extensions and statistical techniques to infer
+potential bugs and present the bugs in a meaningful order to the
+programmer~\cite{engler00programmer,kremenek06from}.  Such an analysis is
+either provided with, or infers, a specification such as not acquiring
+locks twice and not using freed memory.  The work presented in this
+paper aims to achieve a similar end through a different means, by
+providing a simple discipline for the end developer to follow.
+
 
 Recent work in the programming languages community has explored the
 concept of {\em ownership
@@ -71,7 +98,7 @@ to properly account for split-phase operations.  Although recent work
 has explored a form of transfer in the context of ownership type
 systems~\cite{DBLP:conf/ecoop/BanerjeeN05}, that work requires
 programmers to provide detailed assertions about ownership, and these
-assertions are proven as part of a more general program specification
+assertions are proved as part of a more general program specification
 and verification framework.
 
 
@@ -114,5 +141,8 @@ a lightweight manner.  Of course, a language solution like Sing\# has
 the potential to be more expressive and to provide stronger
 guarantees, by enforcing a stylized programming model.
 
-
+\mynote{Roy: Need to add in discussion of heine03pldi.  This is a tough
+one that does a very nice job in direction very similar us.  Key
+differences to highlight are our ability to detect dereferencing of
+dangling pointers and our modeling of persistent stores.}
 
