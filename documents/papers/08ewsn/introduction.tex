@@ -66,9 +66,7 @@ sword.
 %
 Improper management of resources leads to subtle errors affecting both the
 correctness and efficiency of applications.
-
-
-
+%
 For example, consider the architecture of a simple sensor network sense and
 send application.  
 %
@@ -87,15 +85,14 @@ errors.
 First, a component may access a (dangling) reference to data that has been
 passed on and possibly freed downstream. 
 %
-This is particularly dangerous on the low-end processor hardware lacking memory
-management units currently used in many sensor nodes, where a bad dereference
-can subtly corrupt data or crash the system. 
+This is particularly dangerous on the embedded processors without management
+units, where a bad dereference can subtly corrupt data or crash the system. 
 %
 Second, a component may receive data buffer from an upstream component but
 forget to either dispose it or pass it on to the next stage for processing.
 %
-Since expensive garbage-collection mechanisms are not available, such
-resource leaks will rapidly exhaust available memory.
+Since expensive garbage-collection mechanisms are not available, such resource
+leaks will rapidly exhaust available memory.
 
 
 
@@ -137,14 +134,13 @@ Our design rests upon three primary goals:
 provides developers feedback early in their design cycle and prevents bugs
 from entering into deployed networks.
 %
-\item[Simplicity]  The analysis uses a simple exclusive ownership model
-facilitating programmer understanding of the underlying system.  
+\item[Simplicity]  The analysis uses a simple exclusive ownership model.
 %
-This allows developers to work within an understood owenship diciplin, rather
-than simply being told about of bugs.
+This allows developers to understand the bugs found by the analysis, rather
+than simply fix them.
 %
-\item[Scalability]  A simple pre- and post- condition specification allows the
-analysis to examine a single function at a time.
+\item[Scalability]  A simple pre- and post- condition specification
+facilitates module analysis.
 %
 \item[Practicality] The analysis finds numerous bugs in real sensor network
 systems.
@@ -158,17 +154,18 @@ We have instantiated these ideas in Lighthouse, a tool for statically
 ensuring proper management of dynamic memory in the SOS operating
 system~\cite{sos}.  
 %
-Lighthouse uses a simple dataflow analysis analyze each software component
-{\em at compile time} for violations of the ownership protocol, providing
-early feedback to programmers about the potential for dynamic resource
-errors.  
+Lighthouse uses a simple dataflow analysis to analyze each software
+component {\em at compile time} for violations of the ownership protocol,
+providing early feedback to programmers about the potential for dynamic
+resource errors.  
 %
-The dataflow analyses ensures key ownership invariants:  each resource has a
+The dataflow analysis ensures key ownership invariants:  each resource has a
 unique owner; each resource is only manipulated by its owner; and each
 resource is either freed by its owner or transferred to another owner.  
 %
-A reusable specification documents the operating system provided API to make
-the analysis intraprocedural.
+Modular analysis is achieved via an external specification documenting
+system memory manipulation functions that summarises the effect of function
+calls.
 %
 While rarely used or required, end programmers can provide additional
 application specific information to refine the analysis results.
@@ -190,9 +187,6 @@ applications.
 We focus on SOS memory management because of our experience with memory
 errors as users of SOS, which was our initial motivation.  
 %
-\mynote{How do we feel about the following two sentences in light of the
-recent I2C work?}
-%
 However, the underlying dataflow analyses are generic, and Lighthouse is
 parametrized by the API for resource creation, ownership transfer, and
 resource deletion.  
@@ -208,9 +202,14 @@ SOS CVS repository, as well as on the SOS kernel.
 Overall, we ran the checker on about 40,000 lines of code.  
 %
 The tool identified 25 suspect memory operations of which eight were actual
-memory errors in the historic versions of the user modules, as well as 35
-suspect memory operations of which two were actual memory errors in the SOS
-kernel.  
+memory errors in the historic versions of the user modules using a shared
+specification documenting 9 functions manipulating SOS, and a total of 9
+module specific specifications describing module functions that manipulate
+memory.
+%
+The analysis located 35 suspect memory operations of which two were actual
+memory errors in the SOS kernel, using a specification documenting an
+additional 17 internal operating system functions.  
 %
 The latter finding is somewhat surprising, since the SOS kernel code is
 relatively mature and was written by experienced systems programmers.  

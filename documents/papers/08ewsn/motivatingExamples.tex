@@ -7,8 +7,8 @@ mismanagement.
 Both sensor network research and daily logs of system developers reveal the
 span of this problem within the sensor network community.
 %
-This section reviews resource mismanagement from the perspective of those
-battling it on a daily basis.
+This section introduces two representative sources of resource mismanagement
+from the currently used sensor network operating systems.
 
 
 
@@ -41,18 +41,21 @@ buffer.
 Research on interface contracts~\cite{archer07interface} recognizes this
 management problem and proposes run time state monitoring as a solution.
 %
-Knowing that a message transferred via the \code{SendMsg} interface is either in
-control of a user component or the TinyOS kernel, the \code{TOS\_Msg}
-structure is augmented with a \code{msg\_state} field to track the message
-as being either \code{USER\_OWNED} or \code{OS\_OWNED}.
+Knowing that a message transferred via the \code{SendMsg} interface is
+either in control of a user component or the TinyOS kernel, the
+\code{TOS\_Msg} structure is augmented with a \code{msg\_state} field to
+track the message as being either \code{USER\_OWNED} or \code{OS\_OWNED}.
 %
-A contract layer, interposed between the user component and the implementation
-of \code{SendMsg}, verifies that components only \code{send} \code{USER\_OWNED} 
-messages at run time.
+A contract layer, interposed between the user component and the
+implementation of \code{SendMsg}, verifies that components only \code{send}
+\code{USER\_OWNED} messages at run time.
 %
 The contract layer updates sent messages to the \code{OS\_OWNED} state until
-the the \code{sendDone} event occurs when the message is returned to the
+the \code{sendDone} event occurs when the message is returned to the
 \code{USER\_OWNED} state.
+%
+Incorrectly attempting to send a \code{OS\_OWNED} message results in the
+interface contract generating a runtime fault.
 
 
 
