@@ -3,18 +3,15 @@
 
 
 
-A single theme of exclusive data ownership underlies the examples provided in
-section~\ref{sec:mot}.
+A discipline of {\em exclusive data ownership} underlies the examples
+provided in section~\ref{sec:mot}.
 %
 References to resources are passed between multiple components to support
 simple and efficient resource access.
 %
 However, only one component accesses a given resource at any point in time.
 %
-The examples illustrate the {\em ownership} discipline prevalent in sensor
-networks.
-%
-Each resources in this discipline has a unique owning component with the sole
+Each resource in this discipline has a unique owning component with the sole
 capability to access the resource.
 %
 The owner also has the responsibility to eventually dispose of the resource or
@@ -25,21 +22,21 @@ explicitly transfer ownership to another component.
 In this section we describe our approach to statically enforcing an exclusive
 ownership discipline on sensor network applications.  
 %
-Informally, following rules guarantee conformance to this discipline:
+Informally, the following rules guarantee conformance to this discipline:
 %
 \begin{enumerate}
 %
-\item Each function may only refer to owned dynamic memory.  This includes
-memory allocated in the function, memory accessible to the function via
-persistent stores, and any formal parameters transferring dynamic data
+\item Each function may only refer to dynamic memory that it owns.  This
+includes memory allocated in the function, memory accessible to the function
+via persistent stores, and any formal parameters transferring dynamic data
 ownership to the component.
 %
 \item Each function allocating or obtaining ownership of dynamic memory must
 eventually free that memory, transfer its ownership to another component, or
 store the memory in a persistent location.
 %
-\item After freeing or releasing owned memory, a function may no longer access
-the memory.
+\item After freeing or releasing memory, a function may no longer access the
+memory.
 %
 \end{enumerate}
 
@@ -59,9 +56,11 @@ Calls to the \code{send} command transfer ownership of the \code{TOS\_Msg}
 from the component to the kernel, after which the component must not access
 the message until ownership is regained via the \code{sendDone} event.
 %
-Interface contracts provide a means to verify these properties at runtime.
+Interface contracts provide a means to verify these properties at {\em
+runtime}.
 %
-Our work describes a simple technique to move this checking to compile time.
+Our work describes a simple technique to {\em statically} examine these same
+properties.
  
 
 
@@ -123,41 +122,17 @@ after the call.
 
 
 
-\begin{figure}[tp]
-\begin{scriptsize}
-\begin{verbatim}
-ker_malloc.pre {}
-
-ker_malloc.post {
-    $return.full();
-}
-
-ker_free.pre {
-    $1.full();
-}
-
-ker_free.post {
-    $1.empty();
-}
-\end{verbatim}
-\end{scriptsize}
-\caption{\label{fig:spec}Sample specifications for \code{ker\_free} and
-\code{ker\_malloc}}.
-\end{figure}
-
-
-
 A function specification describes preconditions and postconditions relating
 to the dynamic memory referenced by expressions.
 %
-These preconditions and postconditions may describe the expression as
-pointing to a \code{full} or \code{empty} memory buffer.
+These preconditions and postconditions specify an expression as pointing to a
+\code{full} or \code{empty} memory buffer.
 %
 Expressions in a specification may be one or more of: 
 %
 \begin{itemize}
 %
-\item Formal variable identified by index in function prototype
+\item Formal variable identified by its index in the function prototype
 %
 \item Function return value identified by the keyword \code{return} (only
 valid in postconditions)
@@ -167,46 +142,52 @@ valid in postconditions)
 \end{itemize}
 %
 An expression denoted as \code{full} in the postcondition describes dynamic
-memory that the caller of the function will take ownership of from the
-callee, and therefore that the function body must release it.
+memory that the caller of the function will take ownership of from the callee,
+and therefore that the function body must release.
 %
-An expression denoted as \code{full} in the preconditon describes memory
-that the caller of the function releases to the callee, and therefore that
-the function body must take ownership of this memory.
+An expression denoted as \code{full} in the preconditon describes memory that
+the caller of the function releases to the callee, and therefore that the
+function body must take ownership of this memory.
 %
 The \code{empty} denotation is used to describe expressions that are known to
 be not valid pointers to dynamic memory.
 
 
 
-Example specifications demonstrating these ideas are presented in 
+\begin{figure}[tp]
+\centering
+\lstset{numbers=none, language=C}
+\begin{lstlisting}
+                ker_malloc.pre {}
+                ker_malloc.post { $return.full(); }
+
+                ker_free.pre { $1.full(); }
+                ker_free.post { $1.empty(); }
+\end{lstlisting}
+\caption{\label{fig:spec}Specifications for \code{ker\_free} and
+\code{ker\_malloc}}.
+\end{figure}
+
+
+
+Example specifications demonstrating these ideas are presented in
 Figure~\ref{fig:spec}.
 %
-The postcondition for \code{ker\_malloc} notes that the returned data the
-caller of \code{ker\_malloc} must take ownership of.
+The postcondition for \code{ker\_malloc} notes that caller of
+\code{ker\_malloc} must take ownership of the returned data.
 %
-The \code{ker\_free} function specifies that the first formal parameter
-points to valid memory when the function is called, but that this data must
-be released before the function returns.
+The \code{ker\_free} function specifies that the first formal parameter points
+to valid memory when the function is called, but that this data must be
+released before the function returns.
 
 
 
-\mynote{Roy: Check the status of how (if?) we mark the state variable of modules
-as being a valid store in the current version of the checker, and the
-version of the checker used for the evaluation.}
-%
 Our ownership discipline also uses the notion of a persistent store:  each
 component is assumed to own the data in its persistent store and can safely
 ``release'' owned data into this store.
 %
 All global and static variables declared within a component are assumed by
 the analysis to be part of the component's persistent store.
-%
-Stores are used to describe individual the state parameter used by a
-module's message handler in SOS.
-%
-As described earlier, this parameter points to the persistent store
-allocated and maintained by the SOS kernel for a module.
 
 
 
@@ -219,19 +200,18 @@ the complete evaluation of SOS, is sufficient for precise analysis.
 
 
 
-The specification allows modular checking since the side effects of
-called functions is available without leaving the text of a function being
-verified.
+The specification allows modular checking by describing the side effects of
+called functions.
 %
-The ability to perform modular checking allows application writers to
-obtain early feedback about the correctness of their resource management,
-without requiring access to the rest of the system.  
+The ability to perform modular checking allows application writers to obtain
+early feedback about the correctness of their resource management, without
+requiring access to the rest of the system.  
 %
 This is particularly important in a system like SOS, in which modules can be
 linked and unlinked dynamically.  
 %
-In such a setting, the ``rest'' of the system is a moving target, so it is
-not really possible to consider an approach based on whole-program analysis.
+In such a setting, the ``rest'' of the system is a moving target, so it is not
+really possible to consider an approach based on whole-program analysis.
 
 
 
@@ -253,8 +233,8 @@ of compilation.
 
 
 
-The Lighthouse uses a simple forward dataflow analysis to track the state of
-all expressions that may alias dynamic memory within a function.
+Lighthouse uses a forward dataflow analysis to track the state of all
+expressions that may alias dynamic memory within a function.
 %
 The dataflow ensures that:
 %
@@ -288,9 +268,9 @@ return values denoted as \code{full}.
 The analysis described above requires knowledge of the memory pointed to by
 a function's pointers.  
 %
-As usual, this is statically approximated by an alias analysis, which
-determines whether two different pointers store the same memory location at
-a given program point.  
+This is statically approximated by an alias analysis, which determines
+whether two different pointers store the same memory location at a given
+program point.  
 %
 Two standard approximations to the true dynamic alias information are {\em
 must-alias} analysis and {\em may-alias} analysis.
@@ -360,7 +340,7 @@ false negatives.
 
 
 First, we favored using a simple memory model at the cost of not precisely
-handle all of the unsafe features of the C programming language.  
+handling all of the unsafe features of the C programming language.  
 %
 For example, pointer arithmetic is not statically analyzed.  
 %
@@ -423,7 +403,7 @@ $\access^*$ $\delete$ $)^*$.
 
 
 
-Preferring a scalable analysis that only requires examining a single function
+Preferring a modular analysis that only requires examining a single function
 at a time, Lighthouse only tracks data locally within each event handler.  
 %
 When performing this tracking, the tool assumes on entry that all data in the

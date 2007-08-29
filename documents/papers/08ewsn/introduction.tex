@@ -48,7 +48,7 @@ environment.
 For example, TinyOS~\cite{TinyOS} uses a buffer-swapping protocol between
 components for efficient sharing of statically allocated buffers.  
 %
-The SOS operating system~\cite{sos} supports dynamic allocation of memory,
+The SOS operating system~\cite{sos} supports dynamic memory allocation,
 while MANTIS OS~\cite{abrach03mantis} supports both dynamic memory
 allocation and thread creation.  
 %
@@ -83,16 +83,17 @@ Unfortunately, incorrect implementations of buffer passing lead to serious
 errors.  
 %
 First, a component may access a (dangling) reference to data that has been
-passed on and possibly freed downstream. 
+passed downstream and possibly freed.
 %
-This is particularly dangerous on the embedded processors without management
-units, where a bad dereference can subtly corrupt data or crash the system. 
+This is particularly dangerous on the embedded processors without memory
+management units, where a bad dereference can subtly corrupt data or crash
+the system. 
 %
-Second, a component may receive data buffer from an upstream component but
+Second, a component may receive a data buffer from an upstream component but
 forget to either dispose it or pass it on to the next stage for processing.
 %
-Since expensive garbage-collection mechanisms are not available, such resource
-leaks will rapidly exhaust available memory.
+Since expensive garbage-collection mechanisms are not available, such
+resource leaks will rapidly exhaust available memory.
 
 
 
@@ -106,17 +107,17 @@ point.
 The component creating the resource (dynamically through a kernel call or
 statically through a variable declaration) assumes initial ownership.  
 %
-Each component has the right to access the resources that it owns but also the
-responsibility to eventually either free the resource or transfer ownership to
-another component.  
+Each component has the right to access the resources that it owns but also
+the responsibility to eventually either free the resource or transfer
+ownership to another component.  
 %
 A component may not manipulate resources that it does not own.  
 %
-When all components obey this protocol, then there can be neither accesses to
-dangling resources nor resource leaks.
+When all components obey this protocol, then there can be neither accesses
+to dangling resources nor resource leaks.
 %
-Current sensor network systems do not help programmers to ensure that this
-ownership protocol is properly obeyed.  
+Current sensor network systems do not provide a mechanism for helping
+programmers to ensure that this ownership protocol is properly obeyed.  
 %
 Our experience has been that programmers often make subtle mistakes in
 ownership, leading to critical and difficult-to-track errors.  
@@ -126,20 +127,20 @@ ownership, leading to critical and difficult-to-track errors.
 In this paper, we present an approach for automated validation of dynamic
 resource management in sensor network software.  
 %
-Our design rests upon three primary goals:
+Our design rests upon four primary goals:
 %
 \begin{description}
-%
-\item[Statically] The analysis is performed statically at compile time.  This
-provides developers feedback early in their design cycle and prevents bugs
-from entering into deployed networks.
 %
 \item[Simplicity]  The analysis uses a simple exclusive ownership model.
 %
 This allows developers to understand the bugs found by the analysis, rather
 than simply fix them.
 %
-\item[Scalability]  A simple pre- and post- condition specification
+\item[Statically] The analysis is performed statically at compile time.  This
+provides developers feedback early in their design cycle and prevents bugs
+from entering into deployed networks.
+%
+\item[Modularity]  A simple pre- and post- condition specification
 facilitates module analysis.
 %
 \item[Practicality] The analysis finds numerous bugs in real sensor network
@@ -154,10 +155,9 @@ We have instantiated these ideas in Lighthouse, a tool for statically
 ensuring proper management of dynamic memory in the SOS operating
 system~\cite{sos}.  
 %
-Lighthouse uses a simple dataflow analysis to analyze each software
-component {\em at compile time} for violations of the ownership protocol,
-providing early feedback to programmers about the potential for dynamic
-resource errors.  
+Lighthouse uses a dataflow analysis to analyze each software component {\em
+at compile time} for violations of the ownership protocol, providing early
+feedback to programmers about the potential for dynamic resource errors.  
 %
 The dataflow analysis ensures key ownership invariants:  each resource has a
 unique owner; each resource is only manipulated by its owner; and each
@@ -180,20 +180,21 @@ The exclusive ownership discipline is easy to understand and made explicit to
 developers.
 %
 Rather than acting as a black box, the approach presented in this paper
-provides a clear framework within which to develop sensor network
-applications.
+provides a clear framework for sensor network developers to reason about
+their systems.
 
 
 We focus on SOS memory management because of our experience with memory
 errors as users of SOS, which was our initial motivation.  
 %
-However, the underlying dataflow analysis are generic, and Lighthouse is
-parametrized by the API for resource creation, ownership transfer, and
-resource deletion.  
+However, we believe the underlying dataflow analysis is more broadly
+applicable, and Lighthouse is parametrized by the API for resource creation,
+ownership transfer, and resource deletion.  
 %
 Therefore, we believe that our tool can be easily adapted both to statically
 track ownership for other kinds of resources and to handle C-based operating
 systems other than SOS.
+
 
 
 We evaluated Lighthouse on the historic versions of all user modules in the
@@ -202,16 +203,17 @@ SOS CVS repository, as well as on the SOS kernel.
 Overall, we ran the checker on about 40,000 lines of code.  
 %
 The tool identified 25 suspect memory operations of which eight were actual
-memory errors in the historic versions of the user modules using a shared
-specification documenting 9 functions manipulating SOS, and a total of 9
-module specific specifications describing module functions that manipulate
-memory.
+memory errors in the historic versions of the user modules.
 %
-The analysis located 35 suspect memory operations of which two were actual
-memory errors in the SOS kernel, using a specification documenting an
-additional 17 internal operating system functions.  
+This analysis used a shared specification documenting 9 functions
+manipulating SOS, and 9 additional application specific specifications
+describing user functions that manipulate memory.
 %
-The latter finding is somewhat surprising, since the SOS kernel code is
+Within the SOS kernel our analysis located 35 memory operations of which two
+were actual memory errors in the SOS kernel, using a specification
+documenting an additional 17 internal operating system functions.  
+%
+The latter finding is surprising, since the SOS kernel code is
 relatively mature and was written by experienced systems programmers.  
 %
 In summary, our experiments illustrate the practicality of our approach for
@@ -222,7 +224,7 @@ software.
 
 The rest of the paper is structured as follows.  
 %
-Section~\ref{sec:example} further motivates the need for this analysis by
+Section~\ref{sec:mot} further motivates the need for this analysis by
 examining other recent sensor network research and citing examples from
 system development.
 %

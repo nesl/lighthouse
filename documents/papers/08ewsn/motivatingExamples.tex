@@ -8,7 +8,7 @@ Both sensor network research and daily logs of system developers reveal the
 span of this problem within the sensor network community.
 %
 This section introduces two representative sources of resource mismanagement
-from the currently used sensor network operating systems.
+from currently used sensor network operating systems.
 
 
 
@@ -21,19 +21,19 @@ a diverse range of research and commercial organizations.
 %
 TinyOS applications often send data using the \code{SendMsg} interface.
 %
-This interface is used by calling the asynchronous \code{send} command to
-send a \code{TOS\_Msg} to the network.
+Interface users call the asynchronous \code{send} command to send a
+\code{TOS\_Msg} to the network.
 %
 Rather than copying each message, the \code{SendMsg} interface passes a
 reference to the \code{TOS\_Msg} to efficiently pass data through the protocol
 stack.
 %
-Since TinyOS statically allocates resources, a \code{sendDone} event returns to
-the caller a reference to the sent message to signal that the message send
+Since TinyOS statically allocates resources, a \code{sendDone} event returns
+to the caller a reference to the sent message to signal that the message send
 completed.
 %
-It's important that the sending component not reuse the message buffer until
-after the \code{sendDone} event, lest updates corrupt the inadvertently shared
+The sending component should not reuse the message buffer until after the
+\code{sendDone} event, lest buffer writes corrupt the inadvertently shared
 buffer.
 
 
@@ -72,9 +72,9 @@ SOS is a research operating system for sensor networks supporting dynamic
 loading and unloading of software components, called modules, into deployed
 systems.
 %
-The SOS kernel provides an API for these modules to dynamically allocate
-memory using \code{ker\_malloc} and \code{ker\_free}, related to their C
-namesakes respectively allocating and disposing of memory.  
+The SOS kernel provides an API to dynamically allocate memory using
+\code{ker\_malloc} and \code{ker\_free}, related to their C namesakes
+respectively allocating and disposing of memory.  
 %
 As in C, programmers are responsible for manually managing their dynamic
 memory.  
@@ -94,37 +94,28 @@ of the loader.
 
 
 \begin{figure}[tp]
-\begin{scriptsize}
-\begin{verbatim}
+\centering
+\lstset{numbers=left, language=C}
+\begin{lstlisting}
 mod_op = (sos_module_op_t*) ker_msg_take_data(msg);
 if(mod_op == NULL) return -ENOMEM;
 if(mod_op->op == MODULE_OP_INSMOD) {
     existing_module = ker_get_module(mod_op->mod_id);
     if(existing_module != NULL) {
-        uint8_t ver = sos_read_header_byte(
-                existing_module->header,
-                offsetof(mod_header_t, version));
+        uint8_t ver = sos_read_header_byte( ... );
             if (ver < mod_op->version) {
-                ker_unload_module(existing_module->pid, 
-                        sos_read_header_byte(
-                        existing_module->header,
-                        offsetof(mod_header_t, version)));
+                ker_unload_module(  ... );
             } else {
                 return SOS_OK;
             }
         }
-    ret = fetcher_request(KER_DFT_LOADER_PID,
-            mod_op->mod_id,
-            mod_op->version,
-            entohs(mod_op->size),
-            msg->saddr);
+    ret = fetcher_request( ... );
     s->pend = mod_op;
     ker_led(LED_RED_TOGGLE);
     return SOS_OK;
 }
 return SOS_OK;
-\end{verbatim}
-\end{scriptsize}
+\end{lstlisting}
 \caption{\label{fig:leak}A memory leak in an SOS module.}
 \end{figure}
 
@@ -134,11 +125,11 @@ In mid-October 2005 the block of code shown in figure~\ref{fig:leak} was
 checked into CVS as part of \code{loader.c} and introduced a memory leak into
 the loader.  
 %
-The SOS function \code{ker\_msg\_take\_data} transfers ownership a buffer,
+The SOS function \code{ker\_msg\_take\_data} transfers ownership of a buffer,
 passed to the function, from the kernel to the calling component.
 %
 From the users perspective, this is identical to allocating a new buffer and
-copying into it the contents of an reference to external memory.
+copying into it the contents of a reference to external memory.
 %
 Application of our analysis generates warnings for all paths through this
 block of code, which leaks the \code{mod\_op} pointer acquired via the
@@ -154,74 +145,17 @@ After three additional revisions to the module loader not significantly
 modifying or fixing the memory leak, a fourth revision was made in
 mid-December 2005.  
 %
-This revision expands the functionality of \code{loader.c} and breaks the code
-up into smaller functions:
-
-
-
-\begin{footnotesize}
-\begin{verbatim}
-sos_module_op_t *mod_op;
-if (msg->saddr == ker_id() || s->pend) {
-    return SOS_OK;
-}
-mod_op = (sos_module_op_t*) ker_msg_take_data(msg);
-if(mod_op == NULL) return -ENOMEM;
-switch(mod_op->op){
-case MODULE_OP_INSMOD:
-    return module_op_insmod(s,msg,mod_op);
-case MODULE_OP_RMMOD:
-    return module_op_rmmod(s,msg,mod_op);
-}
-return SOS_OK;
-\end{verbatim}
-\end{footnotesize}
-
-
-
-Unfortunately, \code{mod\_op} is still leaked if \code{mod\_op->op} does not
-find a matching case in the {\tt switch} statement.
+This revision expanded the functionality of \code{loader.c} and broke the code
+in figure~\ref{fig:leak} into individual functions to handle module insertion
+requests and module removal requests.
 %
-Further, neither \code{module\_op\_insmod} nor \code{module\_op\_rmmod} free
-\code{mod\_op}, passed to them as the third formal parameter.
-%
-Again, our analysis generates warnings stating that all paths through this
-code leak the buffer claimed as a result of calling
-\code{ker\_msg\_take\_data}.
+Unfortunately, as our analysis found, \code{mod\_op} continued to be leaked on
+all paths through the updated code.
 %
 A day later, two months after the memory leaks were first introduced, these
-memory leaks were found and fixed:
-
-
-
-\begin{footnotesize}
-\begin{verbatim}
-sos_module_op_t *mod_op;
-if (msg->saddr == ker_id() || s->pend) {
-    return SOS_OK;
-}
-mod_op = (sos_module_op_t*) ker_msg_take_data(msg);
-if(mod_op == NULL) return -ENOMEM;
-switch(mod_op->op){
-case MODULE_OP_INSMOD:
-    return module_op_insmod(s,msg,mod_op);
-case MODULE_OP_RMMOD:
-    return module_op_rmmod(s,msg,mod_op);
-}
-ker_free(mod_op);
-return SOS_OK;
-\end{verbatim}
-\end{footnotesize}
-
-
-
-As shown above, a call to \code{ker\_free} added before the final
-\code{return}, properly disposes of \code{mod\_op}.
+memory leaks were found and fixed.
 %
-The functions \code{module\_op\_insmod} and \code{module\_op\_rmmod} were
-similarly updated to free their third argument.  
-%
-The CVS log message simply reads ``fixed another memory leak.''
+The CVS log message simply reads, ``Fixed another memory leak.''
 %
 The analysis described in this paper would have prevented these eight weeks of
 system instability by alerting developers when the initial memory leak was
@@ -229,7 +163,7 @@ introduced to the code base.
 
 
 
-Stories such as this of the SOS module loader reveal that sensor network
+Experiences, such as this of the SOS module loader, reveal that sensor network
 developers are struggling with correct resource usage.
 %
 Application of the analysis presented in this paper will alert developers at
