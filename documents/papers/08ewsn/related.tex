@@ -19,7 +19,7 @@ Dynamic checking of sensor network systems has become a popular technique to
 improve system reliability and find system errors.
 %
 Recent work on Safe TinyOS and UTOS~\cite{regehr06memory} and software fault
-isolation for embedded processors~\cite{kumar07memory} uses static analysis
+isolation for embedded processors~\cite{kumar07system} uses static analysis
 to insert run-time checks that ensure memory protection for sensor-network
 systems.
 %
@@ -71,7 +71,7 @@ specialized language constructs to improve the tool's effectiveness.
 Static analysis has long been used in traditional systems.
 %
 Of particular relation to Lighthouse is work that finds violations of simple
-rules using compiler extensions using XGCC~\cite{engler00programmer} and
+rules using compiler extensions~\cite{engler00checking} and
 follow up work to infer the rules given a code base~\cite{kremenek06from}.
 %
 Where this form of static analysis is effective in statically finding a broad
@@ -180,7 +180,7 @@ programming model.
 
 \mynote{Roy: Second set of eyes should look over my description.}
 %
-Clouseau~\cite{heine03pldi} develops a type system very similar exclusive
+Clouseau~\cite{heine03practical} develops a type system very similar exclusive
 ownership model from Lighthouse to statically ensure that a dynamically
 allocated memory is freed exactly once in C and C++ programs.
 %
