@@ -12,7 +12,7 @@ from currently used sensor network operating systems.
 
 
 
-\subsection{Researchers Hardening Buffer Passing in TinyOS}
+\subsection{Buffer Passing in TinyOS}
 \label{ssec:tinyos}
 
 
@@ -51,7 +51,7 @@ implementation of \code{SendMsg}, verifies that components only \code{send}
 \code{USER\_OWNED} messages at run time.
 %
 The contract layer updates sent messages to the \code{OS\_OWNED} state until
-the \code{sendDone} event occurs when the message is returned to the
+the \code{sendDone} event occurs, when the message is returned to the
 \code{USER\_OWNED} state.
 %
 Incorrectly attempting to send a \code{OS\_OWNED} message results in the
@@ -60,11 +60,14 @@ interface contract generating a runtime fault.
 
 
 This emergent research reveals academia's interest in improving resource
-management safety for sensor network systems.
+management safety for sensor network systems.  
+%
+Our tool statically alerts developers to this type of resource
+mismanagement.
 
 
 
-\subsection{Developers Struggling with Dynamic Memory in SOS}
+\subsection{Dynamic Memory in SOS}
 
 
 
@@ -73,23 +76,25 @@ loading and unloading of software components, called modules, into deployed
 systems.
 %
 The SOS kernel provides an API to dynamically allocate memory using
-\code{ker\_malloc} and \code{ker\_free}, related to their C namesakes
-respectively allocating and disposing of memory.  
+\code{ker\_malloc} and \code{ker\_free}, respectively allocating and
+free memory.  
 %
 As in C, programmers are responsible for manually managing their dynamic
 memory.  
 
 
-
-The SOS module loader proved to be a source of instability during the early
-days of SOS.
+The following example demonstrates a representative example of memory
+mismanagement from the SOS operating system.
 %
 The module loader is a core part of SOS, allowing users to dynamically add
 modules into the running system.
 %
-The analysis described in this paper was applied to old CVS versions of the
-module loader and quickly isolated bugs that had hindered initial development
-of the loader.
+Unfortunately, the SOS module loader proved to be a source of instability
+during the early days of SOS.
+%
+The tool described in this paper was applied to old CVS versions of the
+module loader and quickly isolated bugs that had hindered initial
+development of the loader.
 
 
 
@@ -128,8 +133,7 @@ the loader.
 The SOS function \code{ker\_msg\_take\_data} transfers ownership of a buffer,
 passed to the function, from the kernel to the calling component.
 %
-From the users perspective, this is identical to allocating a new buffer and
-copying into it the contents of a reference to external memory.
+From the user's perspective, this is identical to allocating a new buffer.
 %
 Application of our analysis generates warnings for all paths through this
 block of code, which leaks the \code{mod\_op} pointer acquired via the
@@ -145,30 +149,31 @@ After three additional revisions to the module loader not significantly
 modifying or fixing the memory leak, a fourth revision was made in
 mid-December 2005.  
 %
-This revision expanded the functionality of \code{loader.c} and broke the code
-in figure~\ref{fig:leak} into individual functions to handle module insertion
-requests and module removal requests.
+This revision expanded the functionality of \code{loader.c} and broke the
+code in figure~\ref{fig:leak} into individual functions to handle module
+insertion requests and module removal requests.
 %
-Unfortunately, as our analysis found, \code{mod\_op} continued to be leaked on
-all paths through the updated code.
+Unfortunately, as our analysis found, \code{mod\_op} continued to be leaked
+on all paths through the updated code.
 %
 A day later, two months after the memory leaks were first introduced, these
-memory leaks were found and fixed.
+memory leaks were found and fixed by adding calls to \code{ker\_free} on
+each path through the function.
 %
 The CVS log message simply reads, ``Fixed another memory leak.''
 %
-The analysis described in this paper would have prevented these eight weeks of
-system instability by alerting developers when the initial memory leak was
-introduced to the code base.
+Lighthouse would have prevented these eight weeks of system instability by
+alerting developers when the initial memory leak was introduced to the code
+base.
 
 
 
 Experiences, such as this of the SOS module loader, reveal that sensor network
 developers are struggling with correct resource usage.
 %
-Application of the analysis presented in this paper will alert developers at
+Application of the tool presented in this paper will alert developers at
 compile time to the problem described above, helping to educate developers
-about incorrect programing habits and relieving developers of tedious hunts
+about incorrect programming habits and relieving developers of tedious hunts
 for bugs.
 
 
