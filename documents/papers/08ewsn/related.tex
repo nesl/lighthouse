@@ -1,6 +1,7 @@
 \section{Related Work}
 \label{sec:related}
 
+\subsection{Sensor Network Analysis Research}
 
 As mentioned earlier, the memory manager in the SOS operating
 system~\cite{sos} performs basic tracking of memory ownership to help
@@ -60,6 +61,10 @@ idioms, often making programs more amenable to static checking.
 Our tool currently analyzes ordinary C programs, since that is the language
 that SOS employs, but it would be interesting to explore ways to leverage
 specialized language constructs to improve the tool's effectiveness.
+
+
+
+\subsection{Traditional Systems Analysis Research}
 
 
 
@@ -173,7 +178,7 @@ programming model.
 
 
 
-\mynote{Roy: Second set of eyes are needed to look over this work.}
+\mynote{Roy: Second set of eyes should look over my description.}
 %
 Clouseau~\cite{heine03pldi} develops a type system very similar exclusive
 ownership model from Lighthouse to statically ensure that a dynamically
@@ -185,8 +190,11 @@ Lighthouse.
 %
 In addition to the monitoring of memory leaks performed by Clouseau,
 Lighthouse tracks the status of pointers through the program dataflow to
-locate invalid pointer dereferences and uses the concept of global stores to
-better model the event driven nature of sensor networks.
+locate invalid pointer dereferences.
+%
+Finally, Lighthouse uses explicit specifications to better support modular
+analysis of individual user components, independent of the surrounding
+system.
 %
 An interesting combination of work would result from using Clouseau to
 generate specifications for functions, then combine these results with
