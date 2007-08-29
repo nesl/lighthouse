@@ -98,8 +98,8 @@ resource leaks will rapidly exhaust available memory.
 
 
 Along with others in the sensor network community~\cite{archer07interface}, we
-observe that a clear cut exclusive ownership discipline fits many aspects of
-sensor network systems.
+observe that an exclusive ownership discipline fits the resource management 
+needs of sensor network systems.
 %
 In this style, every resource has exactly one {\em owner} component at any
 point.  
@@ -131,23 +131,24 @@ Our design rests upon four primary goals:
 %
 \begin{description}
 %
-\item[Simplicity]  The analysis uses a simple exclusive ownership model.
+\item[Simplicity]  The exclusive ownership discipline is made explicit to
+developers.
 %
-This allows developers to understand the bugs found by the analysis, rather
-than simply fix them.
+Rather than acting as a black box, the approach presented in this paper
+provides a clear discipline that programmers understand and can easily
+develop within.
 %
-\item[Statically] The analysis is performed statically at compile time.  This
-provides developers feedback early in their design cycle and prevents bugs
-from entering into deployed networks.
+\item[Statically] The analysis is performed at compile time.  This provides
+developers feedback early in their design cycle and prevents bugs from
+entering into deployed networks.
 %
-\item[Modularity]  A simple pre- and post- condition specification
-facilitates module analysis.
+\item[Modularity]  A lightweight pre- and post- condition specification
+facilitates modular analysis.
 %
-\item[Practicality] The analysis finds numerous bugs in real sensor network
-systems.
+\item[Practicality] The analysis finds numerous bugs in mature sensor
+network systems.
 %
 \end{description}
-%
 
 
 
@@ -163,25 +164,16 @@ The dataflow analysis ensures key ownership invariants:  each resource has a
 unique owner; each resource is only manipulated by its owner; and each
 resource is either freed by its owner or transferred to another owner.  
 %
-Modular analysis is achieved via an external specification documenting
-system memory manipulation functions that summarizes the effect of function
-calls.
+Modular analysis is achieved via a lightweight specification summarizing the
+effect of function calls.
 %
 While rarely used or required, end programmers can provide additional
-application specific information to refine the analysis results.
+application-specific specifications to refine the analysis results.
 %
 With our approach, sensor network programmers use the expressiveness of
 dynamic resource management while retaining confidence in the reliability of
 their applications.
 
-
-
-The exclusive ownership discipline is easy to understand and made explicit to
-developers.
-%
-Rather than acting as a black box, the approach presented in this paper
-provides a clear framework for sensor network developers to reason about
-their systems.
 
 
 We focus on SOS memory management because of our experience with memory
@@ -206,15 +198,15 @@ The tool identified 25 suspect memory operations of which eight were actual
 memory errors in the historic versions of the user modules.
 %
 This analysis used a shared specification documenting 9 functions
-manipulating SOS, and 9 additional application specific specifications
+manipulating SOS, and 9 additional application-specific specifications
 describing user functions that manipulate memory.
 %
 Within the SOS kernel our analysis located 35 memory operations of which two
 were actual memory errors in the SOS kernel, using a specification
 documenting an additional 17 internal operating system functions.  
 %
-The latter finding is surprising, since the SOS kernel code is
-relatively mature and was written by experienced systems programmers.  
+Finding two bugs in the SOS kernel is surprising, since the SOS kernel code
+is relatively mature and was written by experienced systems programmers.  
 %
 In summary, our experiments illustrate the practicality of our approach for
 providing early feedback about memory errors in real sensor network
