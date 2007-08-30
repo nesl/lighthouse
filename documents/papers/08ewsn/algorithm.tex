@@ -28,8 +28,8 @@ Informally, the following rules guarantee conformance to this discipline:
 %
 \item Each function may only refer to dynamic memory that it owns.  This
 includes memory allocated in the function, memory accessible to the function
-via persistent stores, and any formal parameters transferring dynamic data
-ownership to the component.
+via global variables, and any formal parameters transferring dynamic data ownership to
+the component.
 %
 \item Each function allocating or obtaining ownership of dynamic memory must
 eventually free that memory, transfer its ownership to another component, or
@@ -47,10 +47,9 @@ memory.
 
 
 The \code{SendMsg} interface described in section~\ref{ssec:tinyos} clearly
-follows the above three rules.
+expects conformance to the above three rules.
 %
-Each component initially owns any \code{TOS\_Msg} that it creates at compile
-time.
+Each component initially owns any \code{TOS\_Msg} that it declares.
 %
 Calls to the \code{send} command transfer ownership of the \code{TOS\_Msg}
 from the component to the kernel, after which the component must not access
@@ -71,17 +70,15 @@ Tracked ownership enables the SOS kernel to perform basic garbage collection
 when a module is removed from a node.
 %
 Calls to the messaging API can specify the \code{SOS\_MSG\_RELEASE} flag to
-signal that ownership of the posted message is to be transferred to the
-callee (or freed by the kernel if the callee does not explicitly take
-ownership).  
+signal that ownership of the posted message is to be transferred to the callee
+(or freed by the kernel if the callee does not explicitly take ownership).  
 %
-Calls to \code{ker\_malloc}, \code{ker\_free}, and
-\code{ker\_msg\_take\_data} are known to allocate, free, and transfer
-ownership of memory respectively.
+Calls to \code{ker\_malloc}, \code{ker\_free}, and \code{ker\_msg\_take\_data}
+are known to allocate, free, and transfer ownership of memory respectively.
 %
 The SOS kernel only uses data ownership information when a module is removed
-from a node at run time and conformance to a stronger exclusive ownership
-protocol is remains completely unchecked.
+from a node at run time and assumes that the API manipulating memory ownership
+is properly used.
 %
 Our work makes this protocol explicit and provides static checking for
 conformance.
@@ -106,27 +103,19 @@ conformance.
 
 
 
-Analyzing memory ownership requires understanding how underlying functions
-manipulate memory ownership properties.
+Analyzing memory ownership requires understanding how functions manipulate
+memory ownership properties.
 %
 Our analysis uses a simple specification file documenting functions that
-transfer memory ownership between components by describing preconditions and
-postconditions, with respect to memory ownership, for the function.
+transfer memory ownership between components.
 %
-Each function body is checked to ensure the postconditions on exit, under
-the assumption that the preconditions hold on entry.  
-%
-Each call within a function is separately checked to ensure the callee's
-preconditions before the call, and it assumes the callee's postconditions
-after the call.
+Each function body is checked to ensure safety under the assumption provided
+by the specification.  
 
 
 
-A function specification describes preconditions and postconditions relating
-to the dynamic memory referenced by expressions.
-%
-These preconditions and postconditions specify an expression as pointing to a
-\code{full} or \code{empty} memory buffer.
+A function specification describes the expressions releasing memory ownership
+to and from the function.
 %
 Expressions in a specification may be one or more of: 
 %
@@ -135,22 +124,22 @@ Expressions in a specification may be one or more of:
 \item Formal variable identified by its index in the function prototype
 %
 \item Function return value identified by the keyword \code{return} (only
-valid in postconditions)
+valid in \code{outgoing} specifications)
 %
 \item Global variable identified by variable name
 %
 \end{itemize}
 %
-An expression denoted as \code{full} in the postcondition describes dynamic
-memory that the caller of the function will take ownership of from the callee,
-and therefore that the function body must release.
+The specification uses \code{incoming} and \code{outgoing} to describe memory
+that is being released into and out from the function, respectively.
 %
-An expression denoted as \code{full} in the preconditon describes memory that
-the caller of the function releases to the callee, and therefore that the
-function body must take ownership of this memory.
+An \code{outgoing} expression qualified with \code{release} describes dynamic
+memory that the caller of the function takes ownership of from the callee, and
+therefore that the function body must release.
 %
-The \code{empty} denotation is used to describe expressions that are known to
-be not valid pointers to dynamic memory.
+An \code{incoming} expression qualified with \code{release} describes dynamic
+memory that the caller of the function releases to the callee, and therefore
+that the function body must take ownership of.
 
 
 
@@ -158,11 +147,9 @@ be not valid pointers to dynamic memory.
 \centering
 \lstset{numbers=none, language=C}
 \begin{lstlisting}
-                ker_malloc.pre {}
-                ker_malloc.post { $return.full(); }
+                ker_malloc.outgoung { $return.release; }
 
-                ker_free.pre { $1.full(); }
-                ker_free.post { $1.empty(); }
+                ker_free.incoming { $1.release; }
 \end{lstlisting}
 \caption{\label{fig:spec}Specifications for \code{ker\_free} and
 \code{ker\_malloc}}.
@@ -173,21 +160,13 @@ be not valid pointers to dynamic memory.
 Example specifications demonstrating these ideas are presented in
 Figure~\ref{fig:spec}.
 %
-The postcondition for \code{ker\_malloc} notes that caller of
-\code{ker\_malloc} must take ownership of the returned data.
+The \code{release} qualifier on the \code{outgoing} return statement notes
+that the caller of \code{ker\_malloc} must take ownership of the returned
+data.
 %
-The \code{ker\_free} function specifies that the first formal parameter points
-to valid memory when the function is called, but that this data must be
-released before the function returns.
-
-
-
-Our ownership discipline also uses the notion of a persistent store:  each
-component is assumed to own the data in its persistent store and can safely
-``release'' owned data into this store.
-%
-All global and static variables declared within a component are assumed by
-the analysis to be part of the component's persistent store.
+The \code{ker\_free} function specifies that the \code{incoming} first formal
+parameter points to dynamic memory released from the caller to the function
+body.
 
 
 
@@ -233,20 +212,18 @@ of compilation.
 
 
 
-Lighthouse uses a forward dataflow analysis to track the state of all
-expressions that may alias dynamic memory within a function.
+Lighthouse uses a dataflow analysis to track the state of all expressions that
+may alias dynamic memory within a function.
 %
 The dataflow ensures that:
 %
 \begin{itemize}
 %
-\item Whenever a node in the dataflow graph is encountered that allocates or
-takes ownership of a block of memory, every path from this node to the
-function exit frees, stores, or releases ownership of the memory exactly
-once.  
+\item Whenever a node in the control flow graph is encountered that allocates
+or takes ownership of a block of memory, every path from this node to the
+function exit frees, stores, or releases ownership of the memory exactly once.  
 %
-If this property is not satisfied, Lighthouse reports a possible memory
-leak.
+If this property is not satisfied, Lighthouse reports a possible memory leak.
 %
 \item Whenever a node in the graph is encountered that frees or releases
 ownership of a block of memory, that no path from this node to the function
@@ -258,10 +235,10 @@ pointer error.
 \end{itemize}
 %
 For the purpose of the Lighthouse traversal over a function's CFG, the
-function's entry node is considered an allocation point for all parameters
-denoted as \code{full} in the functions precondition specification, and the
-function's exit nodes are considered release points for all parameters and
-return values denoted as \code{full}.
+function's entry node is considered an allocation point for all
+\code{incoming} parameters denoted as \code{release}, and the function's exit
+nodes are considered release points for \code{outgoing} expressions denoted as
+\code{release}.
 
 
 
@@ -271,56 +248,26 @@ a function's pointers.
 This is statically approximated by an alias analysis, which determines
 whether two different pointers store the same memory location at a given
 program point.  
-%
-Two standard approximations to the true dynamic alias information are {\em
-must-alias} analysis and {\em may-alias} analysis.
-%
-We have built a simple flow-sensitive must-alias analysis for use by
-Lighthouse.  
-%
-For the may-alias analysis, we use a fast flow-insensitive analysis provided
-by the CIL framework.  
-%
-Obtaining precise alias information at compile time is notoriously
-difficult, and this limitation is the principal cause of false positives for
-our analysis.
-%
-For example, CIL's may-alias analysis does not distinguish among the fields
-of a structure, instead considering them to always potentially alias one
-another.  
-%
-Both alias analyses can be imprecise in the presence of linked data
-structures.
-
-
-
-%  A must-alias analysis underapproximates the dynamic alias relations:  if a
-%  must-alias analysis determines that $x$ and $y$ alias at a particular
-%  program point, then they definitely alias at that point in any program
-%  execution.  
 %  %
-%  A may-alias analysis overapproximates the dynamic alias relations:  if a
-%  may-alias analysis determines that $x$ and $y$ {\em cannot} alias at a
-%  particular program point, then they definitely do not alias at that point in
-%  any program execution.
-
-
-
-%  Lighthouse requires both kinds of static alias approximations.  
+%  Two standard approximations to the true dynamic alias information are {\em
+%  must-alias} analysis and {\em may-alias} analysis.
 %  %
-%  In the first dataflow analysis described above, alias information is used to
-%  ensure that something definitely happens, namely that an allocated resource
-%  is eventually released.  
+%  We have built a simple flow-sensitive must-alias analysis for use by
+%  Lighthouse.  
 %  %
-%  Therefore, in this case we approximate the true alias information with
-%  must-alias information.  
+%  For the may-alias analysis, we use a fast flow-insensitive analysis provided
+%  by the CIL framework.  
 %  %
-%  In the second dataflow analysis described above, alias information is used
-%  to ensure that something definitely does not happen, namely an access to a
-%  released resource.  
+%  Obtaining precise alias information at compile time is notoriously
+%  difficult, and this limitation is the principal cause of false positives for
+%  our analysis.
 %  %
-%  Therefore, in this case we approximate the true alias information with
-%  may-alias information.
+%  For example, CIL's may-alias analysis does not distinguish among the fields
+%  of a structure, instead considering them to always potentially alias one
+%  another.  
+%  %
+%  Both alias analyses can be imprecise in the presence of linked data
+%  structures.
 
 
 
@@ -351,12 +298,12 @@ If $p+i$ in fact overflows to another block of memory at run time, the
 checker's assumption can cause it to miss errors.  
 %
 These kinds of memory safety assumptions are standard for C-based program
-analyses.
+analysis.
 
 
 
 Second, there is a design choice about how to treat dynamic memory referenced
-by formal parameters without the \code{full} denotation.
+by formal parameters without the \code{release} denotation.
 %
 Technically the ownership protocol disallows this memory from being accessed
 at all, since the receiving component is not the owner.  
@@ -364,17 +311,10 @@ at all, since the receiving component is not the owner.
 Lighthouse assumes a more practical stance by not enforcing the requirement
 that a component only access a resource that it owns.
 % 
-%  This design decision provides a seamless adoption path for Lighthouse on
-%  existing systems.  % Programmers can incrementally add annotations to
-%  refine the quality of the analysis without suffering from excessive numbers
-%  of false positives.
-%
-This decision 
-%  also 
-provides a mechanism for allowing patterns of resource sharing that are in
-fact safe but not supported by the ownership discipline, for example when a
-component temporarily ``borrows'' data from another component within a bounded
-scope.
+This decision provides a mechanism for allowing patterns of resource sharing
+that are in fact safe but not supported by the ownership discipline, for
+example when a component temporarily ``borrows'' data from another component
+within a bounded scope.
 %
 The cost of this flexibility is the potential to miss real resource management
 errors.
@@ -385,20 +325,23 @@ leaks.
 
 
 
-Third, our modular checker does not consider the overall order in which
-messages will be received by a component.  
+Third, sensor network systems are often event driven with unpredictable event
+orderings.
 %
-However, event orderings can affect the correctness of ownership tracking
-when a resource is accessed via the persistent store.
+Our modular checker makes optimistic assumptions about the order in which
+events will be received by a component.  
+%
+However, event orderings can affect the correctness of ownership tracking when
+a resource is accessed via the persistent store.
 %
 For example, consider a component that responds to three events: $\create$
-causes the component to allocate a block $b$ and store it into the
-component's persistent store, $\access$ causes the component to access block
-$b$ via the store, and $\delete$ causes the component to deallocate block
-$b$ from the store.  
+causes the component to allocate a block $b$ and store it into the component's
+persistent store, $\access$ causes the component to access block $b$ via the
+store, and $\delete$ causes the component to deallocate block $b$ from the
+store.  
 %
-The component avoids dangling accesses to $b$ and leaks of $b$ as long as
-the temporal sequence of events follows the regular expression $($ $\alloc$
+The component avoids dangling accesses to $b$ and leaks of $b$ as long as the
+temporal sequence of events follows the regular expression $($ $\alloc$
 $\access^*$ $\delete$ $)^*$.  
 
 
@@ -425,13 +368,16 @@ protocol.
 
 
 We have explored and implemented a prototype system combining Lighthouse with
-finite state machine (FSM) representation of the expected event orderings.
+a finite state machine (FSM) representation of the expected event orderings.
 %
 This allows tracking of persistent store state across event handlers, solving
 the problem described above.
 %
 However, this requires pushing basic monitoring into the system runtime to
 watch for invalid event firing orders.
+%
+In practice, we found very few instances where the additional tracking of event
+orderings helped refine our analysis of memory management in SOS.
 %
 More complete handling of inter-component relationships and application-level
 protocols is something we plan to pursue in the future, leveraging recent work
