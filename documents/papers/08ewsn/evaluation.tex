@@ -137,6 +137,20 @@ The 17 remaining warnings were further classified to better understand
 the sources of imprecision in Lighthouse.  
 
 
+\smallskip\noindent{\bf Located memory leaks.}
+
+Four memory leaks arise from user code failing to release data on an
+exceptional path and two memory leaks result from the user releasing an
+incorrect buffer.
+%
+The last two memory leaks result from users passing dynamic memory to the
+\code{ker\_sensor\_control} function that does not release the buffer,
+probably assuming that \code{ker\_sensor\_control} consumes incoming memory.
+%
+These observations demonstrate that users are aware of the need for explicit
+memory management, but make mistakes within their programs.
+
+
 
 \smallskip\noindent{\bf Memory leak false positives.}
 
