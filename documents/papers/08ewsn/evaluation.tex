@@ -139,16 +139,31 @@ the sources of imprecision in Lighthouse.
 
 \smallskip\noindent{\bf Located memory leaks.}
 
-Four memory leaks arise from user code failing to release data on an
-exceptional path and two memory leaks result from the user releasing an
-incorrect buffer.
+
+Half of the memory leaks arise from users failing to release data on an
+exceptional path.
 %
-The last two memory leaks result from users passing dynamic memory to the
-\code{ker\_sensor\_control} function that does not release the buffer,
-probably assuming that \code{ker\_sensor\_control} consumes incoming memory.
+Lighthouse reasons about all paths through a function, exceptional or
+otherwise, and alerts developers to this type of mistake.
 %
-These observations demonstrate that users are aware of the need for explicit
-memory management, but make mistakes within their programs.
+Two more leaks result from users failing to release the memory returned by
+\code{ker\_msg\_take\_data}, and instead attempt to release the data passed
+into \code{ker\_msg\_take\_data}.
+%
+By recognizing resulting memory errors, Lighthouse can alert users to
+incorrect beliefs about the memory management API.
+%
+A second example of this type of API misunderstanding causes the last two
+bugs, resulting from a user passing dynamic memory to the
+\code{ker\_sensor\_control} function.
+%
+From the proximity of other calls to the memory management API, the user
+probably assumed that \code{ker\_sensor\_control} would consume the incoming
+memory buffer.
+%
+Lighthouse isolated each of these memory leaks, each of which would have
+eventually crashed SOS.
+
 
 
 
