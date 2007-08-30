@@ -7,8 +7,9 @@ As mentioned earlier, the memory manager in the SOS operating
 system~\cite{sos} performs basic tracking of memory ownership to help
 clean the system after module removal.
 %
-However, the burden remains on the end user to prevent all other memory
-leaks and invalid derefencing of pointers.
+However, the burden remains on the end user to properly use the API
+interacting with the memory manager, prevent memory leaks, and not
+deference invalid pointers.
 %
 Our work grew out of a desire to prevent these kinds of errors from
 occurring in SOS applications.
@@ -23,9 +24,9 @@ isolation for embedded processors~\cite{kumar07system} uses static analysis
 to insert run-time checks that ensure memory protection for sensor-network
 systems.
 %
-Interface contract monitoring~\cite{archer07interface} by interposing a thin
-layer between interface clients and implementers has proved effective in
-finding bugs in TinyOS programs.
+Interface contract monitoring~\cite{archer07interface} interposes a thin
+layer between interface clients and implementers, and has proved effective
+in finding bugs in TinyOS programs.
 %
 These approaches provide valuable feedback to developers when an executing
 system misbehaves.
@@ -71,17 +72,12 @@ specialized language constructs to improve the tool's effectiveness.
 Static analysis has long been used in traditional systems.
 %
 Of particular relation to Lighthouse is work that finds violations of simple
-rules using compiler extensions~\cite{engler00checking} and
-follow up work to infer the rules given a code base~\cite{kremenek06from}.
+rules using compiler extensions~\cite{engler00checking} and follow up work
+to infer the rules given a code base~\cite{kremenek06from}.
 %
-Where this form of static analysis is effective in statically finding a broad
-range of system errors, our work focuses on providing a framework to help
-developers reason about and understand problems surrounding memory
-ownership.
-%
-\mynote{Roy: Not quite right.  I'm trying to convey the fact that our work
-is a whole way to think about memory in a system, rather than only finding
-memory bugs.}
+Lighthouse focuses on a different point on the design spectrum using explicit
+specifications and a clear design discipline to provide maximum
+understanding to program developers.
 
 
 
@@ -178,26 +174,19 @@ programming model.
 
 
 
-\mynote{Roy: Second set of eyes should look over my description.}
+Clouseau~\cite{heine03practical} develops a type system to statically ensure
+that a dynamically allocated memory is freed exactly once in C and C++
+programs.
 %
-Clouseau~\cite{heine03practical} develops a type system very similar exclusive
-ownership model from Lighthouse to statically ensure that a dynamically
-allocated memory is freed exactly once in C and C++ programs.
-%
-Clouseau uses a constraint system to track owning pointers both intra- and
-inter-procedurally, avoiding many of the pointer analysis problems faced by
-Lighthouse.
+The whole program analysis provided by Clouseau uses a constraint system to
+track owning pointers both intra- and inter-procedurally, avoiding many of
+the pointer analysis problems faced by Lighthouse.
 %
 In addition to the monitoring of memory leaks performed by Clouseau,
 Lighthouse tracks the status of pointers through the program dataflow to
 locate invalid pointer dereferences.
 %
-Finally, Lighthouse uses explicit specifications to better support modular
+Lighthouse also uses explicit specifications to better support modular
 analysis of individual user components, independent of the surrounding
 system.
-%
-An interesting combination of work would result from using Clouseau to
-generate specifications for functions, then combine these results with
-global store information to drive the the Lighthouse dataflow analysis.
-
 
