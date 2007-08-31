@@ -55,7 +55,7 @@ from the component to the kernel, after which the component must not access
 the message until ownership is regained via the \code{sendDone} event.
 %
 Interface contracts provide a means to verify these properties at {\em
-runtime}.
+run time}.
 %
 Our work describes a simple technique to {\em statically} examine these same
 properties.
@@ -367,7 +367,7 @@ a finite state machine (FSM) representation of the expected event orderings.
 This allows tracking of global store state across event handlers, solving
 the problem described above.
 %
-However, this requires pushing basic monitoring into the system runtime to
+However, this requires pushing basic monitoring into the system run time to
 watch for invalid event firing orders.
 %
 In practice, we found very few instances where the additional tracking of event

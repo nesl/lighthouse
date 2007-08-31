@@ -69,27 +69,27 @@ specialized language constructs to improve the tool's effectiveness.
 
 Static analysis has long been used to find bugs in traditional systems.
 %
-Dedicated languges, such as Metal~\cite{engler00checking}, are used to
+Dedicated languages, such as Metal~\cite{engler00checking}, are used to
 compose custom compiler extensions to verify properties at compile time.
 %
-Such properties can even be infered from the code
+Such properties can even be inferred from the code
 itself~\cite{kremenek06from}.
 %
-Clouseau~\cite{heine03practical} ensures that dynamically allocated memory
-is freed exactly once in C and C++ programs.
+Clouseau~\cite{heine03practical} uses a whole program constraint analysis to
+ensure that dynamically allocated memory is freed exactly once in C and C++
+programs.
 %
-The whole program analysis provided by Clouseau uses a constraint system to
-track owning pointers both intra- and inter-procedurally.
+Our work contrasts these approaches by focusing on creating an
+understandable programing discipline.
 %
-A key diffrence in our work is our focuses to create an understandable
-programing discipline, accomplished using explicit lightweight
-specifications that increase developer vilibility into the analysis and
-obviate the need for interprocedural analysis.
+This is accomplished using explicit lightweight specifications that increase
+developer visibility into the analysis and obviate the need for
+interprocedural analysis.
 %
-Other technical differences also exist.
+Other technical differences exist between the systems.
 %
-Where Metal ignores aliasing, Lighthouse provides a stronger analysis
-explicitly consedering aliases.
+Where Metal ignores aliasing, Lighthouse provides a stronger analysis by
+explicitly considering aliases.
 %
 Unlike Clouseau, our work detects dangling pointers.
 
