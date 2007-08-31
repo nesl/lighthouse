@@ -114,8 +114,11 @@ by the specification.
 
 
 
-A function specification describes the expressions releasing memory ownership
-to and from the function.
+A function specification describes preconditions and postconditions relating
+to the dynamic memory referenced by expressions.
+%
+These preconditions and postconditions describe expressions releasing
+memory buffers to or from the function.
 %
 Expressions in a specification may be one or more of: 
 %
@@ -124,20 +127,17 @@ Expressions in a specification may be one or more of:
 \item Formal variable identified by its index in the function prototype
 %
 \item Function return value identified by the keyword \code{return} (only
-valid in \code{outgoing} specifications)
+valid in postconditions)
 %
 \item Global variable identified by variable name
 %
 \end{itemize}
 %
-The specification uses \code{incoming} and \code{outgoing} to describe memory
-that is being released into and out from the function, respectively.
-%
-An \code{outgoing} expression qualified with \code{release} describes dynamic
+An expression annotated with \code{release} in the postcondition describes dynamic
 memory that the caller of the function takes ownership of from the callee, and
 therefore that the function body must release.
 %
-An \code{incoming} expression qualified with \code{release} describes dynamic
+An expression annotated with \code{release} in the precondition describes dynamic
 memory that the caller of the function releases to the callee, and therefore
 that the function body must take ownership of.
 
@@ -147,9 +147,9 @@ that the function body must take ownership of.
 \centering
 \lstset{numbers=none, language=C}
 \begin{lstlisting}
-                ker_malloc.outgoing { $return.release; }
+                ker_malloc.pre { $return.release; }
 
-                ker_free.incoming { $1.release; }
+                ker_free.post { $1.release; }
 \end{lstlisting}
 \caption{\label{fig:spec}Specifications for \code{ker\_free} and
 \code{ker\_malloc}}.
@@ -160,13 +160,12 @@ that the function body must take ownership of.
 Example specifications demonstrating these ideas are presented in
 Figure~\ref{fig:spec}.
 %
-The \code{release} qualifier on the \code{outgoing} return statement notes
+The postcondition qualifying the return statement with \code{release} notes
 that the caller of \code{ker\_malloc} must take ownership of the returned
 data.
 %
-The \code{ker\_free} function specifies that the \code{incoming} first formal
-parameter points to dynamic memory released from the caller to the function
-body.
+The precondition qualifying the first formal parameter to \code{ker\_free}
+specifies that it points to dynamic memory released from the caller to the function body.
 
 
 
@@ -236,9 +235,9 @@ pointer error.
 %
 For the purpose of the Lighthouse traversal over a function's CFG, the
 function's entry node is considered an allocation point for all
-\code{incoming} parameters denoted as \code{release}, and the function's exit
-nodes are considered release points for \code{outgoing} expressions denoted as
-\code{release}.
+parameters qualified as with \code{release} in the preconditon, and the function's exit
+nodes are considered release points for expressions qualified with
+\code{release} in the postcondition.
 
 
 
