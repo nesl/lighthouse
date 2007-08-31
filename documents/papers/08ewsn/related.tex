@@ -4,12 +4,12 @@
 \subsection{Sensor Network Analysis Research}
 
 As mentioned earlier, the memory manager in the SOS operating
-system~\cite{sos} performs basic tracking of memory ownership to help
-clean the system after module removal.
+system~\cite{sos} performs basic tracking of memory ownership to help clean
+the system after module removal.
 %
 However, the burden remains on the end user to properly use the API
-interacting with the memory manager, prevent memory leaks, and not
-deference invalid pointers.
+interacting with the memory manager, prevent memory leaks, and not deference
+invalid pointers.
 %
 Our work grew out of a desire to prevent these kinds of errors from
 occurring in SOS applications.
@@ -40,10 +40,9 @@ Other sensor network platforms include support for static checking targeting
 other classes of errors.  
 %
 The nesC~\cite{nesC} language used in TinyOS employs a whole-program
-analysis to statically detect race conditions.  
-%
-As another example, galsC~\cite{TinyGALS,galsC} employs an analysis to
-ensure the type safety of connections between components.  
+analysis to statically detect race conditions and
+galsC~\cite{TinyGALS,galsC} employs an analysis to ensure the type safety of
+connections between components.  
 
 
 
@@ -69,15 +68,20 @@ specialized language constructs to improve the tool's effectiveness.
 
 
 
-Static analysis has long been used in traditional systems.
+Static analysis has long been used for bug finding in traditional systems.
 %
-Of particular relation to Lighthouse is work that finds violations of simple
-rules using compiler extensions~\cite{engler00checking} and follow up work
-to infer the rules given a code base~\cite{kremenek06from}.
+Dedicated languges have been used to compose custom compiler
+extensions~\cite{engler00checking} to verify properties at compile time.
 %
-Lighthouse focuses on a different point on the design spectrum using explicit
-specifications and a clear design discipline to provide maximum
-understanding to program developers.
+Such properties can even be infered from the code
+itself.~\cite{kremenek06from}.
+%
+Our exclusive ownership discipline could be implemented using such a
+extension languge.
+%
+But by focusing on creating an understandable programing discipline, we also
+use explicit lightweight specifications to increase developer visibility
+into the analysis.
 
 
 
@@ -140,9 +144,6 @@ Our tool does not enforce a uniqueness requirement.
 Instead, a resource may have any number of aliases from within its owning
 component, which is less restrictive and sometimes necessary in practice.
 %
-%(the {\tt nextReceiveBuffer} alias in Figure~\ref{fig:genericbase} is a good
-%example).
-%  
 At the same time, transfer is still safely allowed, as long as none of these
 aliases are accessed after the transfer.
 

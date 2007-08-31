@@ -52,11 +52,9 @@ The SOS operating system~\cite{sos} supports dynamic memory allocation,
 while MANTIS OS~\cite{abrach03mantis} supports both dynamic memory
 allocation and thread creation.  
 %
-Frameworks built on top of sensor network systems also include components
-that make resources dynamically available to other parts of the system.  
-%
-An example of this form of dynamic resource management is the
-VanGo~\cite{greenstein05vango} framework's buffer pool for TinyOS. 
+Frameworks built on top of sensor network systems also make resources
+dynamically available, such as the VanGo's buffer pool framework for
+TinyOS~\cite{greenstein05vango}.
 
 
 
@@ -92,8 +90,8 @@ the system.
 Second, a component may receive a data buffer from an upstream component but
 forget to either dispose it or pass it on to the next stage for processing.
 %
-Since expensive garbage-collection mechanisms are not available, such
-resource leaks will rapidly exhaust available memory.
+Without expensive garbage-collection, such resource leaks will rapidly
+exhaust available memory.
 
 
 
@@ -124,7 +122,7 @@ ownership, leading to critical and difficult-to-track errors.
 
 
 
-In this paper, we present an approach for automated validation of dynamic
+We present an approach for automated validation of dynamic
 resource management in sensor network software.  
 %
 Our design rests upon four primary goals:
@@ -134,9 +132,8 @@ Our design rests upon four primary goals:
 \item[Simplicity]  The exclusive ownership discipline is made explicit to
 developers.
 %
-Rather than acting as a black box, the approach presented in this paper
-provides a clear discipline that programmers understand and can easily
-develop within.
+Rather than acting as a black box, our approach provides a clear discipline
+that programmers understand and can easily develop within.
 %
 \item[Statically] The analysis is performed at compile time.  This provides
 developers feedback early in their design cycle and prevents bugs from
@@ -188,24 +185,24 @@ systems other than SOS.
 
 
 
-We evaluated Lighthouse on the historic versions of all user modules in the
-SOS CVS repository, as well as on the SOS kernel.  
+We evaluated Lighthouse on historic versions of all user modules in the SOS
+CVS repository, as well as on the SOS kernel.  
 %
 Overall, we ran the checker on about 40,000 lines of code.  
 %
-The tool identified 25 suspect memory operations of which eight were actual
+The tool identified 25 suspect memory operations of which 8 were actual
 memory errors in the historic versions of the user modules.
 %
 This analysis used a shared specification documenting 9 functions
 manipulating SOS, and 9 additional application-specific specifications
-describing user functions that manipulate memory.
+describing user functions manipulating memory.
 %
-Within the SOS kernel our analysis located 35 memory operations of which two
-were actual memory errors in the SOS kernel, using a specification
-documenting an additional 17 internal operating system functions.  
+Within the SOS kernel our analysis located 35 suspect memory operations of
+which two were actual memory errors, using a specification documenting an
+additional 17 internal operating system functions.  
 %
-Finding two bugs in the SOS kernel is surprising, since the SOS kernel code
-is relatively mature and was written by experienced systems programmers.  
+Finding two bugs in the SOS kernel is surprising, since the kernel code is
+relatively mature and written by experienced systems programmers.  
 %
 In summary, our experiments illustrate the practicality of our approach for
 providing early feedback about memory errors in real sensor network

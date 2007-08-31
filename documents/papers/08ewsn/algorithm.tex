@@ -35,8 +35,7 @@ the component.
 eventually free that memory, transfer its ownership to another component, or
 store the memory in a persistent location.
 %
-\item After freeing or releasing memory, a function may no longer access the
-memory.
+\item A function may not access memory after freeing or releasing the memory.
 %
 \end{enumerate}
 
@@ -321,23 +320,22 @@ leaks.
 
 
 
-Third, sensor network systems are often event driven with unpredictable event
+Third, sensor network systems are often event driven by unpredictable event
 orderings.
 %
-Our modular checker makes optimistic assumptions about the order in which
-events will be received by a component.  
+Our modular checker makes optimistic assumptions about the order of events
+received by a component.  
 %
-However, event orderings can affect the correctness of ownership tracking when
-a resource is accessed via the persistent store.
+However, event ordering affects the correctness of ownership tracking when a
+memory accessed through a global variable.
 %
 For example, consider a component that responds to three events: $\create$
-causes the component to allocate a block $b$ and store it into the component's
-persistent store, $\access$ causes the component to access block $b$ via the
-store, and $\delete$ causes the component to deallocate block $b$ from the
-store.  
+causes the component to allocate a block $b$ and store it into a global
+store, $\access$ causes the component to access block $b$ via the store, and
+$\delete$ causes the component to deallocate block $b$ from the global.  
 %
-The component avoids dangling accesses to $b$ and leaks of $b$ as long as the
-temporal sequence of events follows the regular expression $($ $\alloc$
+The component avoids dangling accesses to $b$ and leaks of $b$ as long as
+the temporal sequence of events follows the regular expression $($ $\alloc$
 $\access^*$ $\delete$ $)^*$.  
 
 
@@ -345,11 +343,11 @@ $\access^*$ $\delete$ $)^*$.
 Preferring a modular analysis that only requires examining a single function
 at a time, Lighthouse only tracks data locally within each event handler.  
 %
-When performing this tracking, the tool assumes on entry that all data in the
-persistent store is owned by the component.
+When performing this tracking, the tool assumes on entry that all data in
+global stores is owned by the component.
 %
 The tool similarly considers a resource to be properly released when it is
-placed in the persistent store.  
+placed in a global store.  
 %
 These assumptions allow each of the three event handlers in our example to
 pass all checks.  
@@ -366,7 +364,7 @@ protocol.
 We have explored and implemented a prototype system combining Lighthouse with
 a finite state machine (FSM) representation of the expected event orderings.
 %
-This allows tracking of persistent store state across event handlers, solving
+This allows tracking of global store state across event handlers, solving
 the problem described above.
 %
 However, this requires pushing basic monitoring into the system runtime to

@@ -38,23 +38,23 @@ buffer.
 
 
 
-Research on interface contracts~\cite{archer07interface} recognizes this
-management problem and proposes run time state monitoring as a solution.
+Research on interface contracts~\cite{archer07interface} proposes run time
+state monitoring as a solution to the management problem.
 %
 Knowing that a message transferred via the \code{SendMsg} interface is
 either in control of a user component or the TinyOS kernel, the
-\code{TOS\_Msg} structure is augmented with a \code{msg\_state} field to
-track the message as being either \code{USER\_OWNED} or \code{OS\_OWNED}.
+\code{TOS\_Msg} structure is augmented with a \code{msg\_state} field
+tracking the message as either \code{USER\_OWNED} or \code{OS\_OWNED}.
 %
 A contract layer, interposed between the user component and the
-implementation of \code{SendMsg}, verifies that components only \code{send}
+\code{SendMsg} implementation, verifies that components only \code{send}
 \code{USER\_OWNED} messages at run time.
 %
 The contract layer updates sent messages to the \code{OS\_OWNED} state until
 the \code{sendDone} event occurs, when the message is returned to the
 \code{USER\_OWNED} state.
 %
-Incorrectly attempting to send a \code{OS\_OWNED} message results in the
+Incorrec attempts to send a \code{OS\_OWNED} message results in the
 interface contract generating a runtime fault.
 
 

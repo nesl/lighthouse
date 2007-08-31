@@ -65,8 +65,7 @@ programs, our next study aimed to answer the following questions:
 %
 \begin{itemize}
 %
-\item Do programmers have problems properly managing dynamic memory in
-SOS?
+\item Do programmers have problems managing dynamic memory in SOS?
 %
 \item Does the analysis and associated checker described in this paper
 help statically identify those problems?
@@ -194,14 +193,14 @@ about.
 
 
 
-The nine dangling pointer false positives result from limitations of the
-may-alias analysis.  
+The nine dangling pointer false positives result from may-alias analysis
+limitations.
 %
 Improvements could be gained by adding field and flow sensitivity to
 this analysis.
 %
-Although these properties generally make an alias analysis difficult to
-scale, sensor network applications may be small enough due to resource
+Although these properties generally hurt alias analysis scalibility,
+sensor network applications may be small enough due to resource
 constraints that we can leverage these sophisticated techniques in a
 practical manner.
 
