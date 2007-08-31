@@ -3,13 +3,12 @@
 
 \subsection{Sensor Network Analysis Research}
 
-As mentioned earlier, the memory manager in the SOS operating
-system~\cite{sos} performs basic tracking of memory ownership to help clean
+The memory manager in the SOS operating
+system~\cite{sos} performs basic memory ownership tracking to clean
 the system after module removal.
 %
-However, the burden remains on the end user to properly use the API
-interacting with the memory manager, prevent memory leaks, and not deference
-invalid pointers.
+However, the burden remains on the end user to prevent memory leaks in
+active modules and to not dereference invalid pointers.
 %
 Our work grew out of a desire to prevent these kinds of errors from
 occurring in SOS applications.
@@ -19,9 +18,9 @@ occurring in SOS applications.
 Dynamic checking of sensor network systems has become a popular technique to
 improve system reliability and find system errors.
 %
-Recent work on Safe TinyOS and UTOS~\cite{regehr06memory} and software fault
+Recent work on Safe TinyOS, UTOS~\cite{regehr06memory} and software fault
 isolation for embedded processors~\cite{kumar07system} uses static analysis
-to insert run-time checks that ensure memory protection for sensor-network
+to insert run-time checks ensuring memory protection for sensor-network
 systems.
 %
 Interface contract monitoring~\cite{archer07interface} interposes a thin
@@ -36,7 +35,7 @@ alerting developers to problems at compile time.
 
 
 
-Other sensor network platforms include support for static checking targeting
+Sensor network platforms include support for static checking targeting
 other classes of errors.  
 %
 The nesC~\cite{nesC} language used in TinyOS employs a whole-program
@@ -49,7 +48,7 @@ connections between components.
 A complementary approach to improving the reliability of sensor network
 software is through new language abstractions.  
 %
-For example, researchers have explored language support for component-based
+Researchers have explored language support for component-based
 programming~\cite{TinyOS,nesC,galsC}, region
 abstractions~\cite{conf/mobisys/WhitehouseSCB04,conf/nsdi/WelshM04},
 component composition~\cite{conf/sensys/GreensteinKE04}, and programming in
@@ -68,20 +67,32 @@ specialized language constructs to improve the tool's effectiveness.
 
 
 
-Static analysis has long been used for bug finding in traditional systems.
+Static analysis has long been used to find bugs in traditional systems.
 %
-Dedicated languges have been used to compose custom compiler
-extensions~\cite{engler00checking} to verify properties at compile time.
+Dedicated languges, such as Metal~\cite{engler00checking}, are used to
+compose custom compiler extensions to verify properties at compile time.
 %
 Such properties can even be infered from the code
-itself.~\cite{kremenek06from}.
+itself~\cite{kremenek06from}.
 %
-Our exclusive ownership discipline could be implemented using such a
-extension languge.
+Clouseau~\cite{heine03practical} ensures that dynamically allocated memory
+is freed exactly once in C and C++ programs.
 %
-But by focusing on creating an understandable programing discipline, we also
-use explicit lightweight specifications to increase developer visibility
-into the analysis.
+The whole program analysis provided by Clouseau uses a constraint system to
+track owning pointers both intra- and inter-procedurally.
+%
+A key diffrence in our work is our focuses to create an understandable
+programing discipline, accomplished using explicit lightweight
+specifications that increase developer vilibility into the analysis and
+obviate the need for interprocedural analysis.
+%
+Other technical differences also exist.
+%
+Where Metal ignores aliasing, Lighthouse provides a stronger analysis
+explicitly consedering aliases.
+%
+Unlike Clouseau, our work detects dangling pointers.
+
 
 
 
@@ -90,15 +101,7 @@ ownership types~\cite{ownership,ownership2,BoyapatiEtAl02,aliasjava} for
 object-oriented languages. 
 %
 Ownership types designate an owner object for each object, and the static
-type system ensures a form of confinement for each object with respect to
-its owner.  
-%
-For example, a typical invariant guaranteed by ownership type systems is
-that an object will only be accessed by its owner or by other objects owned
-by the same owner.  
-%
-In this way, an object's owner forms a dynamic scope within which the object
-is confined.  
+type system ensures access to an object goes through its owner.
 %
 Related work on confined types~\cite{confined1,confined2} provides a more
 static form of confinement, in which an object is guaranteed not to escape a
@@ -173,21 +176,4 @@ Of course, a language solution like Sing\# has the potential to be more
 expressive and to provide stronger guarantees, by enforcing a stylized
 programming model.
 
-
-
-Clouseau~\cite{heine03practical} develops a type system to statically ensure
-that a dynamically allocated memory is freed exactly once in C and C++
-programs.
-%
-The whole program analysis provided by Clouseau uses a constraint system to
-track owning pointers both intra- and inter-procedurally, avoiding many of
-the pointer analysis problems faced by Lighthouse.
-%
-In addition to the monitoring of memory leaks performed by Clouseau,
-Lighthouse tracks the status of pointers through the program dataflow to
-locate invalid pointer dereferences.
-%
-Lighthouse also uses explicit specifications to better support modular
-analysis of individual user components, independent of the surrounding
-system.
 
