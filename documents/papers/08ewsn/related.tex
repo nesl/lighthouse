@@ -79,8 +79,8 @@ Clouseau~\cite{heine03practical} uses a whole program constraint analysis to
 ensure that dynamically allocated memory is freed exactly once in C and C++
 programs.
 %
-Our work contrasts these approaches by focusing on creating an
-understandable programing discipline.
+Our work contrasts with these approaches by focusing on creating an
+understandable programming discipline.
 %
 This is accomplished using explicit lightweight specifications that increase
 developer visibility into the analysis and obviate the need for
@@ -88,10 +88,12 @@ interprocedural analysis.
 %
 Other technical differences exist between the systems.
 %
-Where Metal ignores aliasing, Lighthouse provides a stronger analysis by
-explicitly considering aliases.
+While our general ownership discipline could be described using the Metal
+language, Lighthouse provides a stronger analysis by explicitly considering
+aliasing, a challenge not handled within Metal.
 %
-Unlike Clouseau, our work detects dangling pointers.
+Unlike Clouseau, our work detects dangling pointers in addition to memory
+leaks.
 
 
 
